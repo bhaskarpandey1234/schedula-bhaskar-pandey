@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local agent and planning guidance
+AGENTS.md
+plan.txt
+
+# Next.js
+.next/
+out/
+
+# Node and NestJS build output
+dist/
+build/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+*.lcov
+
+# Logs and debug output
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Caches and temporary files
+.cache/
+.turbo/
+.parcel-cache/
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.swp
+*.swo
+
+# Local reports and generated artifacts
+*.tsbuildinfo
+*.pid
+*.seed
