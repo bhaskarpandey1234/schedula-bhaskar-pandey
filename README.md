@@ -1,110 +1,93 @@
-# Schedula - Complete Application
+# Schedula Healthcare
 
-Schedula is a full-stack hospital appointment scheduling system. The project is being developed as a pnpm monorepo with a Next.js frontend and a NestJS backend.
+Schedula is a healthcare appointment-booking application. Phase 1 establishes a secure, TypeScript-first Next.js foundation using the official Supabase starter. Booking workflows arrive in later roadmap phases.
 
-## Current Status
+## Phase 1 status
 
-Task 1 currently contains the scheduling domain design and repository guidance:
+Implemented:
 
-- Mermaid ERD: [docs/er-diagram.md](docs/er-diagram.md)
-- Editable Draw.io ERD: [docs/schedula-erd.drawio](docs/schedula-erd.drawio)
-- Repository agent guidance: [AGENTS.md](AGENTS.md)
+- Next.js 16 + React + TypeScript frontend in `frontend/`.
+- Supabase SSR browser/server clients and Next.js proxy session refresh.
+- shadcn/ui configuration with the New York style, neutral base color, and CSS variables.
+- Drizzle/PostgreSQL configuration and a generated, unapplied migration for `profiles`, `patients`, and `doctors`.
+- Vitest foundation tests and Playwright browser smoke-test configuration.
+- Docker-backed local Supabase configuration in [`supabase/config.toml`](supabase/config.toml).
 
-The frontend and backend applications have not been scaffolded yet. Commands for those applications are documented as planned commands until the scaffolds exist.
+Deferred: availability sessions, appointment slots, appointments, notifications, onboarding, custom portal UI, hosted migrations, and deployment.
 
-## Technology Stack
-
-- Frontend: Next.js with TypeScript
-- Backend: NestJS with TypeScript
-- Database: PostgreSQL
-- ORM: TypeORM
-- Package manager and workspace: pnpm
-- API testing preparation: Hoppscotch
-
-## Planned Monorepo Structure
+## Architecture
 
 ```text
 schedula-bhaskar-pandey/
-├── frontend/                 # Next.js + TypeScript application
-├── backend/                  # NestJS + TypeScript application
+├── frontend/                 # Next.js + Supabase SSR application
+│   ├── lib/db/               # Drizzle client and roadmap-aligned schema
+│   ├── drizzle/              # Generated, unapplied SQL migration
+│   ├── tests/                # Vitest and Playwright smoke tests
+│   └── .env.example          # Safe environment-variable template
+├── supabase/config.toml      # Local Supabase CLI configuration
 ├── docs/
-│   ├── er-diagram.md         # GitHub-renderable Mermaid ERD
-│   └── schedula-erd.drawio   # Editable visual ERD
-├── AGENTS.md                 # Engineering and repository guidance
-├── README.md
-├── package.json
-├── pnpm-workspace.yaml
-└── .gitignore
+│   ├── er-diagram.md         # Conceptual future scheduling ERD
+│   └── schedula-healthcare-roadmap.md
+├── package.json              # Workspace scripts
+└── pnpm-workspace.yaml
 ```
 
-## ERD Modules
+Supabase Auth owns identity records in `auth.users`. The Phase 1 migration references those IDs from `profiles`; patient and doctor records use one-to-one profile IDs. The migration is intentionally not applied to any hosted project.
 
-The core scheduling ERD contains these modules in order:
+## Prerequisites
 
-1. User
-2. Patient
-3. Doctor
-4. Availability
-5. Appointment
+- Node.js 22 or newer
+- pnpm 10 or newer
+- Docker Desktop for local Supabase
+- An existing Supabase project for hosted connectivity checks
 
-The model supports a user having both a Patient profile and a Doctor profile. A doctor-specific availability window can contain multiple appointments.
-
-## Local Setup
-
-The application scaffolds are planned but are not present yet. After they are created, the expected setup commands will be:
+## Local setup
 
 ```bash
 pnpm install
-pnpm --filter frontend dev
-pnpm --filter backend start:dev
 ```
 
-Build validation will use:
+Copy `frontend/.env.example` to `frontend/.env.local` (use `Copy-Item` in PowerShell or `cp` in macOS/Linux), then fill in the values.
+
+Fill in `frontend/.env.local` with the project URL, publishable key, and server-only PostgreSQL `DATABASE_URL`. Never commit that file. The publishable key is safe for browser use; database credentials are not.
+
+Start local Supabase when Docker is available:
 
 ```bash
-pnpm --filter frontend build
-pnpm --filter backend build
+pnpm supabase:start
+pnpm exec supabase status
+pnpm dev
 ```
 
-## Task 1 Deliverables
+The application is available at <http://localhost:3000>. If variables are absent, the starter renders its safe configuration warning instead of attempting a connection.
 
-- Establish the Schedula project identity and monorepo conventions.
-- Define the five-module scheduling ERD.
-- Document one-to-one and one-to-many relationships.
-- Prepare the repository for frontend and backend scaffolding.
-- Prepare Hoppscotch workspace groups for future authentication and scheduling APIs.
+## Validation commands
 
-## Future Work
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm --filter frontend db:generate
+pnpm build
+pnpm test:e2e
+```
 
-The following work belongs to later tasks and is not implemented yet:
+Playwright may require a one-time browser installation:
 
-- Next.js frontend scaffolding and scheduling UI
-- NestJS backend scaffolding
-- Authentication, OAuth, and OTP flows
-- Patient and doctor CRUD APIs
-- Appointment booking APIs
-- PostgreSQL connection and TypeORM entities/migrations
-- Notifications and appointment history
-- Deployment and production operations
+```bash
+pnpm --filter frontend exec playwright install chromium
+```
 
-## Hoppscotch Preparation
+The Drizzle command generates SQL under `frontend/drizzle/`; it does not apply a migration. Hosted migrations and production deployment are intentionally deferred.
 
-Hoppscotch will be used for API testing after the backend APIs are implemented. Planned groups include:
+## Future roadmap
 
-- Authentication APIs
-- Scheduling APIs
+The roadmap covers shared UI, authentication onboarding, doctor availability, patient discovery, booking concurrency, cancellation and notifications, integration quality gates, and deployment. The conceptual five-module ERD is documented in [`docs/er-diagram.md`](docs/er-diagram.md).
 
-No API endpoints are implemented as part of the current ERD task.
+## Security
 
-## Security and No-Secret Policy
+Do not commit passwords, database URLs, service-role keys, API keys, access tokens, private keys, or patient/doctor personal data. Keep secrets in ignored `.env.local` files or hosting-provider settings. Do not use the service-role key in browser code.
 
-Never commit passwords, password hashes, API keys, access tokens, private keys, patient data, doctor data, or other personal information. Keep local secrets in ignored environment files and commit only safe example templates such as `.env.example`.
+## Branch workflow
 
-## Contribution Workflow
-
-- Work on a feature branch; do not commit directly to the default branch.
-- Use focused conventional commits, such as `docs: add project setup instructions`.
-- Review staged files before committing.
-- Open pull requests against the integration branch.
-- Address review feedback on the same feature branch.
-- Merge only after mentor or reviewer approval.
+Phase work belongs on feature branches and should target the integration branch after review. Use focused conventional commits and keep build output, local Supabase state, and dependency directories untracked.
