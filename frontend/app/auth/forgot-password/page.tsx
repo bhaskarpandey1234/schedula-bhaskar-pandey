@@ -1,6 +1,6 @@
-import { ForgotPasswordForm } from "@/components/forgot-password-form";
+import { Phase3ForgotPasswordForm } from "@/components/phase3-forgot-password-form";
 import { AuthShell } from "@/components/layout/auth-shell";
 
 export default function Page() {
-  return <AuthShell><ForgotPasswordForm /></AuthShell>;
+  return <AuthShell><Phase3ForgotPasswordForm /></AuthShell>;
 }

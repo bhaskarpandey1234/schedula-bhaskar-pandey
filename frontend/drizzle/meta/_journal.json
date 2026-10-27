@@ -8,6 +8,13 @@
       "when": 1793110438838,
       "tag": "0000_simple_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793116178045,
+      "tag": "0001_phase3-auth",
+      "breakpoints": true
     }
   ]
 }

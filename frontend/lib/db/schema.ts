@@ -41,8 +41,8 @@ export const patients = pgTable("patients", {
   id: uuid("id")
     .primaryKey()
     .references(() => profiles.id, { onDelete: "cascade" }),
-  phone: text("phone"),
-  dateOfBirth: date("date_of_birth"),
+  phone: text("phone").notNull(),
+  dateOfBirth: date("date_of_birth").notNull(),
   ...auditColumns(),
 });
 
@@ -50,10 +50,10 @@ export const doctors = pgTable("doctors", {
   id: uuid("id")
     .primaryKey()
     .references(() => profiles.id, { onDelete: "cascade" }),
-  specialty: text("specialty"),
-  clinicName: text("clinic_name"),
-  experienceYears: integer("experience_years"),
-  biography: text("biography"),
-  timezone: text("timezone"),
+  specialty: text("specialty").notNull(),
+  clinicName: text("clinic_name").notNull(),
+  experienceYears: integer("experience_years").notNull(),
+  biography: text("biography").notNull(),
+  timezone: text("timezone").notNull(),
   ...auditColumns(),
 });

@@ -2,7 +2,7 @@
 
 Schedula is a healthcare appointment-booking application. Phase 1 establishes a secure, TypeScript-first Next.js foundation using the official Supabase starter. Booking workflows arrive in later roadmap phases.
 
-## Phase 2 status
+## Phase 3 status
 
 Implemented:
 
@@ -15,8 +15,11 @@ Implemented:
 - Calm clinical design tokens with light/dark semantic themes.
 - Reusable responsive navigation, layout, state, and shadcn-style UI primitives.
 - Public landing page and shared branded authentication shell.
+- Supabase email/password authentication through validated Server Actions, email confirmation, password reset, and cookie-based session routing.
+- Role-aware sign-up and protected patient/doctor onboarding with portal redirects.
+- Local Drizzle migration with profile provisioning trigger, immutable roles, audit timestamp triggers, and owner-only RLS policies.
 
-Deferred: role onboarding, availability sessions, appointment slots, appointments, notifications, custom portal UI, hosted migrations, and deployment.
+Deferred: availability sessions, appointment slots, appointments, notifications, public doctor discovery, hosted migrations, and deployment.
 
 ## Architecture
 
@@ -71,6 +74,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm --filter frontend db:generate
+pnpm --filter frontend db:migrate
 pnpm build
 pnpm test:e2e
 ```
@@ -81,7 +85,7 @@ Playwright may require a one-time browser installation:
 pnpm --filter frontend exec playwright install chromium
 ```
 
-The Drizzle command generates SQL under `frontend/drizzle/`; it does not apply a migration. Hosted migrations and production deployment are intentionally deferred.
+The Drizzle generate command writes SQL under `frontend/drizzle/`. Start local Supabase first, ensure `frontend/.env.local` contains its server-only `DATABASE_URL`, then run `pnpm --filter frontend db:migrate` to apply the local schema. Hosted migrations and production deployment are intentionally deferred to Phase 9.
 
 ## Future roadmap
 

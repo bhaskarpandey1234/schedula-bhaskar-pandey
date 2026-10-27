@@ -1,6 +1,6 @@
-import { SignUpForm } from "@/components/sign-up-form";
+import { Phase3SignUpForm } from "@/components/phase3-sign-up-form";
 import { AuthShell } from "@/components/layout/auth-shell";
 
 export default function Page() {
-  return <AuthShell><SignUpForm /></AuthShell>;
+  return <AuthShell><Phase3SignUpForm /></AuthShell>;
 }

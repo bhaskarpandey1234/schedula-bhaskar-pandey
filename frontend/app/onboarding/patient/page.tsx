@@ -1,0 +1,16 @@
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
+import { PatientOnboardingForm } from "@/components/patient-onboarding-form";
+import { AuthShell } from "@/components/layout/auth-shell";
+import { getCurrentAccount } from "@/lib/auth/guards";
+
+export const instant = false;
+
+export default async function PatientOnboardingPage() {
+  await connection();
+  const account = await getCurrentAccount();
+  if (!account) redirect("/auth/login");
+  if (account.profile?.role !== "patient") redirect(account.profile?.role === "doctor" ? "/doctor" : "/onboarding");
+  if (account.onboardingComplete) redirect("/patient");
+  return <AuthShell><PatientOnboardingForm /></AuthShell>;
+}

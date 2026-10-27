@@ -1,0 +1,6 @@
+import { Phase3LogoutButton } from "@/components/phase3-logout-button";
+import { PageContainer } from "@/components/layout/page-container";
+import { Stethoscope } from "lucide-react";
+import Link from "next/link";
+
+export function PortalShell({ children, role, name }: { children: React.ReactNode; role: "patient" | "doctor"; name: string }) { return <main className="min-h-svh bg-surface-muted"><header className="border-b bg-background"><PageContainer className="flex h-16 items-center justify-between"><Link href="/" className="flex items-center gap-2 font-semibold"><span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Stethoscope className="size-5" aria-hidden="true" /></span><span>Schedula</span></Link><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{name} · {role === "patient" ? "Patient" : "Doctor"}</span><Phase3LogoutButton /></div></PageContainer></header><PageContainer className="py-10">{children}</PageContainer></main>; }
