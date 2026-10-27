@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { availabilitySessionSchema } from "@/lib/validation/availability";
 import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
@@ -32,6 +33,8 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
   if (profileError) return { error: "We could not update your profile name." };
   const { error } = await supabase.from("doctors").update({ specialty, clinic_name: clinicName, experience_years: experienceYears, biography, timezone }).eq("id", user.id);
   if (error) return { error: "We could not update your professional details." };
+  revalidatePath("/patient/doctors", "page");
+  revalidatePath(`/patient/doctors/${user.id}`, "page");
   return { success: true };
 }
 
@@ -50,6 +53,8 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   });
   if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability." };
   if (!data) return { error: "We could not create this availability." };
+  revalidatePath("/patient/doctors", "page");
+  revalidatePath(`/patient/doctors/${user.id}`, "page");
   redirect(`/doctor?date=${encodeURIComponent(parsed.data.sessionDate)}`);
 }
 
