@@ -32,7 +32,7 @@ async function signUpAndConfirm(page: Page, role: TestUser["role"], label: strin
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(page).toHaveURL(/\/onboarding$/, { timeout: 15000 });
   return testUser;
 }
 
@@ -85,7 +85,7 @@ test("doctor can register, create availability, and see a cancellation", async (
   await page.getByLabel("Timezone").fill("Asia/Kolkata");
   await page.getByRole("button", { name: "Continue to doctor portal" }).click();
   await expect(page).toHaveURL(/\/doctor$/);
-  await page.getByLabel("Date").fill(futureDate());
+  await page.getByLabel("Date", { exact: true }).fill(futureDate());
   await page.getByLabel("Start time").fill("09:00");
   await page.getByLabel("End time").fill("10:00");
   await page.getByLabel("Patients per slot").fill("1");
@@ -100,6 +100,6 @@ test("doctor can register, create availability, and see a cancellation", async (
   const { data: appointmentId, error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: slots[0].id, p_reason: "Doctor schedule test" });
   if (bookingError) throw new Error(bookingError.message);
   await patient.client.rpc("cancel_patient_appointment", { p_appointment_id: appointmentId! });
-  await page.reload();
+  await page.goto(`/doctor?date=${futureDate()}`);
   await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
 });

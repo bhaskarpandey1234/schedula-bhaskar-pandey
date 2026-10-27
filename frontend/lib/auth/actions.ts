@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
 import {
   doctorOnboardingSchema,
   emailSchema,
@@ -12,8 +13,6 @@ import {
 } from "@/lib/validation/auth";
 
 export type ActionState = { error?: string; success?: boolean };
-
-const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 function values(formData: FormData) {
   return Object.fromEntries(formData.entries());
@@ -36,7 +35,7 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
     password: parsed.data.password,
     options: {
       data: { full_name: parsed.data.fullName, role: parsed.data.role },
-      emailRedirectTo: `${siteUrl()}/auth/confirm?next=/onboarding`,
+      emailRedirectTo: getAuthConfirmRedirect("/onboarding"),
     },
   });
   if (error) return { error: error.message };
@@ -57,7 +56,7 @@ export async function forgotPasswordAction(_: ActionState, formData: FormData): 
   if (!parsed.success) return validationError(parsed.error);
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${siteUrl()}/auth/update-password`,
+    redirectTo: getAuthConfirmRedirect("/auth/update-password"),
   });
   if (error) return { error: "Unable to send a reset email right now." };
   return { success: true };

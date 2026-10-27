@@ -58,10 +58,19 @@ export async function onboardTestUser(user: TestUser) {
 
 export async function deleteTestUsers(users: TestUser[]) {
   const admin = localAdmin();
-  await Promise.all(users.map(async (user) => {
-    const { error } = await admin.auth.admin.deleteUser(user.id);
-    if (error) throw new Error(`Could not remove test user: ${error.message}`);
-  }));
+  for (const user of users) {
+    let lastError: string | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { error } = await admin.auth.admin.deleteUser(user.id);
+      if (!error) {
+        lastError = undefined;
+        break;
+      }
+      lastError = error.message;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+    if (lastError) throw new Error(`Could not remove test user: ${lastError}`);
+  }
 }
 
 export function futureDate(days = 21) {
