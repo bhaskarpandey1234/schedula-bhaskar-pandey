@@ -21,6 +21,8 @@ export type DoctorSlot = {
   slot_start_at: string;
   slot_end_at: string;
   timezone: string;
+  capacity: number;
+  remaining_capacity: number;
 };
 
 export function parseDirectoryFilters(params: { q?: string; specialty?: string } | URLSearchParams): DirectoryFilters {

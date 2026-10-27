@@ -9,8 +9,8 @@ describe("doctor discovery helpers", () => {
 
   it("groups slots by the doctor's local date", () => {
     const slots = [
-      { slot_id: "1", slot_start_at: "2099-04-20T23:30:00.000Z", slot_end_at: "2099-04-21T00:00:00.000Z", timezone: "Asia/Kolkata" },
-      { slot_id: "2", slot_start_at: "2099-04-21T00:30:00.000Z", slot_end_at: "2099-04-21T01:00:00.000Z", timezone: "Asia/Kolkata" },
+      { slot_id: "1", slot_start_at: "2099-04-20T23:30:00.000Z", slot_end_at: "2099-04-21T00:00:00.000Z", timezone: "Asia/Kolkata", capacity: 3, remaining_capacity: 3 },
+      { slot_id: "2", slot_start_at: "2099-04-21T00:30:00.000Z", slot_end_at: "2099-04-21T01:00:00.000Z", timezone: "Asia/Kolkata", capacity: 3, remaining_capacity: 3 },
     ];
     const groups = groupSlotsByDate(slots, "Asia/Kolkata");
     expect(groups).toHaveLength(1);

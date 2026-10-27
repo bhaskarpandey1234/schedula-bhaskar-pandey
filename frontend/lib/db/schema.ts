@@ -1,6 +1,7 @@
 import {
   date,
   index,
+  uniqueIndex,
   integer,
   pgEnum,
   pgSchema,
@@ -62,6 +63,8 @@ export const doctors = pgTable("doctors", {
 
 export const availabilitySessionStatus = pgEnum("availability_session_status", ["active", "cancelled"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
+export const appointmentStatus = pgEnum("appointment_status", ["confirmed", "cancelled"]);
+export const notificationType = pgEnum("notification_type", ["appointment_booked"]);
 
 export const availabilitySessions = pgTable("availability_sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -89,3 +92,28 @@ export const appointmentSlots = pgTable("appointment_slots", {
   status: appointmentSlotStatus("status").notNull().default("available"),
   ...auditColumns(),
 }, (table) => ({ sessionStartIdx: index("appointment_slots_session_start_idx").on(table.availabilitySessionId, table.slotStartAt), doctorStartIdx: index("appointment_slots_doctor_start_idx").on(table.doctorId, table.slotStartAt) }));
+
+export const appointments = pgTable("appointments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  slotId: uuid("slot_id").notNull().references(() => appointmentSlots.id, { onDelete: "cascade" }),
+  status: appointmentStatus("status").notNull().default("confirmed"),
+  reason: text("reason"),
+  ...auditColumns(),
+}, (table) => ({
+  patientSlotUnique: uniqueIndex("appointments_patient_slot_unique").on(table.patientId, table.slotId),
+  patientIdx: index("appointments_patient_idx").on(table.patientId, table.createdAt),
+  doctorIdx: index("appointments_doctor_idx").on(table.doctorId, table.createdAt),
+}));
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  recipientId: uuid("recipient_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  type: notificationType("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  ...auditColumns(),
+}, (table) => ({ recipientIdx: index("notifications_recipient_idx").on(table.recipientId, table.createdAt) }));

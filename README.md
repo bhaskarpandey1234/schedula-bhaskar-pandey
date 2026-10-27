@@ -1,8 +1,8 @@
 # Schedula Healthcare
 
-Schedula is a healthcare appointment-booking application. Phase 1 establishes a secure, TypeScript-first Next.js foundation using the official Supabase starter. Signed-in patients can browse `/patient/doctors` and review doctor availability; booking workflows arrive in later roadmap phases.
+Schedula is a healthcare appointment-booking application. The TypeScript-first Next.js application supports authenticated patient discovery and transactional appointment booking against future doctor availability.
 
-## Phase 5 status
+## Phase 6 status
 
 Implemented:
 
@@ -21,8 +21,10 @@ Implemented:
 - Doctor profile editing and future availability sessions with generated wave-scheduling slots.
 - Authenticated patient doctor directory with name search, specialty filtering, doctor profiles, and upcoming availability windows.
 - Patient-only discovery read functions that expose directory-safe fields without widening owner-only table policies.
+- Transactional patient booking with capacity-safe slot reservation, duplicate-booking protection, optional visit reason, dedicated review route, durable confirmation page, and persisted patient notification.
+- Appointment and notification tables with patient/doctor ownership policies and timezone-aware slot details.
 
-Deferred: appointment booking, appointments, notifications, hosted migrations, and deployment.
+Deferred: appointment cancellation and management, hosted migrations, transactional email, and deployment.
 
 ## Architecture
 
