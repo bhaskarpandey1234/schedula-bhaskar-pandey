@@ -9,22 +9,22 @@ This document records the production deployment evidence for the Schedula MVP. I
 | Repository | `https://github.com/bhaskarpandey1234/schedula-bhaskar-pandey` |
 | Release branch | `feature2/schedula-phase9-deployment-handoff` |
 | Integration target | `intern/bhaskar-pandey-main` |
-| Release commit | `bd46f56` |
-| Deployed URL | `TBD` |
+| Release commit | `6648864` |
+| Deployed URL | `https://schedula-bhaskar-pandey.vercel.app` |
 | Loom walkthrough | `TBD` |
 
 ## Provider configuration checklist
 
-- [ ] Create or select the hosted Supabase production project.
-- [ ] Apply the ordered migrations in `frontend/drizzle/` using a secure direct database connection.
-- [ ] Confirm the migrated tables, functions, indexes, constraints, and RLS policies exist.
-- [ ] Enable Supabase email/password sign-up and email confirmation.
-- [ ] Set the production Site URL to the deployed HTTPS URL.
-- [ ] Add exact production redirects for `/auth/confirm?next=/onboarding` and `/auth/confirm?next=/auth/update-password`.
+- [x] Create the hosted Supabase production project (`schedula-healthcare`, ref `eqckoayhycvbkxqudocw`).
+- [x] Apply the ordered migrations in `frontend/drizzle/` using the secure IPv4 session pooler; the temporary database credential was not added to Vercel or Git.
+- [x] Confirm the migrated public schema contains seven tables; provider dashboard is healthy.
+- [x] Enable Supabase email/password sign-up and email confirmation (default provider configuration).
+- [x] Set the production Site URL to the deployed HTTPS URL.
+- [x] Add exact production redirects for `/auth/confirm?next=/onboarding` and `/auth/confirm?next=/auth/update-password`.
 - [ ] Configure confirmation and recovery email templates with `{{ .TokenHash }}` and the matching `email` or `recovery` OTP type.
-- [ ] Configure Vercel with `frontend/` as the project root and Node 22.
-- [ ] Add only `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` to Vercel.
-- [ ] Keep `RESEND_*` unset for this release.
+- [x] Configure Vercel with `frontend/` as the project root, Next.js preset, and Node 22.
+- [x] Add only `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` to Vercel production.
+- [x] Keep `RESEND_*` unset for this release.
 - [ ] Create a future demo doctor availability through the application without recording credentials here.
 
 ## Validation evidence
@@ -56,7 +56,7 @@ Production journey checks:
 - [ ] Cancellation decreases the appointment count and restores exactly one slot allocation.
 - [ ] Password recovery reaches `/auth/update-password` through `/auth/confirm`.
 - [ ] Desktop and mobile checks pass on the deployed URL.
-- [ ] No secret, personal data, generated output, or service-role key is tracked.
+- [x] No secret, personal data, generated output, database credential, or service-role key is tracked.
 
 ## Known limitations
 
