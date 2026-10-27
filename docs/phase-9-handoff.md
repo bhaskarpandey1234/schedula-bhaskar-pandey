@@ -9,7 +9,7 @@ This document records the production deployment evidence for the Schedula MVP. I
 | Repository | `https://github.com/bhaskarpandey1234/schedula-bhaskar-pandey` |
 | Release branch | `feature2/schedula-phase9-deployment-handoff` |
 | Integration target | `intern/bhaskar-pandey-main` |
-| Release commit | `TBD` |
+| Release commit | `bd46f56` |
 | Deployed URL | `TBD` |
 | Loom walkthrough | `TBD` |
 
