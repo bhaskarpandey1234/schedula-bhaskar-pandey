@@ -1,0 +1,9 @@
+"use client";
+import * as React from "react";
+import { cn } from "@/lib/utils";
+const SheetContext = React.createContext<{ open: boolean; setOpen: (open: boolean) => void } | null>(null);
+export function Sheet({ open: controlledOpen, onOpenChange, children }: { open?: boolean; onOpenChange?: (open: boolean) => void; children: React.ReactNode }) { const [internal, setInternal] = React.useState(false); const open = controlledOpen ?? internal; const setOpen = (value: boolean) => { setInternal(value); onOpenChange?.(value); }; return <SheetContext.Provider value={{ open, setOpen }}>{children}</SheetContext.Provider>; }
+export const SheetTrigger = ({ children, onClick, ...props }: React.HTMLAttributes<HTMLSpanElement>) => { const context = React.useContext(SheetContext); return <span role="button" tabIndex={0} onClick={(event) => { context?.setOpen(true); onClick?.(event); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") context?.setOpen(true); }} {...props}>{children}</span>; };
+export const SheetContent = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => { const context = React.useContext(SheetContext); if (!context?.open) return null; return <div className="fixed inset-0 z-50 bg-foreground/30" onClick={(event) => { if (event.target === event.currentTarget) context.setOpen(false); }}><div className={cn("absolute inset-y-0 right-0 w-full max-w-sm border-l bg-surface p-6 shadow-xl", className)} {...props}>{children}<button type="button" aria-label="Close menu" className="sr-only" onClick={() => context.setOpen(false)} /></div></div>; };
+export const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div className={cn("flex flex-col space-y-2", className)} {...props} />;
+export const SheetTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className={cn("text-lg font-semibold", className)} {...props} />;

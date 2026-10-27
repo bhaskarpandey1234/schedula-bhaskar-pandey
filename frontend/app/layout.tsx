@@ -8,8 +8,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Schedula Healthcare",
-  description: "A secure foundation for hospital appointment scheduling",
+  title: "Schedula | Clearer care scheduling",
+  description: "A calmer, more transparent way for patients and care teams to plan appointments.",
 };
 
 export default function RootLayout({

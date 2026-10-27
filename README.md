@@ -2,7 +2,7 @@
 
 Schedula is a healthcare appointment-booking application. Phase 1 establishes a secure, TypeScript-first Next.js foundation using the official Supabase starter. Booking workflows arrive in later roadmap phases.
 
-## Phase 1 status
+## Phase 2 status
 
 Implemented:
 
@@ -12,8 +12,11 @@ Implemented:
 - Drizzle/PostgreSQL configuration and a generated, unapplied migration for `profiles`, `patients`, and `doctors`.
 - Vitest foundation tests and Playwright browser smoke-test configuration.
 - Docker-backed local Supabase configuration in [`supabase/config.toml`](supabase/config.toml).
+- Calm clinical design tokens with light/dark semantic themes.
+- Reusable responsive navigation, layout, state, and shadcn-style UI primitives.
+- Public landing page and shared branded authentication shell.
 
-Deferred: availability sessions, appointment slots, appointments, notifications, onboarding, custom portal UI, hosted migrations, and deployment.
+Deferred: role onboarding, availability sessions, appointment slots, appointments, notifications, custom portal UI, hosted migrations, and deployment.
 
 ## Architecture
 
