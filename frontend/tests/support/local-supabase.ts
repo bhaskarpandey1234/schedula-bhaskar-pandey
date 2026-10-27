@@ -1,0 +1,71 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const password = "SchedulaPhase8Test!";
+
+export type TestRole = "patient" | "doctor";
+export type TestUser = { id: string; email: string; client: SupabaseClient; role: TestRole };
+
+function localEnvironment() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (process.env.SCHEDULA_LOCAL_TESTS !== "true" || !url || !key || !serviceRoleKey) {
+    throw new Error("Run integration and E2E tests through the local Supabase harness.");
+  }
+  const host = new URL(url).hostname;
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") throw new Error("Tests refuse to use a non-local Supabase URL.");
+  return { url, key, serviceRoleKey };
+}
+
+export function localAdmin() {
+  const { url, serviceRoleKey } = localEnvironment();
+  return createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+export async function createTestUser(role: TestRole, label: string): Promise<TestUser> {
+  const { url, key } = localEnvironment();
+  const admin = localAdmin();
+  const email = `phase8-${label}-${crypto.randomUUID()}@example.test`;
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: `Phase 8 ${label}`, role },
+  });
+  if (error || !data.user) throw new Error(`Could not create ${role} test user: ${error?.message ?? "unknown error"}`);
+  const client = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+  if (signInError) throw new Error(`Could not sign in ${role} test user: ${signInError.message}`);
+  return { id: data.user.id, email, client, role };
+}
+
+export async function onboardTestUser(user: TestUser) {
+  if (user.role === "patient") {
+    const { error } = await user.client.from("patients").insert({ id: user.id, phone: "+14155552671", date_of_birth: "1990-04-20" });
+    if (error) throw new Error(`Could not onboard patient: ${error.message}`);
+    return;
+  }
+  const { error } = await user.client.from("doctors").insert({
+    id: user.id,
+    specialty: "Cardiology",
+    clinic_name: "Phase 8 Clinic",
+    experience_years: 8,
+    biography: "A test-only physician profile used to validate appointment scheduling behavior.",
+    timezone: "Asia/Kolkata",
+  });
+  if (error) throw new Error(`Could not onboard doctor: ${error.message}`);
+}
+
+export async function deleteTestUsers(users: TestUser[]) {
+  const admin = localAdmin();
+  await Promise.all(users.map(async (user) => {
+    const { error } = await admin.auth.admin.deleteUser(user.id);
+    if (error) throw new Error(`Could not remove test user: ${error.message}`);
+  }));
+}
+
+export function futureDate(days = 21) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}

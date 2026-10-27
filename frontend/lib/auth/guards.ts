@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/validation/auth";
+import { destinationForRole, portalDestinationFor, type PortalDestination } from "@/lib/auth/portal-destination";
 
-export type PortalDestination = "/auth/login" | "/onboarding" | "/patient" | "/doctor";
+export type { PortalDestination } from "@/lib/auth/portal-destination";
 
 export async function getCurrentAccount() {
   const supabase = await createClient();
@@ -15,16 +16,13 @@ export async function getCurrentAccount() {
 }
 
 export async function resolvePortalDestination(): Promise<PortalDestination> {
-  const account = await getCurrentAccount();
-  if (!account) return "/auth/login";
-  if (!account.profile || !account.onboardingComplete) return "/onboarding";
-  return account.profile.role === "patient" ? "/patient" : "/doctor";
+  return portalDestinationFor(await getCurrentAccount());
 }
 
 export async function requireRole(role: Role) {
   const account = await getCurrentAccount();
   if (!account) redirect("/auth/login");
   if (!account.profile || !account.onboardingComplete) redirect("/onboarding");
-  if (account.profile.role !== role) redirect(account.profile.role === "patient" ? "/patient" : "/doctor");
+  if (account.profile.role !== role) redirect(destinationForRole(account.profile.role));
   return account;
 }

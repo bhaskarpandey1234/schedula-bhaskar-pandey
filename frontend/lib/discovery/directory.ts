@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { formatLocalTime, localDateKey as getLocalDateKey } from "@/lib/scheduling/time";
 
 export type DirectoryFilters = { search: string; specialty: string };
 
@@ -66,7 +67,7 @@ export async function getDoctorSlots(doctorId: string) {
 }
 
 export function localDateKey(value: string | Date, timezone: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  return getLocalDateKey(value, timezone);
 }
 
 export function formatDateLabel(dateKey: string) {
@@ -74,7 +75,7 @@ export function formatDateLabel(dateKey: string) {
 }
 
 export function formatSlotTime(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  return formatLocalTime(value, timezone);
 }
 
 export function groupSlotsByDate(slots: DoctorSlot[], timezone: string) {

@@ -82,10 +82,12 @@ The application is available at <http://localhost:3000>. If variables are absent
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:integration
 pnpm --filter frontend db:generate
 pnpm --filter frontend db:migrate
 pnpm build
 pnpm test:e2e
+pnpm test:quality
 ```
 
 Playwright may require a one-time browser installation:
@@ -93,6 +95,8 @@ Playwright may require a one-time browser installation:
 ```bash
 pnpm --filter frontend exec playwright install chromium
 ```
+
+`pnpm test:integration` and `pnpm test:e2e` start and inspect local Supabase, apply the existing Drizzle migrations, and refuse non-local database URLs. They use temporary `@example.test` users that are removed after each test run. Docker Desktop must be running; no hosted Supabase credentials are used by these suites. `pnpm test:quality` runs the complete local quality gate, including linting, type checking, unit tests, integration tests, browser journeys, and the production build.
 
 The Drizzle generate command writes SQL under `frontend/drizzle/`. Start local Supabase first, ensure `frontend/.env.local` contains its server-only `DATABASE_URL`, then run `pnpm --filter frontend db:migrate` to apply the local schema. Hosted migrations and production deployment are intentionally deferred to Phase 9.
 

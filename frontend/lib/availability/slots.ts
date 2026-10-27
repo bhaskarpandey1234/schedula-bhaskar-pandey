@@ -8,3 +8,7 @@ export function generateSlots(start: Date, end: Date, intervalMinutes: 15 | 30 |
   }
   return slots;
 }
+
+export function intervalsOverlap(leftStart: Date, leftEnd: Date, rightStart: Date, rightEnd: Date) {
+  return leftStart < rightEnd && rightStart < leftEnd;
+}

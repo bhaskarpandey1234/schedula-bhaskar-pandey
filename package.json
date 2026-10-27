@@ -8,7 +8,9 @@
     "lint": "pnpm --filter frontend lint",
     "typecheck": "pnpm --filter frontend typecheck",
     "test": "pnpm --filter frontend test",
+    "test:integration": "pnpm --filter frontend test:integration",
     "test:e2e": "pnpm --filter frontend test:e2e",
+    "test:quality": "pnpm --filter frontend test:quality",
     "db:generate": "pnpm --filter frontend db:generate",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop"
