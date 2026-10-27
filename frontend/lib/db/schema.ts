@@ -64,7 +64,7 @@ export const doctors = pgTable("doctors", {
 export const availabilitySessionStatus = pgEnum("availability_session_status", ["active", "cancelled"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["confirmed", "cancelled"]);
-export const notificationType = pgEnum("notification_type", ["appointment_booked"]);
+export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled"]);
 
 export const availabilitySessions = pgTable("availability_sessions", {
   id: uuid("id").defaultRandom().primaryKey(),

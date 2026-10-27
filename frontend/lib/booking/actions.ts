@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { bookingSchema } from "@/lib/validation/booking";
+import { getAppointmentConfirmation } from "@/lib/booking/queries";
+import { sendBookingConfirmationEmail } from "@/lib/email";
 
 export type BookingActionState = { error?: string };
 
@@ -28,8 +30,18 @@ export async function bookAppointmentAction(_: BookingActionState, formData: For
     return { error: "We could not confirm this appointment. Please try again." };
   }
   if (!appointmentId) return { error: "We could not confirm this appointment. Please try again." };
+  const { data: userData } = await supabase.auth.getUser();
+  if (userData.user?.email) {
+    try {
+      const confirmation = await getAppointmentConfirmation(appointmentId);
+      if (confirmation) await sendBookingConfirmationEmail({ to: userData.user.email, doctorName: confirmation.doctor.full_name, clinicName: confirmation.doctor.clinic_name, timezone: confirmation.doctor.timezone, slotStartAt: confirmation.slot.slot_start_at, slotEndAt: confirmation.slot.slot_end_at, reason: confirmation.appointment.reason });
+    } catch {
+      // Email delivery is best-effort and must not invalidate a booked appointment.
+    }
+  }
   revalidatePath("/patient/doctors", "page");
   revalidatePath("/patient", "page");
+  revalidatePath("/patient/appointments", "page");
   revalidatePath("/doctor", "page");
   redirect(`/patient/appointments/${appointmentId}/confirmation`);
 }

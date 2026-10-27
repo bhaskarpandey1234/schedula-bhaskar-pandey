@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { availabilitySessionSchema } from "@/lib/validation/availability";
 import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
+import { getDoctorScheduleAppointments } from "@/lib/appointments/queries";
 
 export type AvailabilityActionState = { error?: string; success?: boolean };
 
@@ -62,8 +63,9 @@ export async function getDoctorSchedule(sessionDate: string) {
   const { supabase, user } = await currentDoctor();
   if (!user) redirect("/auth/login");
   const { data: sessions, error: sessionError } = await supabase.from("availability_sessions").select("id, session_date, start_time, end_time, timezone, interval_minutes, capacity, status").eq("doctor_id", user.id).eq("session_date", sessionDate).order("start_time");
-  if (sessionError || !sessions?.length) return { sessions: [], slots: [] };
+  if (sessionError || !sessions?.length) return { sessions: [], slots: [], appointments: [] };
   const ids = sessions.map((session) => session.id);
   const { data: slots } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status").in("availability_session_id", ids).order("slot_start_at");
-  return { sessions, slots: slots ?? [] };
+  const appointments = await getDoctorScheduleAppointments(sessionDate);
+  return { sessions, slots: slots ?? [], appointments };
 }

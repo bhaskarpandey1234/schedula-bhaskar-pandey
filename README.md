@@ -2,7 +2,7 @@
 
 Schedula is a healthcare appointment-booking application. The TypeScript-first Next.js application supports authenticated patient discovery and transactional appointment booking against future doctor availability.
 
-## Phase 6 status
+## Phase 7 status
 
 Implemented:
 
@@ -21,10 +21,12 @@ Implemented:
 - Doctor profile editing and future availability sessions with generated wave-scheduling slots.
 - Authenticated patient doctor directory with name search, specialty filtering, doctor profiles, and upcoming availability windows.
 - Patient-only discovery read functions that expose directory-safe fields without widening owner-only table policies.
-- Transactional patient booking with capacity-safe slot reservation, duplicate-booking protection, optional visit reason, dedicated review route, durable confirmation page, and persisted patient notification.
-- Appointment and notification tables with patient/doctor ownership policies and timezone-aware slot details.
+- Transactional patient booking with capacity-safe slot reservation, duplicate-booking protection, optional visit reason, dedicated review route, durable confirmation page, and persisted patient/doctor notifications.
+- Patient appointment management with upcoming, past, and cancelled views plus ownership-enforced future cancellation that releases exactly one slot allocation.
+- Doctor schedule appointment visibility with patient names and lifecycle status.
+- Optional server-side Resend booking confirmation email delivery; missing configuration or delivery failure never invalidates a confirmed appointment.
 
-Deferred: appointment cancellation and management, hosted migrations, transactional email, and deployment.
+Deferred: hosted migrations, deployment, and the Phase 8 integration/end-to-end quality gates.
 
 ## Architecture
 
@@ -61,6 +63,8 @@ pnpm install
 Copy `frontend/.env.example` to `frontend/.env.local` (use `Copy-Item` in PowerShell or `cp` in macOS/Linux), then fill in the values.
 
 Fill in `frontend/.env.local` with the project URL, publishable key, and server-only PostgreSQL `DATABASE_URL`. Never commit that file. The publishable key is safe for browser use; database credentials are not.
+
+Optional transactional email can be enabled by adding `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `frontend/.env.local`. These values are server-only and must never be committed.
 
 Start local Supabase when Docker is available:
 
