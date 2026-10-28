@@ -4,6 +4,8 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+export const instant = false;
+
 const messages: Record<string, { title: string; description: string }> = {
   incomplete_link: { title: "This verification link is incomplete or expired", description: "Request a new verification email, then open the newest link." },
   verification_failed: { title: "We could not verify that link", description: "The link may have expired or already been used. Request a new email and try again." },
