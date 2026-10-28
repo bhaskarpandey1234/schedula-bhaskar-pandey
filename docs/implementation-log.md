@@ -68,7 +68,8 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 - Replaced raw query-string authentication error copy with fixed reason codes and recovery actions. Booking return paths are accepted only when they match an internal booking URL.
 - Rebuilt the homepage around doctor search, specialty shortcuts, and real upcoming availability. The only new raster asset is a non-identifying outpatient-care photo in `frontend/public/images/appointment-hero.png`; icons remain code-native Lucide icons.
 - Removed unused Supabase starter screens/components and aligned pinned Next.js, Supabase, React, and `eslint-config-next` versions. ESLint now uses its native flat config.
-- Added unit coverage for portal destinations and safe booking return paths. Database integration and browser E2E checks are still blocked by unavailable Docker.
+- Added unit coverage for portal destinations, safe booking return paths, and blocking compatibility routes. Docker-backed integration and browser E2E checks pass locally.
+- Vercel preview remediation: `/auth/error` and the legacy `/patient` compatibility route family now declare `instant = false` before reading query, route, or session data. The initial preview failures identified those routes sequentially; a clean `next build --webpack --debug-prerender` now completes with `BUILD_ID` present.
 
 ## Phase summary
 
@@ -82,7 +83,7 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 | Phase 6 — Appointment booking | Implemented locally | — | 2 | 2 | Docker-backed verification |
 | Phase 7 — Appointment management | Implemented locally | — | 2 | 2 | Docker-backed verification |
 | Phase 8 — Tests and UX quality | Partially validated | — | 6 | 6 | Route-matrix and E2E require Docker/browser services |
-| Phase 9 — Deployment and handoff | Blocked | — | 2 | 0 | Windows `.next` EPERM during production build; Docker unavailable |
+| Phase 9 — Deployment and handoff | Preview validation | — | 4 | 4 | Awaiting Vercel preview verification before production promotion |
 
 ## Phase 1 — Supabase/Next.js Foundation
 

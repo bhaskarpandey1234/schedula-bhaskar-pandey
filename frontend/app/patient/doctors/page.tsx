@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+export const instant = false;
+
 export default async function LegacyDoctorDirectory({ searchParams }: { searchParams?: Promise<{ q?: string; specialty?: string }> }) {
   const params = await searchParams;
   const query = new URLSearchParams();
