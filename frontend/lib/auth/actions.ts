@@ -28,10 +28,7 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
   const { error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: {
-      data: { role: parsed.data.role },
-      emailRedirectTo: getAuthConfirmRedirect("/onboarding"),
-    },
+    options: { data: { role: parsed.data.role } },
   });
   if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   return { success: true, values: { email: parsed.data.email, role: parsed.data.role } };
@@ -44,15 +41,6 @@ export async function signInAction(_: ActionState, formData: FormData): Promise<
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   redirect(safeReturnPath(formData.get("next")) ?? "/auth/continue");
-}
-
-export async function resendVerificationAction(_: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = emailSchema.safeParse(formValues(formData));
-  if (!parsed.success) return validationError(parsed.error, formData);
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resend({ type: "signup", email: parsed.data.email, options: { emailRedirectTo: getAuthConfirmRedirect("/onboarding") } });
-  if (error) return { error: "We could not resend the verification email yet. Please wait a moment and try again.", values: formValues(formData) };
-  return { success: true };
 }
 
 export async function forgotPasswordAction(_: ActionState, formData: FormData): Promise<ActionState> {

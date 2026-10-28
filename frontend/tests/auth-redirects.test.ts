@@ -16,14 +16,6 @@ describe("production authentication redirects", () => {
     expect(getSiteUrl()).toBe("https://schedula-demo.vercel.app");
   });
 
-  it("routes signup confirmation through the server verification endpoint", () => {
-    process.env.NEXT_PUBLIC_SITE_URL = "https://schedula-demo.vercel.app";
-
-    expect(getAuthConfirmRedirect("/onboarding")).toBe(
-      "https://schedula-demo.vercel.app/auth/confirm?next=/onboarding",
-    );
-  });
-
   it("routes password recovery through the same endpoint", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://schedula-demo.vercel.app";
 
