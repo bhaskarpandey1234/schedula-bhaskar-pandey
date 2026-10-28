@@ -13,15 +13,15 @@ import type { Role } from "@/lib/validation/auth";
 type NavigationLink = { href: string; label: string };
 
 function linksFor(role?: Role): NavigationLink[] {
-  if (role === "patient") return [{ href: "/doctors", label: "Find doctors" }, { href: "/patient/appointments", label: "Appointments" }];
-  if (role === "doctor") return [{ href: "/doctor", label: "Schedule" }, { href: "/doctor/profile", label: "Profile" }];
+  if (role === "patient") return [{ href: "/", label: "Home" }, { href: "/patient", label: "Dashboard" }, { href: "/doctors", label: "Find doctors" }, { href: "/patient/appointments", label: "Appointments" }, { href: "/patient/profile", label: "Profile" }];
+  if (role === "doctor") return [{ href: "/", label: "Home" }, { href: "/doctor", label: "Dashboard" }, { href: "/doctor/schedule", label: "Schedule" }, { href: "/doctor/appointments", label: "Appointments" }, { href: "/doctor/profile", label: "Profile" }];
   return [{ href: "/doctors", label: "Find doctors" }, { href: "/#for-doctors", label: "For doctors" }];
 }
 
 export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
   const [open, setOpen] = useState(false);
   const links = linksFor(role);
-  const home = role === "patient" ? "/doctors" : role === "doctor" ? "/doctor" : "/";
+  const home = "/";
   const navigation = (mobile = false) => links.map((link) => <PendingLink key={link.href} href={link.href} onClick={() => mobile && setOpen(false)} className={mobile ? "rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent" : "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}>{link.label}</PendingLink>);
 
   return <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">

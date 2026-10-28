@@ -161,7 +161,7 @@ pnpm test
 pnpm lint
 ```
 
-After removing only generated `frontend/.next`, the webpack production build completed and generated `.next/BUILD_ID`. The current suite contains 33 unit tests, 4 Docker-backed integration tests, and 8 Playwright browser journeys, all passing. The migration was applied only to the disposable local Supabase database; no hosted database was modified.
+The current suite contains 34 unit tests. The latest clean production build retry is blocked by Windows `.next` `EPERM` output-directory permissions, and Docker-backed checks were not rerun successfully in this environment. Migration `0006` was applied only to the disposable local Supabase database; no hosted database was modified.
 
 ## Remaining environment blockers
 
@@ -172,6 +172,26 @@ Hosted SSR/database validation remains pending because project credentials were 
 ### Hosted Supabase deployment
 
 Local Supabase validation passed. Applying the migration to a hosted project remains a deployment operation and must be performed through the project’s approved deployment workflow.
+
+## 2026-10-28 interactive dashboard consolidation
+
+- Fixed the live Vercel homepage incident: the hosted schema did not yet contain the public discovery RPCs. The public discovery reader now degrades to its normal empty state while the approved hosted migration workflow is pending; the production seed instructions explicitly require migration `0006` before demo content is expected.
+- Fixed the public-route proxy defect so guests and signed-in users can reach `/`, `/doctors`, and `/doctors/[doctorId]`. Authenticated portal destinations now use `/patient` and `/doctor`, while the site logo and role navigation always retain a Home destination.
+- Added role dashboards and grouped navigation: patient overview/profile routes, doctor overview/schedule/appointments/profile routes, responsive sidebar navigation, mobile parity, and icon-led quick actions.
+- Replaced the doctor profile’s always-open form with a summary card and edit sheet, added the patient profile card/edit sheet, and added atomic profile update RPCs in migration `0007_dashboard-and-profile-rpcs.sql`.
+- Rebuilt the homepage hero as a full-bleed background section, added an accessible auto-advancing doctor carousel with reduced-motion behavior, and added specialty-based common care-area cards using non-diagnostic language.
+- Added route-level loading skeletons and an idempotent `frontend/drizzle/seed-demo-doctors.sql`. The seed looks up pre-created, verified Auth users by documented demo email and never stores credentials.
+- Updated route and portal destination tests. TypeScript, lint, and the 34-test unit suite pass. The clean production build still hits the documented Windows `.next` `EPERM` filesystem blocker after the required retry; Docker integration is blocked by Supabase CLI telemetry write permissions in the host environment.
+
+### Newly tracked issues and status
+
+| ID | Issue | Status |
+| --- | --- | --- |
+| UX-023 | Public directory routes were intercepted by the session proxy. | Resolved in code; requires preview verification. |
+| UX-024 | Authenticated users lacked an explicit Home destination and patient dashboard. | Resolved in code; requires authenticated E2E verification. |
+| UX-025 | Profile pages exposed large, scattered forms instead of grouped cards and focused edit controls. | Resolved in code; requires visual verification. |
+| UX-026 | Public doctor data could not appear until hosted migration `0006` was applied. | Hosted migration and approved seed execution remain pending. |
+| UX-027 | Doctor schedule, appointments, profile, and patient profile lacked a coherent responsive workspace. | Resolved in code; requires Docker/E2E verification. |
 
 ## Future phase template
 

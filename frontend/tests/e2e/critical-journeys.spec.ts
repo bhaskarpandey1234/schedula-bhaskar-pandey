@@ -86,6 +86,8 @@ test("doctor can register and create availability with keyboard-select controls"
   await choose(page, "Timezone", "Asia/Kolkata");
   await page.getByRole("button", { name: "Open doctor workspace" }).click();
   await expect(page).toHaveURL(/\/doctor$/);
+  await page.getByRole("link", { name: "Schedule", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/doctor\/schedule$/);
   await page.locator("#sessionDate").fill(futureDate());
   await page.getByLabel("Start time").fill("09:00");
   await page.getByLabel("End time").fill("10:00");

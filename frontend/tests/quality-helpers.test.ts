@@ -14,9 +14,9 @@ describe("portal destination rules", () => {
   });
 
   it("routes complete roles to their own portals", () => {
-    expect(portalDestinationFor({ profile: { role: "patient" }, onboardingComplete: true })).toBe("/doctors");
+    expect(portalDestinationFor({ profile: { role: "patient" }, onboardingComplete: true })).toBe("/patient");
     expect(portalDestinationFor({ profile: { role: "doctor" }, onboardingComplete: true })).toBe("/doctor");
-    expect(destinationForRole("patient")).toBe("/doctors");
+    expect(destinationForRole("patient")).toBe("/patient");
     expect(destinationForRole("doctor")).toBe("/doctor");
   });
 });

@@ -12,6 +12,6 @@ export default async function OnboardingPage() {
   const account = await getCurrentAccount();
   if (!account) redirect("/auth/login");
   if (!account.profile) redirect("/auth/error?reason=profile_missing");
-  if (account.onboardingComplete) redirect(account.profile.role === "patient" ? "/doctors" : "/doctor");
+  if (account.onboardingComplete) redirect(account.profile.role === "patient" ? "/patient" : "/doctor");
   return <AuthShell>{account.profile.role === "patient" ? <PatientOnboardingForm /> : <DoctorOnboardingForm />}</AuthShell>;
 }

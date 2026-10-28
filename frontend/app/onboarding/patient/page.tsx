@@ -11,6 +11,6 @@ export default async function PatientOnboardingPage() {
   const account = await getCurrentAccount();
   if (!account) redirect("/auth/login");
   if (account.profile?.role !== "patient") redirect(account.profile?.role === "doctor" ? "/doctor" : "/onboarding");
-  if (account.onboardingComplete) redirect("/doctors");
+  if (account.onboardingComplete) redirect("/patient");
   return <AuthShell><PatientOnboardingForm /></AuthShell>;
 }

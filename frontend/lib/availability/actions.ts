@@ -31,10 +31,8 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
   const { fullName, specialty, clinicName, experienceYears, biography, timezone } = parsed.data;
-  const { error: profileError } = await supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
-  if (profileError) return { error: "We could not update your profile name.", values: values(formData) };
-  const { error } = await supabase.from("doctors").update({ specialty, clinic_name: clinicName, experience_years: experienceYears, biography, timezone }).eq("id", user.id);
-  if (error) return { error: "We could not update your professional details.", values: values(formData) };
+  const { error } = await supabase.rpc("update_doctor_profile", { p_full_name: fullName, p_specialty: specialty, p_clinic_name: clinicName, p_experience_years: experienceYears, p_biography: biography, p_timezone: timezone });
+  if (error) return { error: "We could not update your professional details. Please try again.", values: values(formData) };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   return { success: true };
@@ -57,7 +55,7 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   if (!data) return { error: "We could not create this availability.", values: values(formData) };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
-  redirect(`/doctor?date=${encodeURIComponent(parsed.data.sessionDate)}&created=1#schedule`);
+  redirect(`/doctor/schedule?date=${encodeURIComponent(parsed.data.sessionDate)}&created=1#schedule`);
 }
 
 export async function getDoctorSchedule(sessionDate: string) {

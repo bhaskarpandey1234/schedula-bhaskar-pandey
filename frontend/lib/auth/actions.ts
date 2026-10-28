@@ -101,7 +101,7 @@ export async function completePatientOnboarding(_: ActionState, formData: FormDa
     p_date_of_birth: parsed.data.dateOfBirth,
   });
   if (error) return { error: "We could not save your patient details. Please review the highlighted fields and try again.", values: formValues(formData) };
-  redirect("/doctors");
+  redirect("/patient");
 }
 
 export async function completeDoctorOnboarding(_: ActionState, formData: FormData): Promise<ActionState> {
