@@ -37,7 +37,16 @@ async function patientRpc<T>(fn: string, args?: Record<string, string | null>) {
 async function publicRpc<T>(fn: string, args?: Record<string, string | null>) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(fn, args);
-  if (error) throw new Error(`Public doctor discovery query failed: ${error.message}`);
+  if (error) {
+    // Keep the public shell available while a hosted Supabase project is
+    // catching up with the discovery migration. The directory then renders
+    // its normal empty state instead of turning the whole page into a 500.
+    if (error.message.toLowerCase().includes("schema cache") || error.message.toLowerCase().includes("does not exist")) {
+      console.warn(`Public discovery function ${fn} is unavailable; returning an empty result until migrations are applied.`);
+      return [] as T;
+    }
+    throw new Error(`Public doctor discovery query failed: ${error.message}`);
+  }
   return (data ?? []) as T;
 }
 
