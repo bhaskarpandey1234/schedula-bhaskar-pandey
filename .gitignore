@@ -58,6 +58,4 @@ ehthumbs.db
 *.pid
 *.seed
 
-# Local implementation notes
-/docs/implementation-log.md
 /docs/schedula-healthcare-roadmap.md

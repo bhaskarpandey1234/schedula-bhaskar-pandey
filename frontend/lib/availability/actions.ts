@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { availabilitySessionSchema } from "@/lib/validation/availability";
 import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
 import { getDoctorScheduleAppointments } from "@/lib/appointments/queries";
+import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 
-export type AvailabilityActionState = { error?: string; success?: boolean };
+export type AvailabilityActionState = FormActionState;
 
-function values(formData: FormData) { return Object.fromEntries(formData.entries()); }
+function values(formData: FormData) { return formValues(formData); }
 function firstIssue(error: unknown) {
   if (error && typeof error === "object" && "issues" in error) return (error as { issues: Array<{ message: string }> }).issues[0]?.message;
   return undefined;
@@ -26,14 +27,14 @@ async function currentDoctor() {
 
 export async function updateDoctorProfileAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
   const parsed = doctorProfileSchema.safeParse(values(formData));
-  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the profile details and try again." };
+  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the profile details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: values(formData) };
   const { supabase, user } = await currentDoctor();
-  if (!user) return { error: "Your doctor session is no longer valid." };
+  if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
   const { fullName, specialty, clinicName, experienceYears, biography, timezone } = parsed.data;
   const { error: profileError } = await supabase.from("profiles").update({ full_name: fullName }).eq("id", user.id);
-  if (profileError) return { error: "We could not update your profile name." };
+  if (profileError) return { error: "We could not update your profile name.", values: values(formData) };
   const { error } = await supabase.from("doctors").update({ specialty, clinic_name: clinicName, experience_years: experienceYears, biography, timezone }).eq("id", user.id);
-  if (error) return { error: "We could not update your professional details." };
+  if (error) return { error: "We could not update your professional details.", values: values(formData) };
   revalidatePath("/patient/doctors", "page");
   revalidatePath(`/patient/doctors/${user.id}`, "page");
   return { success: true };
@@ -41,9 +42,9 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
 
 export async function createAvailabilityAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
   const parsed = availabilitySessionSchema.safeParse(values(formData));
-  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again." };
+  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: values(formData) };
   const { supabase, user } = await currentDoctor();
-  if (!user) return { error: "Your doctor session is no longer valid." };
+  if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
   const { data, error } = await supabase.rpc("create_availability_session_with_slots", {
     p_session_date: parsed.data.sessionDate,
     p_start_time: parsed.data.startTime,
@@ -52,11 +53,11 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
     p_interval_minutes: parsed.data.intervalMinutes,
     p_capacity: parsed.data.capacity,
   });
-  if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability." };
-  if (!data) return { error: "We could not create this availability." };
+  if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: values(formData) };
+  if (!data) return { error: "We could not create this availability.", values: values(formData) };
   revalidatePath("/patient/doctors", "page");
   revalidatePath(`/patient/doctors/${user.id}`, "page");
-  redirect(`/doctor?date=${encodeURIComponent(parsed.data.sessionDate)}`);
+  redirect(`/doctor?date=${encodeURIComponent(parsed.data.sessionDate)}&created=1#schedule`);
 }
 
 export async function getDoctorSchedule(sessionDate: string) {

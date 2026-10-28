@@ -1,128 +1,95 @@
 # Schedula Entity-Relationship Diagram
 
-This production-oriented conceptual ERD models the core hospital appointment scheduling workflow.
+This conceptual ERD is synchronized with the implemented Supabase and Drizzle model. It keeps the five required domain modules in order while documenting implementation-specific tables separately.
 
 ```mermaid
 erDiagram
     USER {
-        int id PK
-        string first_name
-        string last_name
+        uuid id PK
         string email UK
-        string password_hash
-        string role
+        string full_name
+        enum role
         datetime created_at
         datetime updated_at
     }
 
     PATIENT {
-        int id PK
-        int user_id FK, UK
-        date date_of_birth
+        uuid id PK, FK
         string phone
-        string address_line1
-        string address_line2
-        string city
-        string state
-        string postal_code
-        string country
+        date date_of_birth
         datetime created_at
         datetime updated_at
     }
 
     DOCTOR {
-        int id PK
-        int user_id FK, UK
-        string specialization
-        string phone
-        string address_line1
-        string address_line2
-        string city
-        string state
-        string postal_code
-        string country
+        uuid id PK, FK
+        string specialty
+        string clinic_name
+        int experience_years
+        string biography
+        string timezone
         datetime created_at
         datetime updated_at
     }
 
     AVAILABILITY {
-        int id PK
-        int doctor_id FK
-        date available_date
+        uuid id PK
+        uuid doctor_id FK
+        date session_date
         time start_time
         time end_time
         string timezone
+        int interval_minutes
+        int capacity
         string status
         datetime created_at
         datetime updated_at
     }
 
     APPOINTMENT {
-        int id PK
-        int patient_id FK
-        int doctor_id FK
-        int availability_id FK
-        string reason
+        uuid id PK
+        uuid patient_id FK
+        uuid doctor_id FK
+        uuid slot_id FK
         string status
-        datetime scheduled_at
-        int duration_minutes
-        string cancellation_reason
+        string reason
         datetime created_at
         datetime updated_at
     }
 
     USER ||--o| PATIENT : "has patient profile"
     USER ||--o| DOCTOR : "has doctor profile"
-    DOCTOR ||--o{ AVAILABILITY : "defines"
+    DOCTOR ||--o{ AVAILABILITY : "defines sessions"
     PATIENT ||--o{ APPOINTMENT : "books"
     DOCTOR ||--o{ APPOINTMENT : "handles"
-    AVAILABILITY ||--o{ APPOINTMENT : "contains"
+    AVAILABILITY ||--o{ APPOINTMENT : "provides generated slots"
 ```
 
-## Relationship Explanation
+## Relationship and implementation notes
 
-- **User -> Patient: one-to-one** - A user can have zero or one patient profile, and each patient profile belongs to one user.
-- **User -> Doctor: one-to-one** - A user can have zero or one doctor profile, and each doctor profile belongs to one user.
-- **Doctor -> Availability: one-to-many** - A doctor can define many availability windows, and each availability window belongs to one doctor.
-- **Patient -> Appointment: one-to-many** - A patient can have many appointments, and each appointment belongs to one patient.
-- **Doctor -> Appointment: one-to-many** - A doctor can handle many appointments, and each appointment belongs to one doctor.
-- **Availability -> Appointment: one-to-many** - An availability window can contain many appointments, and each appointment belongs to one availability window.
+- `USER` represents the application profile joined to Supabase `auth.users`. The email is owned by Supabase Auth; `full_name` and `role` are stored in `profiles`.
+- `PATIENT.id` and `DOCTOR.id` are both the profile ID and enforce one profile per user role. There are no separate `user_id` columns in the implemented schema.
+- Patient onboarding currently stores phone and date of birth.
+- Doctor onboarding and editing store specialty, clinic name, experience, biography, and IANA timezone.
+- `AVAILABILITY` represents an `availability_sessions` record. The application generates `appointment_slots` from each session; slots are intentionally kept outside this five-module conceptual ERD.
+- `APPOINTMENT` references a generated slot through `slot_id`, while doctor and patient ownership are retained for authorization and reporting.
+- `notifications` supports appointment events but is an implementation-specific support table, not a sixth conceptual domain module.
 
-The current schema has no many-to-many relationships. A many-to-many relationship would require a dedicated join table. For example, shared availability would require a `DoctorAvailability` table between `Doctor` and `Availability`; the current model is doctor-specific because `Availability.doctor_id` assigns each availability window to one doctor.
+## Business rules
 
-## Schema and Business Rules
+- Profile roles are limited to `patient` and `doctor` and are immutable after profile creation.
+- Patient and doctor profile IDs must reference the same authenticated user profile.
+- A doctor’s availability sessions must not overlap and must use a valid timezone.
+- Availability must start in the future, end after it starts, and use a supported interval and capacity.
+- Appointments must reference a valid generated slot and matching doctor.
+- A patient cannot book the same slot twice.
+- Appointment status currently supports `confirmed` and `cancelled`; future lifecycle states can be added when product requirements define them.
+- All audit timestamps use timezone-aware database timestamps.
+- Passwords are managed by Supabase Auth and are never stored in the application schema.
 
-- `User.email` must be unique and normalized for future authentication.
-- `password_hash` is reserved for secure future authentication storage; plaintext passwords must never be stored.
-- `Patient.user_id` and `Doctor.user_id` must be unique to enforce one profile per user role.
-- The unique `user_id` foreign keys enforce the one-to-one User-to-profile relationships.
-- `Availability.doctor_id` allows one doctor to have many availability records while each record belongs to one doctor.
-- `Appointment.patient_id` and `Appointment.doctor_id` allow patients and doctors to have many appointments.
-- `Appointment.availability_id` is non-unique so multiple appointments can share one broad availability window.
-- `User.first_name` and `User.last_name` provide separately searchable identity fields.
-- `date_of_birth` is used instead of `age` because age changes over time.
-- `Availability.end_time` must be later than `Availability.start_time`.
-- A doctor's availability windows must not overlap.
-- `Availability.timezone` preserves the local timezone for the availability window.
-- A confirmed appointment must reference an available availability window.
-- `Appointment.doctor_id` must be derived from `Availability.doctor_id` when an appointment is created.
-- The appointment doctor and availability doctor must always match.
-- `Availability` is a broad working window and may contain multiple appointments.
-- `Appointment.availability_id` must not be unique.
-- Each appointment must have its own `scheduled_at` and `duration_minutes`.
-- Appointment times must fit inside the referenced availability window.
-- Appointments for the same doctor must not overlap.
-- Appointment statuses should support at least `requested`, `confirmed`, `completed`, `cancelled`, and `no-show`.
-- Availability statuses should support at least `available`, `held`, `booked`, `blocked`, and `cancelled`.
-- Timestamps should be stored consistently and appointment scheduling should use timezone-aware values in the PostgreSQL implementation.
-- Authentication lifecycle fields such as account activation, email verification, and last-login tracking are deferred until authentication requirements are defined.
-- Doctor licensing and verification fields are deferred until licensing requirements are defined.
+## Scope decisions
 
-## Scope Decisions
-
-This ERD keeps the required five core entities. Separate `Address`, `Credential`, `Location`, `AuditLog`, `Notification`, `AppointmentHistory`, licensing, and authentication entities may be introduced during detailed backend design if the application requires them.
-
-Medical records, diagnoses, prescriptions, payments, insurance, and other clinical or financial modules are outside the scope of this scheduling ERD.
+This diagram intentionally excludes addresses, credentials, licensing, medical records, diagnoses, prescriptions, payments, insurance, and other healthcare entities until their requirements are defined.
 
 ## References
 

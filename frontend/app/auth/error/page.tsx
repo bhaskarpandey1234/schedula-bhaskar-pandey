@@ -1,4 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CircleAlert } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { Suspense } from "react";
 
 async function ErrorContent({
@@ -33,15 +36,12 @@ export default function Page({
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">
-                Sorry, something went wrong.
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-2xl"><CircleAlert className="size-5 text-destructive" aria-hidden="true" />Verification needs attention</CardTitle></CardHeader>
             <CardContent>
               <Suspense>
                 <ErrorContent searchParams={searchParams} />
               </Suspense>
+              <Button asChild className="mt-4"><Link href="/auth/login">Go to sign in</Link></Button>
             </CardContent>
           </Card>
         </div>

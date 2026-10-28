@@ -4,15 +4,9 @@ const password = z.string().min(12, "Use at least 12 characters.");
 
 export const signUpSchema = z
   .object({
-    fullName: z.string().trim().min(2).max(120),
     email: z.string().trim().toLowerCase().email(),
     password,
-    passwordConfirmation: z.string(),
     role: z.enum(["patient", "doctor"]),
-  })
-  .refine((value) => value.password === value.passwordConfirmation, {
-    path: ["passwordConfirmation"],
-    message: "Passwords do not match.",
   });
 
 export const signInSchema = z.object({
