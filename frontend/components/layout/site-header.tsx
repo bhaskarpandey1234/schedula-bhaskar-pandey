@@ -15,7 +15,7 @@ type NavigationLink = { href: string; label: string };
 function linksFor(role?: Role): NavigationLink[] {
   if (role === "patient") return [{ href: "/", label: "Home" }, { href: "/patient", label: "Dashboard" }, { href: "/doctors", label: "Find doctors" }, { href: "/patient/appointments", label: "Appointments" }, { href: "/patient/profile", label: "Profile" }];
   if (role === "doctor") return [{ href: "/", label: "Home" }, { href: "/doctor", label: "Dashboard" }, { href: "/doctor/schedule", label: "Schedule" }, { href: "/doctor/appointments", label: "Appointments" }, { href: "/doctor/profile", label: "Profile" }];
-  return [{ href: "/doctors", label: "Find doctors" }, { href: "/#for-doctors", label: "For doctors" }];
+  return [{ href: "/doctors", label: "Find doctors" }, { href: "/#browse-care", label: "Browse care" }];
 }
 
 export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
