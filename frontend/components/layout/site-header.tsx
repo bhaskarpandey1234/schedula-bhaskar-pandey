@@ -22,7 +22,7 @@ export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
   const [open, setOpen] = useState(false);
   const links = linksFor(role);
   const home = "/";
-  const navigation = (mobile = false) => links.map((link) => <PendingLink key={link.href} href={link.href} onClick={() => mobile && setOpen(false)} className={mobile ? "rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent" : "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}>{link.label}</PendingLink>);
+  const navigation = (mobile = false) => (mobile ? links : links.slice(0, 2)).map((link) => <PendingLink key={link.href} href={link.href} onClick={() => mobile && setOpen(false)} className={mobile ? "rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent" : "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}>{link.label}</PendingLink>);
 
   return <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
     <PageContainer className="flex h-16 items-center justify-between gap-4">
