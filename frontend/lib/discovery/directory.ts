@@ -1,31 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatLocalTime, localDateKey as getLocalDateKey } from "@/lib/scheduling/time";
 import { type DirectoryFilters } from "@/lib/discovery/filters";
+import { formatDateLabel } from "@/lib/discovery/format";
+import type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
 
 export { parseDirectoryFilters, type DirectoryFilters } from "@/lib/discovery/filters";
-
-export type DoctorDirectoryRecord = {
-  doctor_id: string;
-  full_name: string;
-  specialty: string;
-  clinic_name: string;
-  experience_years: number;
-  available_dates: string[];
-};
-
-export type DoctorDetailRecord = DoctorDirectoryRecord & {
-  biography: string;
-  timezone: string;
-};
-
-export type DoctorSlot = {
-  slot_id: string;
-  slot_start_at: string;
-  slot_end_at: string;
-  timezone: string;
-  capacity: number;
-  remaining_capacity: number;
-};
+export { formatDateLabel } from "@/lib/discovery/format";
+export type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
 
 async function patientRpc<T>(fn: string, args?: Record<string, string | null>) {
   const supabase = await createClient();
@@ -98,10 +79,6 @@ export async function getDoctorSlots(doctorId: string) {
 
 export function localDateKey(value: string | Date, timezone: string) {
   return getLocalDateKey(value, timezone);
-}
-
-export function formatDateLabel(dateKey: string) {
-  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" }).format(new Date(`${dateKey}T12:00:00Z`));
 }
 
 export function formatSlotTime(value: string, timezone: string) {

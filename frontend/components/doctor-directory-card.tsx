@@ -3,7 +3,8 @@ import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDateLabel, type DoctorDirectoryRecord } from "@/lib/discovery/directory";
+import { formatDateLabel } from "@/lib/discovery/format";
+import type { DoctorDirectoryRecord } from "@/lib/discovery/types";
 
 export function DoctorDirectoryCard({ doctor }: { doctor: DoctorDirectoryRecord }) {
   return <Card className="flex h-full flex-col">

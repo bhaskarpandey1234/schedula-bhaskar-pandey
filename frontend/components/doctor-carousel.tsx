@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { DoctorDirectoryCard } from "@/components/doctor-directory-card";
-import type { DoctorDirectoryRecord } from "@/lib/discovery/directory";
+import type { DoctorDirectoryRecord } from "@/lib/discovery/types";
 
 export function DoctorCarousel({ doctors }: { doctors: DoctorDirectoryRecord[] }) {
   const ref = useRef<HTMLDivElement>(null);
