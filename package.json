@@ -11,6 +11,7 @@
     "test:integration": "pnpm --filter frontend test:integration",
     "test:e2e": "pnpm --filter frontend test:e2e",
     "test:quality": "pnpm --filter frontend test:quality",
+    "release:check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter frontend db:generate",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop"

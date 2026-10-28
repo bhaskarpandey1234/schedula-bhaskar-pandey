@@ -80,6 +80,14 @@ The application is available at <http://localhost:3000>. If variables are absent
 
 ## Validation commands
 
+Before pushing a deployment branch, run the release gate:
+
+```bash
+pnpm release:check
+```
+
+This runs frontend linting, type checking, unit tests, and the production build. Run `pnpm test:integration` and `pnpm test:e2e` separately when Docker Desktop and local Supabase are available.
+
 ```bash
 pnpm lint
 pnpm typecheck
