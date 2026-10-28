@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
 import { authErrorMessage } from "@/lib/auth/errors";
+import { safeReturnPath } from "@/lib/auth/return-path";
 import { formValues, firstZodError, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 import {
   doctorOnboardingSchema,
@@ -42,7 +43,7 @@ export async function signInAction(_: ActionState, formData: FormData): Promise<
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
-  redirect("/auth/continue");
+  redirect(safeReturnPath(formData.get("next")) ?? "/auth/continue");
 }
 
 export async function resendVerificationAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -94,9 +95,13 @@ export async function completePatientOnboarding(_: ActionState, formData: FormDa
   if (!parsed.success) return validationError(parsed.error, formData);
   const { supabase, user } = await currentUserAndRole("patient");
   if (!user) return { error: "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
-  const { error } = await supabase.from("patients").upsert({ id: user.id, phone: parsed.data.phone, date_of_birth: parsed.data.dateOfBirth }, { onConflict: "id" });
+  const { error } = await supabase.rpc("complete_patient_onboarding", {
+    p_full_name: parsed.data.fullName,
+    p_phone: parsed.data.phone,
+    p_date_of_birth: parsed.data.dateOfBirth,
+  });
   if (error) return { error: "We could not save your patient details. Please review the highlighted fields and try again.", values: formValues(formData) };
-  redirect("/patient");
+  redirect("/doctors");
 }
 
 export async function completeDoctorOnboarding(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -104,7 +109,14 @@ export async function completeDoctorOnboarding(_: ActionState, formData: FormDat
   if (!parsed.success) return validationError(parsed.error, formData);
   const { supabase, user } = await currentUserAndRole("doctor");
   if (!user) return { error: "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
-  const { error } = await supabase.from("doctors").upsert({ id: user.id, specialty: parsed.data.specialty, clinic_name: parsed.data.clinicName, experience_years: parsed.data.experienceYears, biography: parsed.data.biography, timezone: parsed.data.timezone }, { onConflict: "id" });
+  const { error } = await supabase.rpc("complete_doctor_onboarding", {
+    p_full_name: parsed.data.fullName,
+    p_specialty: parsed.data.specialty,
+    p_clinic_name: parsed.data.clinicName,
+    p_experience_years: parsed.data.experienceYears,
+    p_biography: parsed.data.biography,
+    p_timezone: parsed.data.timezone,
+  });
   if (error) return { error: "We could not save your doctor details. Please review the highlighted fields and try again.", values: formValues(formData) };
   redirect("/doctor");
 }

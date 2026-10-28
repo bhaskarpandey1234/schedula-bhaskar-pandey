@@ -22,6 +22,11 @@ export function localAdmin() {
   return createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+export function publicClient() {
+  const { url, key } = localEnvironment();
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
 export async function createTestUser(role: TestRole, label: string): Promise<TestUser> {
   const { url, key } = localEnvironment();
   const admin = localAdmin();
@@ -41,18 +46,11 @@ export async function createTestUser(role: TestRole, label: string): Promise<Tes
 
 export async function onboardTestUser(user: TestUser) {
   if (user.role === "patient") {
-    const { error } = await user.client.from("patients").insert({ id: user.id, phone: "+14155552671", date_of_birth: "1990-04-20" });
+    const { error } = await user.client.rpc("complete_patient_onboarding", { p_full_name: `Phase 8 ${user.role}`, p_phone: "+14155552671", p_date_of_birth: "1990-04-20" });
     if (error) throw new Error(`Could not onboard patient: ${error.message}`);
     return;
   }
-  const { error } = await user.client.from("doctors").insert({
-    id: user.id,
-    specialty: "Cardiology",
-    clinic_name: "Phase 8 Clinic",
-    experience_years: 8,
-    biography: "A test-only physician profile used to validate appointment scheduling behavior.",
-    timezone: "Asia/Kolkata",
-  });
+  const { error } = await user.client.rpc("complete_doctor_onboarding", { p_full_name: "Dr. Phase 8", p_specialty: "Cardiology", p_clinic_name: "Phase 8 Clinic", p_experience_years: 8, p_biography: "A test-only physician profile used to validate appointment scheduling behavior.", p_timezone: "Asia/Kolkata" });
   if (error) throw new Error(`Could not onboard doctor: ${error.message}`);
 }
 

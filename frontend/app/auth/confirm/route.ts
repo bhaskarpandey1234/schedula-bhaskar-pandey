@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) redirect(`/auth/login?verified=1`);
-    redirect("/auth/error?error=We could not verify your email link. Please request a new verification email.");
+    redirect("/auth/error?reason=verification_failed");
   }
 
   if (token_hash && type) {
@@ -28,11 +28,9 @@ export async function GET(request: NextRequest) {
     if (!error) {
       redirect(next === "/onboarding" ? "/auth/login?verified=1" : next);
     } else {
-      // redirect the user to an error page with some instructions
-      redirect("/auth/error?error=We could not verify your email link. Please request a new verification email.");
+      redirect("/auth/error?reason=verification_failed");
     }
   }
 
-  // redirect the user to an error page with some instructions
-  redirect("/auth/error?error=This verification link is incomplete or expired. Please request a new verification email.");
+  redirect("/auth/error?reason=incomplete_link");
 }

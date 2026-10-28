@@ -14,6 +14,6 @@ export function DoctorDirectoryCard({ doctor }: { doctor: DoctorDirectoryRecord 
     <CardContent className="flex-1">
       <div className="flex items-start gap-2 text-sm"><CalendarDays className="mt-0.5 size-4 text-primary" aria-hidden="true" /><div><p className="font-medium">Upcoming availability</p>{doctor.available_dates.length ? <div className="mt-1 flex flex-wrap gap-1.5">{doctor.available_dates.slice(0, 3).map((date) => <Badge key={date} variant="outline">{formatDateLabel(date)}</Badge>)}</div> : <p className="mt-1 text-muted-foreground">No upcoming times in the next 30 days.</p>}</div></div>
     </CardContent>
-    <CardFooter className="gap-2"><Button asChild className="flex-1"><Link href={`/patient/doctors/${doctor.doctor_id}`}>View profile <ArrowRight className="ml-2 size-4" aria-hidden="true" /></Link></Button></CardFooter>
+    <CardFooter className="gap-2"><Button asChild className="flex-1"><Link href={`/doctors/${doctor.doctor_id}`}>View profile <ArrowRight className="ml-2 size-4" aria-hidden="true" /></Link></Button></CardFooter>
   </Card>;
 }

@@ -5,7 +5,7 @@ export function PageContainer({
   children,
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8", className)}>
+    <div className={cn("mx-auto w-full px-4 sm:px-5 lg:px-6 xl:px-8", className)}>
       {children}
     </div>
   );

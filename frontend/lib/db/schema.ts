@@ -35,7 +35,8 @@ export const profiles = pgTable("profiles", {
   id: uuid("id")
     .primaryKey()
     .references(() => authUsers.id, { onDelete: "cascade" }),
-  fullName: text("full_name").notNull(),
+  // A name is collected during role onboarding, after the minimal auth signup.
+  fullName: text("full_name"),
   role: userRole("role").notNull(),
   ...auditColumns(),
 });

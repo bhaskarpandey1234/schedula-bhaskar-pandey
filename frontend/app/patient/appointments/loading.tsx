@@ -1,3 +1,4 @@
 import { LoadingState } from "@/components/states/loading-state";
+import { PageContainer } from "@/components/layout/page-container";
 
-export default function Loading() { return <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LoadingState label="Loading appointments" /></main>; }
+export default function Loading() { return <PageContainer className="py-8"><LoadingState label="Loading appointments" /></PageContainer>; }

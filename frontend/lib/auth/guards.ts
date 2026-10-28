@@ -12,7 +12,7 @@ export async function getCurrentAccount() {
   const { data: profile } = await supabase.from("profiles").select("id, full_name, role").eq("id", userData.user.id).maybeSingle();
   if (!profile) return { user: userData.user, profile: null, onboardingComplete: false };
   const { data: details } = await supabase.from(profile.role === "patient" ? "patients" : "doctors").select("id").eq("id", userData.user.id).maybeSingle();
-  return { user: userData.user, profile, onboardingComplete: Boolean(details) };
+  return { user: userData.user, profile, onboardingComplete: Boolean(details && profile.full_name?.trim()) };
 }
 
 export async function resolvePortalDestination(): Promise<PortalDestination> {
@@ -22,7 +22,7 @@ export async function resolvePortalDestination(): Promise<PortalDestination> {
 export async function requireRole(role: Role) {
   const account = await getCurrentAccount();
   if (!account) redirect("/auth/login");
-  if (!account.profile || !account.onboardingComplete) redirect("/onboarding");
+  if (!account.profile || !account.onboardingComplete || !account.profile.full_name) redirect("/onboarding");
   if (account.profile.role !== role) redirect(destinationForRole(account.profile.role));
   return account;
 }

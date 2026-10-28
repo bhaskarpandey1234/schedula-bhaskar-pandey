@@ -1,1 +1,0 @@
-export function OnboardingFormMessage({ error }: { error?: string }) { return error ? <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null; }

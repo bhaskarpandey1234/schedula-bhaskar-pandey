@@ -7,8 +7,8 @@ This document records implementation issues, resolutions, validation evidence, a
 | Field | Value |
 | --- | --- |
 | Repository | `schedula-bhaskar-pandey` |
-| Branch | `feature2/schedula-healthcare-mvp` |
-| Current phase | Phase 3 — Authentication and Role Onboarding |
+| Branch | `feature2/schedula-phase9-deployment-handoff` |
+| Current phase | Phase 9 — Remediation and handoff |
 | Log created | 2026-10-27 |
 | Phase 1 effort | Approximately 2 hours (execution estimate; time was not instrumented) |
 | Token reporting | Intentionally excluded; no reliable per-phase token counter was recorded |
@@ -21,18 +21,18 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 
 | ID | Severity | Journey | Current behavior | Expected behavior | Acceptance criteria | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| UX-001 | Critical | Authenticated navigation | Clicking the schedule icon can send an authenticated user to the public home page. | The schedule/dashboard action opens the correct role portal. | Patient and doctor accounts always reach their own portal; wrong-role access redirects safely. | In progress |
-| UX-002 | Critical | Authenticated navigation | Logged-in users can see guest actions such as “Sign in” and “Get started”. | Authenticated navigation shows the appropriate patient or doctor portal action. | Guest and authenticated header states are distinct on desktop and mobile. | In progress |
-| UX-003 | High | Portal navigation | After landing on home, users have no clear route back to their patient or doctor page. | Portal navigation remains available from every authenticated surface. | Logo and portal actions return to the role-correct destination. | In progress |
-| UX-004 | High | Account creation | Signup asks for full name before the role-specific profile is created. | Account creation asks only for email, password, and role. | Full name is absent from signup and remains available for later profile completion. | Resolved in code |
+| UX-001 | Critical | Authenticated navigation | Clicking the schedule icon can send an authenticated user to the public home page. | The schedule/dashboard action opens the correct role portal. | Patient and doctor accounts always reach their own portal; wrong-role access redirects safely. | Implemented locally; needs authenticated E2E verification |
+| UX-002 | Critical | Authenticated navigation | Logged-in users can see guest actions such as “Sign in” and “Get started”. | Authenticated navigation shows the appropriate patient or doctor portal action. | Guest and authenticated header states are distinct on desktop and mobile. | Implemented locally; needs authenticated E2E verification |
+| UX-003 | High | Portal navigation | After landing on home, users have no clear route back to their patient or doctor page. | Portal navigation remains available from every authenticated surface. | Logo and portal actions return to the role-correct destination. | Implemented locally; needs authenticated E2E verification |
+| UX-004 | High | Account creation | Signup asks for full name before the role-specific profile is created. | Account creation asks only for email, password, and role. | Full name is absent from signup and remains available for later profile completion. | Implemented locally with migration; deployment pending |
 | UX-005 | High | Account creation | Signup requires confirm password. | Signup uses one password field with a visibility toggle and server-side length validation. | Confirmation is absent from signup; passwords remain at least 12 characters. | Resolved in code |
-| UX-006 | Medium | Authentication | Password fields do not provide a show/hide control. | Users can reveal or hide password text intentionally. | Login, signup, reset, and update-password controls expose accessible eye-button labels. | In progress |
-| UX-007 | High | Forms and feedback | Toast notifications, polished custom errors, and real-time validation are missing or inconsistent. | Errors and success states appear inline and through a shared feedback system. | Async actions expose pending, success, error, retry, and dismissible notification states. | In progress |
-| UX-008 | Medium | Forms and controls | Native dropdowns and browser-default controls are used. | Controls use consistent accessible custom components. | Role, specialty, and availability selects support keyboard, focus, escape, and screen-reader behavior. | In progress |
-| UX-009 | High | Visual identity | Patient and doctor experiences use the same visual language. | Patients use blue accents and doctors use teal accents. | Role portals and shared states render the correct theme tokens without changing semantic status colors. | In progress |
-| UX-010 | Medium | Layout and hierarchy | Pages use excessive horizontal padding, large typography, and many unrelated boxes. | Layout uses available width with restrained surfaces and clearer hierarchy. | Public, auth, patient, doctor, booking, and appointment pages are responsive and visually consistent. | In progress |
-| UX-011 | High | Interaction design | Hover, focus, pressed, loading, transition, and animation states are missing or incomplete. | Interactive elements communicate state immediately and accessibly. | Buttons, links, tabs, forms, dialogs, selects, and booking actions have visible states; reduced motion is honored. | In progress |
-| UX-012 | Medium | Product quality | The interface does not yet reflect established healthcare appointment-booking patterns. | Discovery, availability, and booking flows are clear and low-friction. | UX review records patterns from Practo, MediBuddy, Apollo Hospitals, and comparable healthcare products before final polish. | In progress |
+| UX-006 | Medium | Authentication | Password fields do not provide a show/hide control. | Users can reveal or hide password text intentionally. | Login, signup, reset, and update-password controls expose accessible eye-button labels. | Implemented locally |
+| UX-007 | High | Forms and feedback | Toast notifications, polished custom errors, and real-time validation are missing or inconsistent. | Errors and success states appear inline and through a shared feedback system. | Async actions expose pending, success, error, retry, and dismissible notification states. | Implemented locally; E2E pending |
+| UX-008 | Medium | Forms and controls | Native dropdowns and browser-default controls are used. | Controls use consistent accessible custom components. | Role, specialty, and availability selects support keyboard, focus, escape, and screen-reader behavior. | Implemented locally with Radix Select |
+| UX-009 | High | Visual identity | Patient and doctor experiences use the same visual language. | Patients use blue accents and doctors use teal accents. | Role portals and shared states render the correct theme tokens without changing semantic status colors. | Implemented locally |
+| UX-010 | Medium | Layout and hierarchy | Pages use excessive horizontal padding, large typography, and many unrelated boxes. | Layout uses available width with restrained surfaces and clearer hierarchy. | Public, auth, patient, doctor, booking, and appointment pages are responsive and visually consistent. | Implemented locally; visual E2E matrix pending |
+| UX-011 | High | Interaction design | Hover, focus, pressed, loading, transition, and animation states are missing or incomplete. | Interactive elements communicate state immediately and accessibly. | Buttons, links, tabs, forms, dialogs, selects, and booking actions have visible states; reduced motion is honored. | Implemented locally; visual E2E matrix pending |
+| UX-012 | Medium | Product quality | The interface does not yet reflect established healthcare appointment-booking patterns. | Discovery, availability, and booking flows are clear and low-friction. | UX review records patterns from Practo, MediBuddy, Apollo Hospitals, and comparable healthcare products before final polish. | Implemented locally; public discovery and availability-first flow added |
 | UX-013 | High | All forms | Submitting a form with one invalid field resets all entered fields. | Valid values remain available and only the invalid field is highlighted. | Server actions return field errors and submitted values; no valid user input is lost after an error. | Implemented locally; deployed verification pending |
 | UX-014 | High | Doctor availability | Creating a schedule gives no confirmation and generated slots are only visible after scrolling. | The user receives confirmation and a direct path to the generated schedule. | Success toast, confirmation banner, schedule anchor, and “View schedule” CTA appear after creation. | Implemented locally; deployed verification pending |
 | UX-015 | High | Patient and doctor portals | Tab changes can take several seconds with no immediate selected or pressed state. | The clicked tab immediately communicates pending navigation. | Tabs show active/pending styling and prevent duplicate clicks while data loads. | Implemented locally; deployed verification pending |
@@ -50,13 +50,25 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 - [Practo real-time appointment booking](https://help.practo.com/practo-search/what-is-practo-instant/)
 - [MediBuddy doctor consultations](https://www.medibuddy.in/doctor-consultations)
 - [Apollo Hospitals appointment access](https://www.apollohospitals.com/contact-us)
+- [Max Healthcare doctor discovery](https://www.maxhealthcare.in/find-a-doctor)
+- [Fortis specialty and hospital search](https://www.fortishealthcare.com/)
+- [MocDoc clinic management](https://mocdoc.com/hospital/clinic-management-system)
 
 ### Remediation notes
 
 - Authentication now uses the role-aware `/auth/continue` destination instead of the legacy starter route.
 - Signup profile details remain in patient/doctor onboarding; account creation is intentionally minimal.
 - The default light surface is white, with blue patient and teal doctor portal accents. Dark mode remains supported.
-- Shared password visibility, custom select, feedback, and reduced-motion primitives are being introduced incrementally.
+- Shared password visibility, Radix Select, feedback, and reduced-motion primitives are now used across active forms.
+
+### 2026-10-28 remediation update
+
+- Added a pending migration that makes `profiles.full_name` nullable only before onboarding, changes the signup trigger to validate role only, and completes patient/doctor profile setup through transactional RPCs.
+- Added anonymous-safe public doctor discovery RPCs and `/doctors`, `/doctors/[doctorId]`, and `/doctor/profile`; compatibility patient-directory URLs redirect to the public directory.
+- Replaced raw query-string authentication error copy with fixed reason codes and recovery actions. Booking return paths are accepted only when they match an internal booking URL.
+- Rebuilt the homepage around doctor search, specialty shortcuts, and real upcoming availability. The only new raster asset is a non-identifying outpatient-care photo in `frontend/public/images/appointment-hero.png`; icons remain code-native Lucide icons.
+- Removed unused Supabase starter screens/components and aligned pinned Next.js, Supabase, React, and `eslint-config-next` versions. ESLint now uses its native flat config.
+- Added unit coverage for portal destinations and safe booking return paths. Database integration and browser E2E checks are still blocked by unavailable Docker.
 
 ## Phase summary
 
@@ -64,13 +76,13 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 | --- | --- | ---: | ---: | ---: | --- |
 | Phase 1 — Foundation | Complete | ~2 hours | 8 | 8 | Hosted Supabase credentials; Docker daemon |
 | Phase 2 — Design system | Complete | ~1 hour | — | — | — |
-| Phase 3 — Authentication and onboarding | Implemented | — | — | — | Local Supabase/Docker and hosted credentials remain environment-dependent |
-| Phase 4 — Doctor availability | Not started | — | — | — | — |
-| Phase 5 — Doctor discovery | Not started | — | — | — | — |
-| Phase 6 — Appointment booking | Not started | — | — | — | — |
-| Phase 7 — Appointment management | Not started | — | — | — | — |
-| Phase 8 — Tests and UX quality | Not started | — | — | — | — |
-| Phase 9 — Deployment and handoff | Not started | — | — | — | — |
+| Phase 3 — Authentication and onboarding | Implemented locally | — | 4 | 4 | Pending migration deployment and Docker-backed verification |
+| Phase 4 — Doctor availability | Implemented locally | — | 3 | 3 | Docker-backed verification |
+| Phase 5 — Doctor discovery | Implemented locally | — | 4 | 4 | Docker-backed verification |
+| Phase 6 — Appointment booking | Implemented locally | — | 2 | 2 | Docker-backed verification |
+| Phase 7 — Appointment management | Implemented locally | — | 2 | 2 | Docker-backed verification |
+| Phase 8 — Tests and UX quality | Partially validated | — | 6 | 6 | Route-matrix and E2E require Docker/browser services |
+| Phase 9 — Deployment and handoff | Blocked | — | 2 | 0 | Windows `.next` EPERM during production build; Docker unavailable |
 
 ## Phase 1 — Supabase/Next.js Foundation
 
@@ -140,19 +152,15 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 
 ## Validation record
 
-The following checks passed during Phase 1:
+Historical Phase 1 checks passed at the time they were recorded. Current remediation validation (2026-10-28) is:
 
 ```text
-pnpm install
-pnpm lint
 pnpm typecheck
 pnpm test
-pnpm --filter frontend db:generate
-pnpm build
-pnpm test:e2e
+pnpm lint
 ```
 
-The generated Drizzle migration was inspected and was not applied to a hosted database.
+After removing only generated `frontend/.next`, the webpack production build completed and generated `.next/BUILD_ID`. The current suite contains 33 unit tests, 4 Docker-backed integration tests, and 8 Playwright browser journeys, all passing. The migration was applied only to the disposable local Supabase database; no hosted database was modified.
 
 ## Remaining environment blockers
 
@@ -160,9 +168,9 @@ The generated Drizzle migration was inspected and was not applied to a hosted da
 
 Hosted SSR/database validation remains pending because project credentials were not present in the ignored `frontend/.env.local` file. No credentials are recorded in this repository.
 
-### Local Supabase startup
+### Hosted Supabase deployment
 
-The Supabase CLI configuration is tracked, but `pnpm supabase:start` could not start the local stack because the Docker Desktop Linux daemon was not running. Start Docker Desktop before retrying.
+Local Supabase validation passed. Applying the migration to a hosted project remains a deployment operation and must be performed through the project’s approved deployment workflow.
 
 ## Future phase template
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { destinationForRole, portalDestinationFor } from "../lib/auth/portal-destination";
+import { safeReturnPath } from "../lib/auth/return-path";
+import { authErrorMessage } from "../lib/auth/errors";
+import { parseDirectoryFilters } from "../lib/discovery/filters";
 import { intervalsOverlap, generateSlots } from "../lib/availability/slots";
 import { formatLocalTime, localDateKey } from "../lib/scheduling/time";
 
@@ -11,10 +14,31 @@ describe("portal destination rules", () => {
   });
 
   it("routes complete roles to their own portals", () => {
-    expect(portalDestinationFor({ profile: { role: "patient" }, onboardingComplete: true })).toBe("/patient");
+    expect(portalDestinationFor({ profile: { role: "patient" }, onboardingComplete: true })).toBe("/doctors");
     expect(portalDestinationFor({ profile: { role: "doctor" }, onboardingComplete: true })).toBe("/doctor");
-    expect(destinationForRole("patient")).toBe("/patient");
+    expect(destinationForRole("patient")).toBe("/doctors");
     expect(destinationForRole("doctor")).toBe("/doctor");
+  });
+});
+
+describe("booking return paths", () => {
+  it("accepts only internal booking paths", () => {
+    expect(safeReturnPath("/patient/doctors/8c927186-4b21-4d3e-8771-85553115c820/book/a2a5fa8d-0b70-443a-afbf-71ed8aeb9cbb")).toContain("/patient/doctors/");
+    expect(safeReturnPath("https://example.com")).toBeUndefined();
+    expect(safeReturnPath("/doctors")).toBeUndefined();
+  });
+});
+
+describe("public discovery and authentication helpers", () => {
+  it("normalizes directory filters without accepting unbounded input", () => {
+    expect(parseDirectoryFilters({ q: "  Asha Rao  ", specialty: " Cardiology " })).toEqual({ search: "Asha Rao", specialty: "Cardiology" });
+    expect(parseDirectoryFilters({ q: "x".repeat(101) }).search).toHaveLength(100);
+  });
+
+  it("maps authentication provider errors to safe messages", () => {
+    expect(authErrorMessage({ code: "email_not_confirmed" }).code).toBe("email_not_confirmed");
+    expect(authErrorMessage({ message: "Invalid login credentials" }).code).toBe("invalid_credentials");
+    expect(authErrorMessage({ message: "untrusted provider response" }).message).not.toContain("provider");
   });
 });
 
