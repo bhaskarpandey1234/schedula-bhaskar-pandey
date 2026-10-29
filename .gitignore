@@ -7,9 +7,9 @@ node_modules/
 !.env.example
 !.env.*.example
 
-# Local agent and planning guidance
-AGENTS.md
+# Local planning guidance
 plan.txt
+frontend/AGENTS.md
 
 # Next.js
 .next/
@@ -58,6 +58,4 @@ ehthumbs.db
 *.pid
 *.seed
 
-# Local implementation notes
-/docs/implementation-log.md
 /docs/schedula-healthcare-roadmap.md

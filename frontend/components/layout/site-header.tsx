@@ -3,44 +3,38 @@
 import { Menu, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Phase3LogoutButton } from "@/components/phase3-logout-button";
 import { PageContainer } from "@/components/layout/page-container";
+import { PendingLink } from "@/components/pending-link";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import type { Role } from "@/lib/validation/auth";
 
-const links = [
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#for-patients", label: "For patients" },
-  { href: "#for-doctors", label: "For doctors" },
-];
+type NavigationLink = { href: string; label: string };
 
-export function SiteHeader() {
+function linksFor(role?: Role): NavigationLink[] {
+  if (role === "patient") return [{ href: "/", label: "Home" }, { href: "/patient", label: "Dashboard" }, { href: "/doctors", label: "Find doctors" }, { href: "/patient/appointments", label: "Appointments" }, { href: "/patient/profile", label: "Profile" }];
+  if (role === "doctor") return [{ href: "/", label: "Home" }, { href: "/doctor", label: "Dashboard" }, { href: "/doctor/schedule", label: "Schedule" }, { href: "/doctor/appointments", label: "Appointments" }, { href: "/doctor/profile", label: "Profile" }];
+  return [{ href: "/doctors", label: "Find doctors" }, { href: "/#browse-care", label: "Browse care" }];
+}
+
+export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
   const [open, setOpen] = useState(false);
+  const links = linksFor(role);
+  const home = "/";
+  const navigation = (mobile = false) => (mobile ? links : links.slice(0, 2)).map((link) => <PendingLink key={link.href} href={link.href} onClick={() => mobile && setOpen(false)} className={mobile ? "rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent" : "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}>{link.label}</PendingLink>);
 
-  return (
-    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <PageContainer className="flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Stethoscope aria-hidden="true" className="size-5" />
-          </span>
-          <span className="text-lg">Schedula</span>
-        </Link>
-
-        <nav aria-label="Primary navigation" className="hidden items-center gap-7 md:flex">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button>
-          <Button asChild size="sm"><Link href="/auth/sign-up">Get started</Link></Button>
-        </div>
-
-        <Sheet open={open} onOpenChange={setOpen}><SheetTrigger className="md:hidden" aria-label="Open navigation"><Button type="button" size="icon" variant="outline"><Menu aria-hidden="true" /></Button></SheetTrigger><SheetContent id="mobile-navigation"><PageContainer className="flex flex-col gap-2 py-4"><div className="mb-4 flex items-center justify-between"><span className="font-semibold">Menu</span><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Button></div>{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent">{link.label}</Link>)}<div className="mt-2 grid grid-cols-2 gap-2 border-t pt-4"><Button asChild variant="outline"><Link href="/auth/login">Sign in</Link></Button><Button asChild><Link href="/auth/sign-up">Get started</Link></Button></div></PageContainer></SheetContent></Sheet>
-      </PageContainer>
-    </header>
-  );
+  return <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+    <PageContainer className="flex h-16 items-center justify-between gap-4">
+      <Link href={home} className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Stethoscope aria-hidden="true" className="size-5" /></span>
+        <span className="text-lg">Schedula</span>
+      </Link>
+      <nav aria-label="Primary navigation" className="hidden flex-1 items-center justify-center gap-7 md:flex">{navigation()}</nav>
+      <div className="hidden items-center gap-2 md:flex">
+        {role ? <><span className="max-w-44 truncate text-sm text-muted-foreground">{name}</span><Phase3LogoutButton /></> : <><Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button><Button asChild size="sm"><Link href="/auth/sign-up">Create account</Link></Button></>}
+      </div>
+      <Sheet open={open} onOpenChange={setOpen}><SheetTrigger className="inline-flex size-9 items-center justify-center rounded-md border border-input text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Open navigation"><Menu className="size-4" aria-hidden="true" /></SheetTrigger><SheetContent id="mobile-navigation"><div className="flex h-full flex-col"><div className="mb-5 flex items-center justify-between"><span className="font-semibold">Menu</span><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Button></div><nav aria-label="Mobile navigation" className="grid gap-1">{navigation(true)}</nav><div className="mt-auto grid gap-2 border-t pt-4">{role ? <><p className="px-3 text-sm text-muted-foreground">{name}</p><Phase3LogoutButton /></> : <><Button asChild variant="outline"><Link href="/auth/login">Sign in</Link></Button><Button asChild><Link href="/auth/sign-up">Create account</Link></Button></>}</div></div></SheetContent></Sheet>
+    </PageContainer>
+  </header>;
 }

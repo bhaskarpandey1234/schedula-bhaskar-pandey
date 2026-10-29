@@ -2,7 +2,7 @@
 
 Schedula is a healthcare appointment-booking application. The TypeScript-first Next.js application supports authenticated patient discovery and transactional appointment booking against future doctor availability.
 
-## Phase 7 status
+## Phase 9 status
 
 Implemented:
 
@@ -26,7 +26,9 @@ Implemented:
 - Doctor schedule appointment visibility with patient names and lifecycle status.
 - Optional server-side Resend booking confirmation email delivery; missing configuration or delivery failure never invalidates a confirmed appointment.
 
-Deferred: hosted migrations, deployment, and the Phase 8 integration/end-to-end quality gates.
+Phase 8 quality gates are complete. Phase 9 adds deployment-safe authentication redirects and the release handoff runbook. Hosted Supabase migration and Vercel deployment require provider dashboard access and are recorded in [`docs/phase-9-handoff.md`](docs/phase-9-handoff.md).
+
+Doctor-initiated appointment cancellation remains explicitly deferred. The deployed release validates patient cancellation and capacity restoration.
 
 ## Architecture
 
@@ -78,6 +80,14 @@ The application is available at <http://localhost:3000>. If variables are absent
 
 ## Validation commands
 
+Before pushing a deployment branch, run the release gate:
+
+```bash
+pnpm release:check
+```
+
+This runs frontend linting, type checking, unit tests, and the production build. Run `pnpm test:integration` and `pnpm test:e2e` separately when Docker Desktop and local Supabase are available.
+
 ```bash
 pnpm lint
 pnpm typecheck
@@ -99,6 +109,10 @@ pnpm --filter frontend exec playwright install chromium
 `pnpm test:integration` and `pnpm test:e2e` start and inspect local Supabase, apply the existing Drizzle migrations, and refuse non-local database URLs. They use temporary `@example.test` users that are removed after each test run. Docker Desktop must be running; no hosted Supabase credentials are used by these suites. `pnpm test:quality` runs the complete local quality gate, including linting, type checking, unit tests, integration tests, browser journeys, and the production build.
 
 The Drizzle generate command writes SQL under `frontend/drizzle/`. Start local Supabase first, ensure `frontend/.env.local` contains its server-only `DATABASE_URL`, then run `pnpm --filter frontend db:migrate` to apply the local schema. Hosted migrations and production deployment are intentionally deferred to Phase 9.
+
+## Phase 9 deployment handoff
+
+The Vercel project should use `frontend/` as its root directory and Node 22. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in Vercel. Keep `DATABASE_URL`, Supabase service-role keys, demo credentials, and any `RESEND_*` values out of Git and out of Vercel unless a future server-side feature requires them. Apply the ordered Drizzle migrations from a secure migration environment, then configure Supabase Auth’s production Site URL, exact confirmation/recovery redirects, and OTP-based email templates. See the handoff document for release evidence and limitations.
 
 ## Future roadmap
 

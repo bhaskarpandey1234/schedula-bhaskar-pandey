@@ -43,6 +43,20 @@
       "when": 1793130800000,
       "tag": "0005_phase7-appointment-management",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793134400000,
+      "tag": "0006_public-discovery-and-onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793202000000,
+      "tag": "0007_dashboard-and-profile-rpcs",
+      "breakpoints": true
     }
   ]
 }

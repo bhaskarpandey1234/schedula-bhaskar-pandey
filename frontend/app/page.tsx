@@ -1,21 +1,57 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CalendarCheck2, CheckCircle2, Clock3, ShieldCheck, UsersRound } from "lucide-react";
+import { connection } from "next/server";
+import { ArrowRight, CalendarDays, Search, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CustomSelect } from "@/components/ui/custom-select";
+import { CareAreaCarousel } from "@/components/care-area-carousel";
+import { DoctorCarousel } from "@/components/doctor-carousel";
 import { PageContainer } from "@/components/layout/page-container";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { getCurrentAccount } from "@/lib/auth/guards";
+import { getPublicDoctorSpecialties, searchPublicDoctors } from "@/lib/discovery/directory";
 
-const steps = [
-  { icon: UsersRound, title: "Choose the right care", description: "Start with a clear view of the people and services available to you." },
-  { icon: CalendarCheck2, title: "Find a time that works", description: "Browse future availability and select a convenient appointment window." },
-  { icon: CheckCircle2, title: "Stay in control", description: "Keep your plans organised with simple, understandable appointment details." },
-];
+export const instant = false;
 
-export default function Home() {
-  return <div className="min-h-screen"><SiteHeader /><main>
-    <section className="overflow-hidden border-b bg-gradient-to-b from-accent/70 to-background"><PageContainer className="grid gap-12 py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:py-28"><div><p className="mb-5 inline-flex items-center gap-2 rounded-full border bg-surface px-3 py-1 text-sm font-medium text-primary"><ShieldCheck aria-hidden="true" className="size-4" /> Care planning made clearer</p><h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-balance sm:text-6xl">Appointments that fit your life and your care.</h1><p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">Schedula brings patients and care teams together around a calmer, more transparent way to plan appointments.</p><div className="mt-8 flex flex-col gap-3 sm:flex-row"><Button asChild size="lg"><Link href="/auth/sign-up">Book care as a patient <ArrowRight aria-hidden="true" /></Link></Button><Button asChild variant="outline" size="lg"><Link href="/auth/sign-up">Join as a doctor</Link></Button></div><p className="mt-5 text-sm text-muted-foreground">Already have an account? <Link href="/auth/login" className="font-semibold text-primary underline-offset-4 hover:underline">Sign in</Link></p></div><div className="relative mx-auto w-full max-w-md"><div className="rounded-3xl border bg-surface p-5 shadow-xl shadow-primary/10 sm:p-7"><div className="flex items-center justify-between border-b pb-5"><div><p className="text-sm font-medium text-muted-foreground">Your care plan</p><p className="mt-1 text-xl font-semibold">A little more clarity</p></div><span className="flex size-11 items-center justify-center rounded-2xl bg-accent text-primary"><CalendarCheck2 aria-hidden="true" /></span></div><div className="space-y-3 py-6"><div className="rounded-xl bg-surface-muted p-4"><div className="flex items-center justify-between"><p className="font-medium">Upcoming appointment</p><span className="text-xs font-semibold text-success">Confirmed</span></div><p className="mt-2 text-sm text-muted-foreground">Your schedule, in one easy-to-follow place.</p></div><div className="flex items-center gap-3 rounded-xl border p-4"><Clock3 aria-hidden="true" className="size-5 text-info" /><p className="text-sm text-muted-foreground">See time windows and plan ahead.</p></div></div></div></div></PageContainer></section>
-    <section id="how-it-works" className="scroll-mt-20 py-20 sm:py-24"><PageContainer><div className="max-w-2xl"><p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-primary">How it works</p><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">A simpler path from searching to scheduled.</h2><p className="mt-4 text-lg leading-8 text-muted-foreground">Every part of Schedula is designed to make the next step easy to understand.</p></div><div className="mt-12 grid gap-5 md:grid-cols-3">{steps.map(({ icon: Icon, title, description }, index) => <Card key={title} className="bg-surface"><CardHeader><span className="mb-4 flex size-11 items-center justify-center rounded-xl bg-accent text-primary"><Icon aria-hidden="true" className="size-5" /></span><p className="text-sm font-semibold text-muted-foreground">0{index + 1}</p><CardTitle className="text-xl">{title}</CardTitle></CardHeader><CardContent><p className="leading-7 text-muted-foreground">{description}</p></CardContent></Card>)}</div></PageContainer></section>
-    <section className="border-y bg-surface-muted py-20 sm:py-24"><PageContainer className="grid gap-6 md:grid-cols-2"><Card id="for-patients" className="scroll-mt-20 border-primary/20 bg-surface"><CardHeader><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">For patients</p><CardTitle className="mt-2 text-2xl">Make room for what matters.</CardTitle></CardHeader><CardContent><p className="leading-7 text-muted-foreground">See the information you need to choose a time with confidence, then keep your appointment details close at hand.</p><Button asChild variant="link" className="mt-4 h-auto px-0"><Link href="/auth/sign-up">Get started as a patient <ArrowRight aria-hidden="true" /></Link></Button></CardContent></Card><Card id="for-doctors" className="scroll-mt-20 border-primary/20 bg-surface"><CardHeader><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">For doctors</p><CardTitle className="mt-2 text-2xl">Give your time more structure.</CardTitle></CardHeader><CardContent><p className="leading-7 text-muted-foreground">Create a clear experience for people looking for care and keep future availability easier to manage.</p><Button asChild variant="link" className="mt-4 h-auto px-0"><Link href="/auth/sign-up">Get started as a doctor <ArrowRight aria-hidden="true" /></Link></Button></CardContent></Card></PageContainer></section>
-  </main><SiteFooter /></div>;
+const fallbackSpecialties = ["Cardiology", "Dermatology", "Pediatrics", "General Medicine", "Orthopedics", "Gynecology"];
+
+export default async function Home() {
+  await connection();
+  const [account, specialties, doctors] = await Promise.all([getCurrentAccount(), getPublicDoctorSpecialties(), searchPublicDoctors({ search: "", specialty: "" })]);
+  const role = account?.onboardingComplete && account.profile?.full_name ? account.profile.role : undefined;
+  const displaySpecialties = specialties.length ? specialties : fallbackSpecialties;
+
+  return <div className={`min-h-screen ${role === "patient" ? "[--primary:210_80%_45%] [--ring:210_80%_45%]" : role === "doctor" ? "[--primary:174_72%_31%] [--ring:174_72%_31%]" : ""}`}>
+    <SiteHeader role={role} name={account?.profile?.full_name ?? undefined} />
+    <main>
+      <section data-testid="hero" className="relative isolate flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b">
+        <Image src="/images/appointment-hero.png" alt="" fill priority sizes="100vw" className="-z-20 object-cover" />
+        <div className="absolute inset-0 -z-10 bg-slate-950/65" />
+        <PageContainer className="w-full py-12 sm:py-16"><div className="max-w-3xl text-white">
+          <p className="text-sm font-medium text-white/80">Care that fits your day</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Find a doctor. Book with confidence.</h1>
+          <p className="mt-4 max-w-xl text-base leading-7 text-white/80">Search verified profiles and upcoming appointment times in one place.</p>
+          <form action="/doctors" className="mt-8 grid gap-3 rounded-xl bg-white p-3 text-foreground shadow-xl md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+            <div className="grid gap-1"><label htmlFor="home-search" className="text-xs font-medium text-muted-foreground">Doctor name</label><input id="home-search" name="q" placeholder="Search by name" className="h-10 bg-transparent px-1 text-sm outline-none" /></div>
+            <div className="grid gap-1"><label htmlFor="home-specialty" className="text-xs font-medium text-muted-foreground">Specialty</label><CustomSelect id="home-specialty" name="specialty" defaultValue="" options={[{ value: "", label: "All specialties" }, ...displaySpecialties.map((specialty) => ({ value: specialty, label: specialty }))]} /></div>
+            <Button type="submit" className="md:self-end"><Search className="size-4" aria-hidden="true" />Find doctors</Button>
+          </form>
+        </div></PageContainer>
+      </section>
+
+      <section id="browse-care" className="border-b bg-surface-muted py-10 sm:py-12"><PageContainer>
+        <div className="mb-5"><p className="text-sm font-medium text-primary">Browse care</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Find the right care for you</h2></div>
+        <CareAreaCarousel specialties={displaySpecialties} />
+      </PageContainer></section>
+
+      <section className="py-10 sm:py-12"><PageContainer>
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-primary">Available now</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Doctors with upcoming times</h2></div><Button asChild variant="outline"><Link href="/doctors">View all <ArrowRight className="size-4" aria-hidden="true" /></Link></Button></div>
+        <DoctorCarousel doctors={doctors} showDemo={doctors.length === 0} />
+      </PageContainer></section>
+
+      <section id="for-doctors" className="py-10"><PageContainer className="flex flex-col gap-4 rounded-xl border bg-surface-muted p-6 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Stethoscope className="size-5" aria-hidden="true" /></span><div><h2 className="font-semibold">For doctors</h2><p className="mt-1 text-sm text-muted-foreground">Publish your profile and availability in one workspace.</p></div></div><Button asChild><Link href="/auth/sign-up">Join Schedula <CalendarDays className="size-4" /></Link></Button></PageContainer></section>
+    </main>
+    <SiteFooter />
+  </div>;
 }

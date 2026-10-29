@@ -4,29 +4,29 @@
 
 @layer base {
   :root {
-    --background: 192 40% 98%;
+    --background: 0 0% 100%;
     --foreground: 201 45% 13%;
     --surface: 0 0% 100%;
-    --surface-muted: 188 32% 94%;
+    --surface-muted: 210 30% 97%;
     --card: 0 0% 100%;
     --card-foreground: 201 45% 13%;
     --popover: 0 0% 100%;
     --popover-foreground: 201 45% 13%;
     --primary: 174 72% 31%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 187 35% 91%;
+    --secondary: 210 30% 94%;
     --secondary-foreground: 184 63% 20%;
-    --muted: 190 24% 93%;
+    --muted: 210 30% 95%;
     --muted-foreground: 201 16% 39%;
-    --accent: 204 92% 95%;
+    --accent: 210 90% 96%;
     --accent-foreground: 205 73% 25%;
     --info: 204 83% 42%;
     --success: 151 61% 32%;
     --warning: 35 91% 43%;
     --destructive: 0 69% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 190 24% 84%;
-    --input: 190 24% 76%;
+    --border: 210 24% 88%;
+    --input: 210 24% 78%;
     --ring: 174 72% 31%;
     --radius: 0.75rem;
     --spacing-unit: 0.25rem;
@@ -56,6 +56,15 @@
     --border: 198 27% 28%;
     --input: 198 27% 36%;
     --ring: 173 64% 48%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

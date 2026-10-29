@@ -1,44 +1,55 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatLocalTime, localDateKey as getLocalDateKey } from "@/lib/scheduling/time";
+import { type DirectoryFilters } from "@/lib/discovery/filters";
+import { formatDateLabel } from "@/lib/discovery/format";
+import type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
 
-export type DirectoryFilters = { search: string; specialty: string };
-
-export type DoctorDirectoryRecord = {
-  doctor_id: string;
-  full_name: string;
-  specialty: string;
-  clinic_name: string;
-  experience_years: number;
-  available_dates: string[];
-};
-
-export type DoctorDetailRecord = DoctorDirectoryRecord & {
-  biography: string;
-  timezone: string;
-};
-
-export type DoctorSlot = {
-  slot_id: string;
-  slot_start_at: string;
-  slot_end_at: string;
-  timezone: string;
-  capacity: number;
-  remaining_capacity: number;
-};
-
-export function parseDirectoryFilters(params: { q?: string; specialty?: string } | URLSearchParams): DirectoryFilters {
-  const get = (key: string) => params instanceof URLSearchParams ? params.get(key) : params[key as keyof typeof params];
-  return {
-    search: (get("q") ?? "").trim().slice(0, 100),
-    specialty: (get("specialty") ?? "").trim().slice(0, 100),
-  };
-}
+export { parseDirectoryFilters, type DirectoryFilters } from "@/lib/discovery/filters";
+export { formatDateLabel } from "@/lib/discovery/format";
+export type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
 
 async function patientRpc<T>(fn: string, args?: Record<string, string | null>) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw new Error(`Doctor discovery query failed: ${error.message}`);
   return (data ?? []) as T;
+}
+
+async function publicRpc<T>(fn: string, args?: Record<string, string | null>) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) {
+    // Keep the public shell available while a hosted Supabase project is
+    // catching up with the discovery migration. The directory then renders
+    // its normal empty state instead of turning the whole page into a 500.
+    if (error.message.toLowerCase().includes("schema cache") || error.message.toLowerCase().includes("does not exist")) {
+      console.warn(`Public discovery function ${fn} is unavailable; returning an empty result until migrations are applied.`);
+      return [] as T;
+    }
+    throw new Error(`Public doctor discovery query failed: ${error.message}`);
+  }
+  return (data ?? []) as T;
+}
+
+export async function getPublicDoctorSpecialties() {
+  const data = await publicRpc<Array<{ specialty: string }>>("public_doctor_specialties");
+  return data.map((row) => row.specialty);
+}
+
+export async function searchPublicDoctors(filters: DirectoryFilters) {
+  return publicRpc<DoctorDirectoryRecord[]>("public_doctor_directory", {
+    p_search: filters.search || null,
+    p_specialty: filters.specialty || null,
+  });
+}
+
+export async function getPublicDoctorDetail(doctorId: string) {
+  const data = await publicRpc<DoctorDetailRecord[]>("public_doctor_detail", { p_doctor_id: doctorId });
+  return data[0] ?? null;
+}
+
+export async function getPublicDoctorSlots(doctorId: string) {
+  return publicRpc<DoctorSlot[]>("public_doctor_slots", { p_doctor_id: doctorId });
 }
 
 export async function getDoctorSpecialties() {
@@ -68,10 +79,6 @@ export async function getDoctorSlots(doctorId: string) {
 
 export function localDateKey(value: string | Date, timezone: string) {
   return getLocalDateKey(value, timezone);
-}
-
-export function formatDateLabel(dateKey: string) {
-  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" }).format(new Date(`${dateKey}T12:00:00Z`));
 }
 
 export function formatSlotTime(value: string, timezone: string) {

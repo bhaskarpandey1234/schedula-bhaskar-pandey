@@ -11,7 +11,7 @@ export default async function OnboardingPage() {
   await connection();
   const account = await getCurrentAccount();
   if (!account) redirect("/auth/login");
-  if (!account.profile) redirect("/auth/error?error=Your profile is not ready yet");
+  if (!account.profile) redirect("/auth/error?reason=profile_missing");
   if (account.onboardingComplete) redirect(account.profile.role === "patient" ? "/patient" : "/doctor");
   return <AuthShell>{account.profile.role === "patient" ? <PatientOnboardingForm /> : <DoctorOnboardingForm />}</AuthShell>;
 }

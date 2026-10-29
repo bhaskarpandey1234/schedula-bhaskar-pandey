@@ -1,6 +1,10 @@
-import { Phase3LogoutButton } from "@/components/phase3-logout-button";
 import { PageContainer } from "@/components/layout/page-container";
-import { CalendarDays, Search, Stethoscope } from "lucide-react";
-import Link from "next/link";
+import { SiteHeader } from "@/components/layout/site-header";
+import { DashboardSidebar } from "@/components/dashboard-sidebar";
+import type { Role } from "@/lib/validation/auth";
 
-export function PortalShell({ children, role, name }: { children: React.ReactNode; role: "patient" | "doctor"; name: string }) { return <main className="min-h-svh bg-surface-muted"><header className="border-b bg-background"><PageContainer className="flex h-16 items-center justify-between"><div className="flex items-center gap-6"><Link href="/" className="flex items-center gap-2 font-semibold"><span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Stethoscope className="size-5" aria-hidden="true" /></span><span>Schedula</span></Link>{role === "patient" ? <div className="hidden items-center gap-4 sm:flex"><Link href="/patient/doctors" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"><Search className="size-4" aria-hidden="true" />Find doctors</Link><Link href="/patient/appointments" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"><CalendarDays className="size-4" aria-hidden="true" />My appointments</Link></div> : <Link href="/doctor" className="hidden items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground sm:flex"><CalendarDays className="size-4" aria-hidden="true" />Schedule</Link>}</div><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{name} · {role === "patient" ? "Patient" : "Doctor"}</span><Phase3LogoutButton /></div></PageContainer></header><PageContainer className="py-10">{children}</PageContainer></main>; }
+export function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
+  const accent = role === "patient" ? "[--primary:210_80%_45%] [--ring:210_80%_45%]" : role === "doctor" ? "[--primary:174_72%_31%] [--ring:174_72%_31%]" : "";
+  if (!role) return <div className={`min-h-svh bg-background ${accent}`}><SiteHeader role={role} name={name} /><main><PageContainer className="py-6 sm:py-8">{children}</PageContainer></main></div>;
+  return <div className={`min-h-svh bg-background ${accent}`}><SiteHeader role={role} name={name} /><div className="flex min-h-[calc(100svh-4rem)]"><DashboardSidebar role={role} /><main className="min-w-0 flex-1"><PageContainer className="py-6 sm:py-8">{children}</PageContainer></main></div></div>;
+}

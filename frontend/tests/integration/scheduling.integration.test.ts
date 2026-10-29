@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createTestUser, deleteTestUsers, futureDate, onboardTestUser, type TestUser } from "../support/local-supabase";
+import { createTestUser, deleteTestUsers, futureDate, onboardTestUser, publicClient, type TestUser } from "../support/local-supabase";
 
 const users: TestUser[] = [];
 
@@ -32,6 +32,14 @@ afterEach(async () => {
 });
 
 describe("local Supabase scheduling RPCs", () => {
+  it("exposes completed doctors through anonymous-safe discovery fields only", async () => {
+    const doctor = await user("doctor", "public-discovery");
+    const { data, error } = await publicClient().rpc("public_doctor_detail", { p_doctor_id: doctor.id });
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(Object.keys(data![0]).sort()).toEqual(["biography", "clinic_name", "doctor_id", "experience_years", "full_name", "specialty", "timezone"]);
+  });
+
   it("rejects an overlapping availability session for the same doctor", async () => {
     const doctor = await user("doctor", "overlap-doctor");
     await createSlot(doctor);
