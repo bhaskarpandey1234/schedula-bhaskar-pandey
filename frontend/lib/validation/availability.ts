@@ -11,7 +11,9 @@ function isFutureLocal(date: string, time: string, zone: string) {
 }
 
 export const availabilitySessionSchema = z.object({
-  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date."),
+  mode: z.enum(["weekly", "custom"]).default("custom"),
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional(),
+  consultingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1).optional(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid start time."),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid end time."),
   timezone,
@@ -19,7 +21,15 @@ export const availabilitySessionSchema = z.object({
   capacity: z.coerce.number().int().min(1).max(10),
 }).superRefine((value, ctx) => {
   if (value.endTime <= value.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time." });
-  if (!isFutureLocal(value.sessionDate, value.startTime, value.timezone)) ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Availability must start in the future." });
+  if (value.mode === "weekly" && (!value.consultingDays?.length || value.sessionDate)) {
+    ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one consulting day." });
+  }
+  if (value.mode === "custom" && (!value.sessionDate || value.consultingDays?.length)) {
+    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Choose a custom session date." });
+  }
+  if (value.sessionDate && !isFutureLocal(value.sessionDate, value.startTime, value.timezone)) {
+    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Availability must start in the future." });
+  }
 });
 
 export type AvailabilitySessionInput = z.infer<typeof availabilitySessionSchema>;

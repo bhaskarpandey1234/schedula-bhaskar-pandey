@@ -57,6 +57,13 @@
       "when": 1793202000000,
       "tag": "0007_dashboard-and-profile-rpcs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793205600000,
+      "tag": "0008-recurring-availability",
+      "breakpoints": true
     }
   ]
 }

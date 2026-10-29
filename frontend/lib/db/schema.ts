@@ -63,6 +63,7 @@ export const doctors = pgTable("doctors", {
 });
 
 export const availabilitySessionStatus = pgEnum("availability_session_status", ["active", "cancelled"]);
+export const availabilitySessionKind = pgEnum("availability_session_kind", ["weekly", "custom"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["confirmed", "cancelled"]);
 export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled"]);
@@ -70,17 +71,19 @@ export const notificationType = pgEnum("notification_type", ["appointment_booked
 export const availabilitySessions = pgTable("availability_sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
   doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
-  sessionDate: date("session_date").notNull(),
+  kind: availabilitySessionKind("kind").notNull().default("custom"),
+  sessionDate: date("session_date"),
+  dayOfWeek: integer("day_of_week"),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
   timezone: text("timezone").notNull(),
   intervalMinutes: integer("interval_minutes").notNull().default(30),
   capacity: integer("capacity").notNull().default(3),
   status: availabilitySessionStatus("status").notNull().default("active"),
-  sessionStartAt: timestamp("session_start_at", { withTimezone: true }).notNull(),
-  sessionEndAt: timestamp("session_end_at", { withTimezone: true }).notNull(),
+  sessionStartAt: timestamp("session_start_at", { withTimezone: true }),
+  sessionEndAt: timestamp("session_end_at", { withTimezone: true }),
   ...auditColumns(),
-}, (table) => ({ doctorDateIdx: index("availability_sessions_doctor_date_idx").on(table.doctorId, table.sessionDate) }));
+}, (table) => ({ doctorDateIdx: index("availability_sessions_doctor_date_idx").on(table.doctorId, table.sessionDate), doctorWeekdayIdx: index("availability_sessions_doctor_weekday_idx").on(table.doctorId, table.dayOfWeek) }));
 
 export const appointmentSlots = pgTable("appointment_slots", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -92,7 +95,7 @@ export const appointmentSlots = pgTable("appointment_slots", {
   allocatedCount: integer("allocated_count").notNull().default(0),
   status: appointmentSlotStatus("status").notNull().default("available"),
   ...auditColumns(),
-}, (table) => ({ sessionStartIdx: index("appointment_slots_session_start_idx").on(table.availabilitySessionId, table.slotStartAt), doctorStartIdx: index("appointment_slots_doctor_start_idx").on(table.doctorId, table.slotStartAt) }));
+}, (table) => ({ sessionStartIdx: index("appointment_slots_session_start_idx").on(table.availabilitySessionId, table.slotStartAt), doctorStartIdx: index("appointment_slots_doctor_start_idx").on(table.doctorId, table.slotStartAt), sessionStartUnique: uniqueIndex("appointment_slots_session_start_unique").on(table.availabilitySessionId, table.slotStartAt) }));
 
 export const appointments = pgTable("appointments", {
   id: uuid("id").defaultRandom().primaryKey(),

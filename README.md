@@ -18,7 +18,7 @@ Implemented:
 - Supabase email/password authentication through validated Server Actions, email confirmation, password reset, and cookie-based session routing.
 - Role-aware sign-up and protected patient/doctor onboarding with portal redirects.
 - Local Drizzle migration with profile provisioning trigger, immutable roles, audit timestamp triggers, and owner-only RLS policies.
-- Doctor profile editing and future availability sessions with generated wave-scheduling slots.
+- Doctor profile editing, recurring weekly consulting days, custom date overrides, and generated wave-scheduling slots in a rolling 30-day booking window.
 - Authenticated patient doctor directory with name search, specialty filtering, doctor profiles, and upcoming availability windows.
 - Patient-only discovery read functions that expose directory-safe fields without widening owner-only table policies.
 - Transactional patient booking with capacity-safe slot reservation, duplicate-booking protection, optional visit reason, dedicated review route, durable confirmation page, and persisted patient/doctor notifications.

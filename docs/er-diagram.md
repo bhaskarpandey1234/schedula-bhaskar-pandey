@@ -35,6 +35,8 @@ erDiagram
     AVAILABILITY {
         uuid id PK
         uuid doctor_id FK
+        enum kind
+        int day_of_week
         date session_date
         time start_time
         time end_time
@@ -71,7 +73,7 @@ erDiagram
 - `PATIENT.id` and `DOCTOR.id` are both the profile ID and enforce one profile per user role. There are no separate `user_id` columns in the implemented schema.
 - Patient onboarding currently stores phone and date of birth.
 - Doctor onboarding and editing store specialty, clinic name, experience, biography, and IANA timezone.
-- `AVAILABILITY` represents an `availability_sessions` record. The application generates `appointment_slots` from each session; slots are intentionally kept outside this five-module conceptual ERD.
+- `AVAILABILITY` represents an `availability_sessions` record. A `weekly` record stores an ISO consulting weekday and continues every week; a `custom` record stores one local calendar date and overrides recurring availability for that date. The application generates date-specific `appointment_slots` from both kinds of session; slots are intentionally kept outside this five-module conceptual ERD.
 - `APPOINTMENT` references a generated slot through `slot_id`, while doctor and patient ownership are retained for authorization and reporting.
 - `notifications` supports appointment events but is an implementation-specific support table, not a sixth conceptual domain module.
 
@@ -79,7 +81,7 @@ erDiagram
 
 - Profile roles are limited to `patient` and `doctor` and are immutable after profile creation.
 - Patient and doctor profile IDs must reference the same authenticated user profile.
-- A doctor’s availability sessions must not overlap and must use a valid timezone.
+- A doctor’s weekly sessions must not overlap on the same consulting day; custom sessions must not overlap on the same date and override recurring hours for that date.
 - Availability must start in the future, end after it starts, and use a supported interval and capacity.
 - Appointments must reference a valid generated slot and matching doctor.
 - A patient cannot book the same slot twice.

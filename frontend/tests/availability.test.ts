@@ -4,6 +4,13 @@ import { availabilitySessionSchema } from "../lib/validation/availability";
 import { doctorProfileSchema } from "../lib/validation/doctor-profile";
 
 describe("Phase 4 validation", () => {
+  it("accepts weekly consulting days without a session date", () => {
+    expect(availabilitySessionSchema.safeParse({ mode: "weekly", consultingDays: [1, 3, 5], startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+  });
+  it("accepts a future custom date and rejects a weekly date", () => {
+    expect(availabilitySessionSchema.safeParse({ mode: "custom", sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ mode: "weekly", sessionDate: "2099-04-20", consultingDays: [1], startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+  });
   it("accepts supported intervals and capacity defaults", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
   });
