@@ -30,16 +30,23 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
     password: parsed.data.password,
     options: { data: { role: parsed.data.role } },
   });
-  if (error) { console.warn("[auth] sign-in failed", authErrorDiagnostic(error)); const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
+  if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   return { success: true, values: { email: parsed.data.email, role: parsed.data.role } };
 }
 
 export async function signInAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = signInSchema.safeParse(formValues(formData));
   if (!parsed.success) return validationError(parsed.error, formData);
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
+  let error: unknown;
+  try {
+    const supabase = await createClient();
+    ({ error } = await supabase.auth.signInWithPassword(parsed.data));
+  } catch (exception) {
+    console.error("[auth] sign-in exception", authErrorDiagnostic(exception, "password_sign_in_exception"));
+    const friendly = authErrorMessage(exception);
+    return { error: friendly.message, code: friendly.code, values: formValues(formData) };
+  }
+  if (error) { console.error("[auth] sign-in failed", authErrorDiagnostic(error)); const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   redirect(safeReturnPath(formData.get("next")) ?? "/auth/continue");
 }
 

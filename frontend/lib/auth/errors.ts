@@ -33,7 +33,7 @@ export function authErrorCategory(error: unknown): AuthErrorCategory {
   if (code === "email_not_confirmed" || message.includes("email not confirmed")) return "email_not_confirmed";
   if (code === "invalid_credentials" || message.includes("invalid login credentials")) return "invalid_credentials";
   if (status === 429 || code.includes("rate") || code.includes("too_many") || message.includes("rate limit") || message.includes("too many requests")) return "rate_limited";
-  if (code.includes("api_key") || code.includes("configuration") || message.includes("invalid api key") || message.includes("missing supabase")) return "configuration";
+  if (code.includes("api_key") || code.includes("configuration") || message.includes("invalid api key") || message.includes("missing supabase") || message.includes("invalid supabase") || message.includes("supabase url")) return "configuration";
   if ((status !== undefined && status >= 500) || message.includes("database error") || message.includes("provider error") || message.includes("service unavailable")) return "provider_error";
   return "auth_error";
 }

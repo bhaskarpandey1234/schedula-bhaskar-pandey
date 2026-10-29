@@ -44,6 +44,7 @@ describe("public discovery and authentication helpers", () => {
   it("classifies rate limits, configuration failures, and provider failures", () => {
     expect(authErrorCategory({ status: 429 })).toBe("rate_limited");
     expect(authErrorCategory({ message: "Invalid API key" })).toBe("configuration");
+    expect(authErrorCategory({ message: "Invalid Supabase URL" })).toBe("configuration");
     expect(authErrorCategory({ status: 503 })).toBe("provider_error");
     expect(authErrorMessage({ status: 429 }).message).toContain("Too many");
   });
