@@ -57,6 +57,7 @@ export const doctorOnboardingSchema = z.object({
   experienceYears: z.coerce.number().int().min(0).max(80),
   biography: z.string().trim().min(20).max(2000),
   timezone,
+  consultationFee: z.coerce.number().finite().min(1, "Enter a consultation fee of at least ₹1.").max(100000, "Consultation fee cannot exceed ₹100,000.").default(1000),
 });
 
 export type Role = "patient" | "doctor";

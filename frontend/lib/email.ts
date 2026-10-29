@@ -41,3 +41,16 @@ export async function sendBookingConfirmationEmail(details: BookingEmail, client
     return "failed";
   }
 }
+
+export async function sendNotificationEmail(details: { to: string; subject: string; text: string }, idempotencyKey: string): Promise<BookingEmailDelivery> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!from || !apiKey) return "skipped";
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({ from, to: details.to, subject: details.subject, text: details.text }, { idempotencyKey });
+    return "sent";
+  } catch {
+    return "failed";
+  }
+}

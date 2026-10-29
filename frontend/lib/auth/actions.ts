@@ -104,6 +104,7 @@ export async function completeDoctorOnboarding(_: ActionState, formData: FormDat
     p_experience_years: parsed.data.experienceYears,
     p_biography: parsed.data.biography,
     p_timezone: parsed.data.timezone,
+    p_consultation_fee_minor: Math.round(parsed.data.consultationFee * 100),
   });
   if (error) return { error: "We could not save your doctor details. Please review the highlighted fields and try again.", values: formValues(formData) };
   redirect("/doctor");

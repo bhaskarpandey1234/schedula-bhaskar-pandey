@@ -28,6 +28,8 @@ erDiagram
         int experience_years
         string biography
         string timezone
+        int consultation_fee_minor
+        string fee_currency
         datetime created_at
         datetime updated_at
     }
@@ -75,7 +77,7 @@ erDiagram
 - Doctor onboarding and editing store specialty, clinic name, experience, biography, and IANA timezone.
 - `AVAILABILITY` represents an `availability_sessions` record. A `weekly` record stores an ISO consulting weekday and continues every week; a `custom` record stores one local calendar date and overrides recurring availability for that date. The application generates date-specific `appointment_slots` from both kinds of session; slots are intentionally kept outside this five-module conceptual ERD.
 - `APPOINTMENT` references a generated slot through `slot_id`, while doctor and patient ownership are retained for authorization and reporting.
-- `notifications` supports appointment events but is an implementation-specific support table, not a sixth conceptual domain module.
+- `notifications`, payment, refund, reservation, and reminder tables support the appointment lifecycle but remain implementation-specific support tables, not additional conceptual domain modules. See [`day-4-payments-operations.md`](day-4-payments-operations.md) for the payment and notification operational design.
 
 ## Business rules
 
@@ -85,13 +87,13 @@ erDiagram
 - Availability must start in the future, end after it starts, and use a supported interval and capacity.
 - Appointments must reference a valid generated slot and matching doctor.
 - A patient cannot book the same slot twice.
-- Appointment status currently supports `confirmed` and `cancelled`; future lifecycle states can be added when product requirements define them.
+- Appointment lifecycle includes payment-pending, confirmed, cancelled, and expired states; payment and refund records retain the financial state separately from appointment cancellation.
 - All audit timestamps use timezone-aware database timestamps.
 - Passwords are managed by Supabase Auth and are never stored in the application schema.
 
 ## Scope decisions
 
-This diagram intentionally excludes addresses, credentials, licensing, medical records, diagnoses, prescriptions, payments, insurance, and other healthcare entities until their requirements are defined.
+This diagram intentionally keeps payments, refunds, reservations, and notification delivery outside the five required conceptual modules. They are implemented as supporting tables for the appointment lifecycle rather than as new healthcare domain entities.
 
 ## References
 

@@ -11,6 +11,8 @@ export type BookableSlot = {
   slot_end_at: string;
   capacity: number;
   remaining_capacity: number;
+  consultation_fee_minor: number | null;
+  consultation_currency: string;
 };
 
 export async function getBookableSlot(slotId: string) {
@@ -24,7 +26,7 @@ export async function getAppointmentConfirmation(appointmentId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("patient_appointment_confirmation", { p_appointment_id: appointmentId });
   if (error) throw new Error(`Appointment confirmation query failed: ${error.message}`);
-  const row = ((data ?? []) as Array<{ appointment_id: string; status: string; reason: string | null; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; notification_title: string | null; notification_message: string | null }>)[0];
+  const row = ((data ?? []) as Array<{ appointment_id: string; status: "payment_pending" | "confirmed" | "cancelled" | "expired"; reason: string | null; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; notification_title: string | null; notification_message: string | null }>)[0];
   if (!row) return null;
   return {
     appointment: { id: row.appointment_id, status: row.status, reason: row.reason },

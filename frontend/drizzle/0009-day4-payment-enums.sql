@@ -1,0 +1,9 @@
+ALTER TYPE public.appointment_status ADD VALUE IF NOT EXISTS 'payment_pending';
+ALTER TYPE public.appointment_status ADD VALUE IF NOT EXISTS 'expired';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'payment_confirmed';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'payment_failed';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'refund_pending';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'refund_processed';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'refund_failed';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'appointment_rescheduled';
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'appointment_reminder';

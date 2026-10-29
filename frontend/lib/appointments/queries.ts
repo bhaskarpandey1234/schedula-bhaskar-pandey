@@ -3,7 +3,7 @@ import { appointmentTabSchema, type AppointmentTab } from "@/lib/validation/appo
 
 export type PatientAppointment = {
   appointment_id: string;
-  status: "confirmed" | "cancelled";
+  status: "payment_pending" | "confirmed" | "cancelled" | "expired";
   reason: string | null;
   doctor_name: string;
   specialty: string;
@@ -11,6 +11,10 @@ export type PatientAppointment = {
   timezone: string;
   slot_start_at: string;
   slot_end_at: string;
+  payment_status: "creating" | "pending" | "captured" | "failed" | "abandoned" | "expired" | "captured_unallocated" | null;
+  payment_amount_minor: number | null;
+  refund_status: "requested" | "pending" | "processed" | "failed" | null;
+  refund_amount_minor: number | null;
 };
 
 export async function getPatientAppointments(tab: AppointmentTab) {

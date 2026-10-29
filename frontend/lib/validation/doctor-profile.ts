@@ -8,6 +8,7 @@ export const doctorProfileSchema = z.object({
   experienceYears: doctorOnboardingSchema.shape.experienceYears,
   biography: doctorOnboardingSchema.shape.biography,
   timezone: doctorOnboardingSchema.shape.timezone,
+  consultationFee: doctorOnboardingSchema.shape.consultationFee,
 });
 
 export type DoctorProfileInput = z.infer<typeof doctorProfileSchema>;

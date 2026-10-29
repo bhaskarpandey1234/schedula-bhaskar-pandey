@@ -11,7 +11,7 @@ export async function cancelAppointmentAction(_: CancellationActionState, formDa
   const parsed = appointmentIdSchema.safeParse({ appointmentId: formData.get("appointmentId") });
   if (!parsed.success) return { error: firstZodError(parsed.error) ?? "Check the appointment and try again.", fieldErrors: zodFieldErrors(parsed.error), values: formValues(formData) };
   const supabase = await createClient();
-  const { error } = await supabase.rpc("cancel_patient_appointment", { p_appointment_id: parsed.data.appointmentId });
+  const { data, error } = await supabase.rpc("cancel_paid_appointment", { p_appointment_id: parsed.data.appointmentId });
   if (error) {
     const message = error.message.toLowerCase();
     if (message.includes("not found")) return { error: "This appointment is no longer available.", values: formValues(formData) };
@@ -23,5 +23,6 @@ export async function cancelAppointmentAction(_: CancellationActionState, formDa
   revalidatePath("/patient/appointments", "page");
   revalidatePath("/patient", "page");
   revalidatePath("/doctor", "page");
-  return { success: true };
+  const result = (data ?? {}) as { refund_amount_minor?: number };
+  return { success: true, values: { refundAmountMinor: String(result.refund_amount_minor ?? 0) } };
 }

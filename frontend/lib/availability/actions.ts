@@ -30,8 +30,8 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
   if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the profile details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: values(formData) };
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
-  const { fullName, specialty, clinicName, experienceYears, biography, timezone } = parsed.data;
-  const { error } = await supabase.rpc("update_doctor_profile", { p_full_name: fullName, p_specialty: specialty, p_clinic_name: clinicName, p_experience_years: experienceYears, p_biography: biography, p_timezone: timezone });
+  const { fullName, specialty, clinicName, experienceYears, biography, timezone, consultationFee } = parsed.data;
+  const { error } = await supabase.rpc("update_doctor_profile", { p_full_name: fullName, p_specialty: specialty, p_clinic_name: clinicName, p_experience_years: experienceYears, p_biography: biography, p_timezone: timezone, p_consultation_fee_minor: Math.round(consultationFee * 100) });
   if (error) return { error: "We could not update your professional details. Please try again.", values: values(formData) };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
