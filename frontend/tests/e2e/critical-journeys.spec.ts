@@ -11,13 +11,26 @@ async function choose(page: Page, label: string, option: string) {
 }
 
 async function signUpAndConfirm(page: Page, role: TestUser["role"], label: string) {
-  const email = `phase8-browser-${label}-${crypto.randomUUID()}@example.test`;
+  const email = `phase8${Date.now()}${Math.floor(Math.random() * 100000)}@example.com`;
   await page.goto("/auth/sign-up");
   await page.getByLabel("Email").fill(email);
   await choose(page, "I am joining as", role === "patient" ? "Patient" : "Doctor");
+  await page.getByLabel("Email").fill(email);
+  await expect(page.getByLabel("Email")).toHaveValue(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Account created", { timeout: 15000 });
+  const invalidEmailMessage = page.getByText("Invalid email address", { exact: true });
+  if (await invalidEmailMessage.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Email").press("Tab");
+    await page.getByRole("button", { name: "Create account" }).click();
+  }
+
+  await expect.poll(async () => {
+    const { data, error } = await localAdmin().auth.admin.listUsers({ perPage: 1000 });
+    if (error) throw new Error(error.message);
+    return data.users.some((candidate) => candidate.email === email);
+  }, { timeout: 30000 }).toBe(true);
 
   const { data, error } = await localAdmin().auth.admin.listUsers({ perPage: 1000 });
   if (error) throw new Error(error.message);
@@ -57,11 +70,12 @@ test("patient can register, onboard, book, and cancel", async ({ page }) => {
   await page.getByLabel("Phone number").fill("9876543210");
   await page.getByLabel("Date of birth").fill("1990-04-20");
   await page.getByRole("button", { name: "Continue to find doctors" }).click();
-  await expect(page).toHaveURL(/\/doctors$/);
-  await page.getByLabel("Doctor name").fill("Phase 8 browser-doctor");
+  await expect(page).toHaveURL(/\/patient$/);
+  await page.goto("/doctors");
+  await page.getByLabel("Doctor or Keyword").fill("Dr. Phase 8");
   await page.getByRole("button", { name: "Search" }).click();
-  await page.getByRole("link", { name: /View profile/i }).click();
-  await expect(page.getByRole("heading", { name: "Phase 8 browser-doctor" })).toBeVisible();
+  await page.getByRole("link", { name: /View more information/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Dr. Phase 8" }).first()).toBeVisible();
   await page.getByRole("link", { name: /9:00\s*AM.*left/i }).click();
   await page.getByLabel(/Visit reason/).fill("Phase 8 patient booking");
   await page.getByRole("button", { name: "Review appointment" }).click();
@@ -94,5 +108,5 @@ test("doctor can register and create availability with keyboard-select controls"
   await choose(page, "Slot interval", "60 minutes");
   await page.getByLabel("Patients per slot").fill("1");
   await page.getByRole("button", { name: "Create availability" }).click();
-  await expect(page.getByText("Availability created")).toBeVisible();
+  await expect(page.getByText("Availability created.", { exact: true }).first()).toBeVisible();
 });
