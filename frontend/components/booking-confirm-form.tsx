@@ -8,7 +8,7 @@ import { verifyPaymentAction, markPaymentAbandoned } from "@/lib/payments/action
 import { Button } from "@/components/ui/button";
 import { FormErrorSummary } from "@/components/ui/form-feedback";
 
-declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void }; } }
+declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on?: (event: string, handler: (response: { error?: { description?: string; reason?: string } }) => void) => void }; } }
 
 export function BookingConfirmForm({ slotId, reason, backHref, amountMinor, currency }: { slotId: string; reason: string; backHref: string; amountMinor?: number | null; currency?: string }) {
   const router = useRouter();
@@ -24,6 +24,7 @@ export function BookingConfirmForm({ slotId, reason, backHref, amountMinor, curr
       const instance = new window.Razorpay({ key: checkout.keyId, amount: checkout.amountMinor, currency: checkout.currency, order_id: checkout.orderId, name: "Schedula Healthcare", description: "Online consultation", handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
         try { await verifyPaymentAction({ paymentId: checkout.paymentId, orderId: response.razorpay_order_id, providerPaymentId: response.razorpay_payment_id, signature: response.razorpay_signature }); router.push(`/patient/appointments/${checkout.appointmentId}/confirmation`); } catch (error) { setPaymentError(error instanceof Error ? error.message : "Payment could not be verified yet."); }
       }, modal: { ondismiss: () => { void markPaymentAbandoned({ paymentId: checkout.paymentId }); } } });
+      instance.on?.("payment.failed", (response) => { setPaymentError(response.error?.description ?? response.error?.reason ?? "Payment failed. You can retry while the slot is held."); });
       instance.open();
     };
     if (window.Razorpay) openCheckout(); else { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = openCheckout; script.onerror = () => setPaymentError("Payment checkout could not load. Please try again."); document.body.appendChild(script); }
