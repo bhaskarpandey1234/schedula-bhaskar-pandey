@@ -10,6 +10,7 @@ node_modules/
 # Local planning guidance
 plan.txt
 frontend/AGENTS.md
+.agents/
 
 # Next.js
 .next/

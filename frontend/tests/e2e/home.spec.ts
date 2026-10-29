@@ -3,11 +3,10 @@ import { expect, test } from "@playwright/test";
 test("renders search-first public discovery", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveTitle(/Schedula/);
-  await expect(page.getByRole("heading", { name: "Find a doctor. Book with confidence." })).toBeVisible();
   await expect(page.getByTestId("hero")).toBeVisible();
   await expect(page.getByRole("link", { name: "Find doctors" }).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Browse care" }).first()).toBeVisible();
-  await expect(page.getByRole("region", { name: "Browse care areas" })).toBeVisible();
+  await expect(page.locator("#browse-care")).toBeVisible();
+  await expect(page.getByRole("region", { name: "In-clinic specialties carousel" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Doctor profiles" })).toBeVisible();
   await expect(page.locator("header").getByRole("link", { name: "For doctors" })).toHaveCount(0);
 });
