@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { authErrorDiagnostic, authErrorMessage } from "@/lib/auth/errors";
 import { safeReturnPath } from "@/lib/auth/return-path";
 import { formValues, firstZodError, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 import {
@@ -30,7 +30,7 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
     password: parsed.data.password,
     options: { data: { role: parsed.data.role } },
   });
-  if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
+  if (error) { console.warn("[auth] sign-in failed", authErrorDiagnostic(error)); const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   return { success: true, values: { email: parsed.data.email, role: parsed.data.role } };
 }
 
