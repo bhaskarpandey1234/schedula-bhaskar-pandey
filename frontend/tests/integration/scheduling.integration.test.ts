@@ -27,6 +27,13 @@ async function createSlot(doctor: TestUser, capacity = 1) {
   return slots![0];
 }
 
+function futureWeekday(weekday: number, minimumDays = 7) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + minimumDays);
+  while (((date.getUTCDay() + 6) % 7) + 1 !== weekday) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
 afterEach(async () => {
   await deleteTestUsers(users.splice(0));
 });
@@ -52,6 +59,54 @@ describe("local Supabase scheduling RPCs", () => {
       p_capacity: 1,
     });
     expect(error?.message).toContain("overlaps");
+  });
+
+  it("materializes weekly consulting days across the rolling booking window", async () => {
+    const doctor = await user("doctor", "weekly-doctor");
+    const weekday = 1;
+    const { data: ruleIds, error } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [weekday], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+    });
+    expect(error).toBeNull();
+    expect(ruleIds).toHaveLength(1);
+    const { data: slots } = await doctor.client.from("appointment_slots").select("slot_start_at").eq("availability_session_id", ruleIds![0]);
+    expect(slots?.length).toBeGreaterThan(2);
+  });
+
+  it("lets a custom session replace an unbooked recurring date", async () => {
+    const doctor = await user("doctor", "override-doctor");
+    const date = futureWeekday(2);
+    const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [2], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+    });
+    expect(weeklyError).toBeNull();
+    const { error: customError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: date, p_start_time: "14:00", p_end_time: "15:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+    });
+    expect(customError).toBeNull();
+    const { data: sessions } = await doctor.client.from("availability_sessions").select("id, kind").eq("doctor_id", doctor.id).in("id", [rules![0]]);
+    expect(sessions?.[0]?.kind).toBe("weekly");
+    const { data: customSessions } = await doctor.client.from("availability_sessions").select("id, kind").eq("doctor_id", doctor.id).eq("session_date", date);
+    const { data: customSlots } = await doctor.client.from("appointment_slots").select("slot_start_at, status, availability_session_id").in("availability_session_id", customSessions!.map((session) => session.id));
+    expect(customSlots).toHaveLength(1);
+    expect(customSessions?.[0]?.kind).toBe("custom");
+  });
+
+  it("protects booked recurring slots from a custom replacement", async () => {
+    const doctor = await user("doctor", "booked-override-doctor");
+    const patient = await user("patient", "booked-override-patient");
+    const date = futureWeekday(3);
+    const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [3], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+    });
+    expect(weeklyError).toBeNull();
+    const { data: weeklySlots } = await doctor.client.from("appointment_slots").select("id, slot_start_at").eq("availability_session_id", rules![0]);
+    const slot = weeklySlots?.find((candidate) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(candidate.slot_start_at)) === date);
+    expect(slot).toBeTruthy();
+    const { error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: slot!.id, p_reason: "Override protection" });
+    expect(bookingError).toBeNull();
+    const { error: overrideError } = await doctor.client.rpc("create_custom_availability_with_slots", { p_session_date: date, p_start_time: "14:00", p_end_time: "15:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
+    expect(overrideError?.message).toContain("existing bookings");
   });
 
   it("allows exactly one concurrent booking at final capacity", async () => {
