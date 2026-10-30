@@ -21,5 +21,15 @@ export async function PortalShell({ children, role, name }: { children: React.Re
       </div>
     );
   }
-  return <div className={`min-h-svh bg-background ${accent}`}><SiteHeader role={role} name={name} unreadCount={unreadCount} /><div className="flex min-h-[calc(100svh-4rem)]"><DashboardSidebar role={role} /><main className="min-w-0 flex-1"><PageContainer className="py-6 sm:py-8">{children}</PageContainer></main></div></div>;
+  return (
+    <div className={`min-h-svh bg-background ${accent}`}>
+      <SiteHeader role={role} name={name} unreadCount={unreadCount} />
+      <div className="flex min-h-[calc(100svh-4rem)]">
+        <DashboardSidebar role={role} name={name} />
+        <main className="min-w-0 flex-1">
+          <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
+        </main>
+      </div>
+    </div>
+  );
 }
