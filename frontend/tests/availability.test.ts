@@ -19,7 +19,7 @@ describe("Phase 4 validation", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2000-04-20", startTime: "11:00", endTime: "09:00", timezone: "Asia/Kolkata", intervalMinutes: 20, capacity: 11 }).success).toBe(false);
   });
   it("validates editable doctor profile data", () => {
-    expect(doctorProfileSchema.safeParse({ fullName: "Dr. Asha Rao", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" }).success).toBe(true);
+    expect(doctorProfileSchema.safeParse({ fullName: "Dr. Asha Rao", phone: "+14155552671", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" }).success).toBe(true);
   });
   it("preserves custom mode values after a validation error", async () => {
     const form = new FormData();

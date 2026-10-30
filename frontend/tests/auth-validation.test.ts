@@ -16,7 +16,7 @@ describe("Phase 3 auth validation", () => {
     expect(patientOnboardingSchema.safeParse({ fullName: "A", phone: "555-0100", dateOfBirth: "2090-04-20" }).success).toBe(false);
   });
   it("validates doctor details and IANA timezones", () => {
-    const valid = { fullName: "Dr. Asha Rao", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" };
+    const valid = { fullName: "Dr. Asha Rao", phone: "+14155552671", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" };
     expect(doctorOnboardingSchema.safeParse(valid).success).toBe(true);
     expect(doctorOnboardingSchema.safeParse({ ...valid, timezone: "Not/A_Timezone", experienceYears: 81 }).success).toBe(false);
   });

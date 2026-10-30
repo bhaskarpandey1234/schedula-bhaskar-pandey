@@ -17,6 +17,7 @@ export async function bookAppointmentAction(_: BookingActionState, formData: For
     const message = error instanceof Error ? error.message.toLowerCase() : "";
     if (message.includes("already booked")) return { error: "You have already booked this slot.", values: formValues(formData) };
     if (message.includes("full") || message.includes("no longer available")) return { error: "This slot is no longer available. Please choose another time.", values: formValues(formData) };
+    if (message.includes("profile_incomplete")) return { error: "Complete your patient profile before booking an appointment.", values: formValues(formData) };
     if (message.includes("onboarded") || message.includes("authenticated")) return { error: "Your patient session is no longer valid.", values: formValues(formData) };
     return { error: "We could not start payment for this appointment. Please try again.", values: formValues(formData) };
   }

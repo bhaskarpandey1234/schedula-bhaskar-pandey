@@ -78,6 +78,27 @@
       "when": 1793301000000,
       "tag": "0010-day4-payments-refunds-notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793387400000,
+      "tag": "0017-appointment-notification-delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793473800000,
+      "tag": "0018-profile-completeness-gates",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793560200000,
+      "tag": "0019-email-verification-gates",
+      "breakpoints": true
     }
   ]
 }

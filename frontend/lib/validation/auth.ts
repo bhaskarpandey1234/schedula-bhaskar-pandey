@@ -52,6 +52,7 @@ const timezone = z.string().trim().refine((value) => {
 
 export const doctorOnboardingSchema = z.object({
   fullName: z.string().trim().min(2, "Enter your full name.").max(160),
+  phone: z.string().trim().regex(/^\+[1-9]\d{7,14}$/, "Use an international phone number, such as +14155552671."),
   specialty: z.string().trim().min(2).max(100),
   clinicName: z.string().trim().min(2).max(160),
   experienceYears: z.coerce.number().int().min(0).max(80),

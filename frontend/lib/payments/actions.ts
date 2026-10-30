@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { createCheckoutPrefill } from "@/lib/payments/checkout";
 import { randomUUID } from "node:crypto";
+import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
 
 export type CheckoutSession = { appointmentId: string; paymentId: string; orderId: string; keyId: string; amountMinor: number; currency: string; expiresAt: string; prefill: { name: string; email: string; contact: string } };
 
 export async function startCheckoutAction(input: { slotId: string; reason?: string; expectedAmountMinor?: number; idempotencyKey?: string }): Promise<CheckoutSession> {
+  await requireCompleteProfile("patient");
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error("Please sign in before starting payment");
@@ -33,6 +35,7 @@ export async function startCheckoutAction(input: { slotId: string; reason?: stri
 }
 
 export async function verifyPaymentAction(input: { paymentId: string; orderId: string; providerPaymentId: string; signature: string }) {
+  await requireVerifiedUser();
   const supabase = await createClient();
   const { data: stored, error: storedError } = await supabase.from("payments").select("provider_order_id, amount_minor, currency").eq("id", input.paymentId).single();
   if (storedError || !stored?.provider_order_id) throw new Error("Payment order was not found");
@@ -46,6 +49,7 @@ export async function verifyPaymentAction(input: { paymentId: string; orderId: s
 }
 
 export async function markPaymentAbandoned(input: { paymentId: string }) {
+  await requireVerifiedUser();
   const supabase = await createClient();
   const { error } = await supabase.rpc("complete_payment", { p_payment_id: input.paymentId, p_provider_payment_id: null, p_outcome: "abandoned" });
   if (error) throw new Error(error.message);

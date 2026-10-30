@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createDb } from "@/lib/db";
 import { notifications } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
+import { requireVerifiedUser } from "@/lib/auth/guards";
 
 async function currentUserId(): Promise<string | null> {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ async function currentUserId(): Promise<string | null> {
 }
 
 export async function markAllNotificationsRead(role: "patient" | "doctor") {
+  try { await requireVerifiedUser(); } catch { return; }
   const userId = await currentUserId();
   if (!userId) return;
   const db = createDb();
@@ -24,6 +26,7 @@ export async function markAllNotificationsRead(role: "patient" | "doctor") {
 }
 
 export async function markNotificationRead(id: string, role: "patient" | "doctor") {
+  try { await requireVerifiedUser(); } catch { return; }
   const userId = await currentUserId();
   if (!userId) return;
   const db = createDb();

@@ -2,8 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { requireCompleteProfile } from "@/lib/auth/guards";
 
 export async function startRescheduleAction(input: { appointmentId: string; targetSlotId: string }) {
+  await requireCompleteProfile("patient");
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("start_same_doctor_reschedule", { p_appointment_id: input.appointmentId, p_target_slot_id: input.targetSlotId });
   if (error) throw new Error(error.message);

@@ -5,8 +5,8 @@ import { safeReturnPath } from "@/lib/auth/return-path";
 
 export const instant = false;
 
-export default async function Page({ searchParams }: { searchParams?: Promise<{ next?: string }> }) {
+export default async function Page({ searchParams }: { searchParams?: Promise<{ next?: string; verified?: string }> }) {
   await connection();
   const params = await searchParams;
-  return <AuthShell><Phase3LoginForm next={safeReturnPath(params?.next)} /></AuthShell>;
+  return <AuthShell><Phase3LoginForm next={safeReturnPath(params?.next)} verified={params?.verified === "1"} /></AuthShell>;
 }

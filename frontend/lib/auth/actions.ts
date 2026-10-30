@@ -31,7 +31,29 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
     options: { data: { role: parsed.data.role } },
   });
   if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
-  return { success: true, values: { email: parsed.data.email, role: parsed.data.role } };
+  return { success: true, code: "verification_required", values: { email: parsed.data.email, role: parsed.data.role } };
+}
+
+export async function resendVerificationAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = emailSchema.safeParse(formValues(formData));
+  if (!parsed.success) return validationError(parsed.error, formData);
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: parsed.data.email,
+      options: { emailRedirectTo: getAuthConfirmRedirect("/onboarding") },
+    });
+    if (error) {
+      const friendly = authErrorMessage(error);
+      if (friendly.code === "rate_limited") return { error: friendly.message, code: friendly.code, values: { email: parsed.data.email } };
+      return { error: "We could not send a verification email right now. Please try again later.", code: "verification_resend_failed", values: { email: parsed.data.email } };
+    }
+  } catch (error) {
+    console.error("[auth] verification resend failed", authErrorDiagnostic(error, "verification_resend"));
+    return { error: "We could not send a verification email right now. Please try again later.", code: "verification_resend_failed", values: { email: parsed.data.email } };
+  }
+  return { success: true, code: "verification_resend_sent", values: { email: parsed.data.email } };
 }
 
 export async function signInAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -79,17 +101,18 @@ export async function signOutAction() {
 async function currentUserAndRole(expectedRole: "patient" | "doctor") {
   const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { supabase, user: null, profile: null };
+  if (!userData.user) return { supabase, user: null, profile: null, unverified: false };
+  if (!userData.user.email_confirmed_at) return { supabase, user: null, profile: null, unverified: true };
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", userData.user.id).maybeSingle();
-  if (!profile || profile.role !== expectedRole) return { supabase, user: null, profile: null };
-  return { supabase, user: userData.user, profile };
+  if (!profile || profile.role !== expectedRole) return { supabase, user: null, profile: null, unverified: false };
+  return { supabase, user: userData.user, profile, unverified: false };
 }
 
 export async function completePatientOnboarding(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = patientOnboardingSchema.safeParse(formValues(formData));
   if (!parsed.success) return validationError(parsed.error, formData);
-  const { supabase, user } = await currentUserAndRole("patient");
-  if (!user) return { error: "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
+  const { supabase, user, unverified } = await currentUserAndRole("patient");
+  if (!user) return { error: unverified ? "Verify your email before completing your profile." : "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
   const { error } = await supabase.rpc("complete_patient_onboarding", {
     p_full_name: parsed.data.fullName,
     p_phone: parsed.data.phone,
@@ -102,10 +125,11 @@ export async function completePatientOnboarding(_: ActionState, formData: FormDa
 export async function completeDoctorOnboarding(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = doctorOnboardingSchema.safeParse(formValues(formData));
   if (!parsed.success) return validationError(parsed.error, formData);
-  const { supabase, user } = await currentUserAndRole("doctor");
-  if (!user) return { error: "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
+  const { supabase, user, unverified } = await currentUserAndRole("doctor");
+  if (!user) return { error: unverified ? "Verify your email before completing your profile." : "Your session or role is no longer valid. Please sign in again.", values: formValues(formData) };
   const { error } = await supabase.rpc("complete_doctor_onboarding", {
     p_full_name: parsed.data.fullName,
+    p_phone: parsed.data.phone,
     p_specialty: parsed.data.specialty,
     p_clinic_name: parsed.data.clinicName,
     p_experience_years: parsed.data.experienceYears,

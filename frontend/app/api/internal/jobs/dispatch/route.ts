@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "@/lib/db";
 import { paymentWebhookEvents } from "@/lib/db/schema";
-import { sendNotificationEmail } from "@/lib/email";
+import { sendEmail, sendSms } from "@/lib/notifications/providers";
+import { renderNotificationTemplate } from "@/lib/notifications/templates";
+import { notificationAttempts } from "@/lib/db/schema";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
 import { findMatchingProviderRefund, isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
@@ -129,17 +131,77 @@ export async function POST(request: Request) {
       if (!isRetryableRefundError(statusCode)) await applyRefundState(db, refund.id, "failed", safeRefundFailureReason(statusCode));
     }
   }
-  let deliveries: Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }> = [];
-  try {
-    deliveries = (await db.execute(sql`select d.id, d.dedupe_key, d.template, u.email, coalesce(n.title, 'Appointment reminder') as title, coalesce(n.message, 'This is a reminder for your upcoming Schedula appointment.') as message from public.notification_deliveries d join auth.users u on u.id = d.recipient_id left join public.notifications n on n.id = d.notification_id left join public.appointments a on a.id = d.appointment_id left join public.appointment_slots s on s.id = a.slot_id where d.channel = 'email' and d.status = 'pending' and d.scheduled_at <= now() and (d.template not like 'appointment_reminder%' or (a.status = 'confirmed' and s.slot_start_at > now())) order by d.scheduled_at limit 50`)) as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>;
-  } catch {
-    // A restricted database role may not be able to read auth.users. Leave the outbox pending and continue refunds.
+  const configuredIntervals = (process.env.APPOINTMENT_REMINDER_INTERVALS_MINUTES ?? "1440,120").split(",").map((value) => Number(value.trim())).filter((value) => Number.isInteger(value) && value > 0 && value <= 60 * 24 * 30);
+  for (const minutes of [...new Set(configuredIntervals)]) {
+    const template = `appointment_reminder_${minutes}m`;
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.patient_id, a.id, 'email'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/email'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.patient_id AND pref.reminder_email
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.patient_id, a.id, 'sms'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/sms'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.patient_id AND pref.reminder_sms
+      JOIN public.patients patient ON patient.id = a.patient_id
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now() AND patient.phone IS NOT NULL
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.doctor_id, a.id, 'email'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-email'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_email
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.doctor_id, a.id, 'sms'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-sms'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_sms
+      JOIN public.doctors doctor ON doctor.id = a.doctor_id AND doctor.phone IS NOT NULL
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
   }
+  await db.execute(sql`UPDATE public.notification_deliveries d SET status = 'cancelled'::notification_delivery_status, updated_at = now() WHERE d.template LIKE 'appointment_reminder%' AND d.status IN ('pending'::notification_delivery_status, 'processing'::notification_delivery_status) AND NOT EXISTS (SELECT 1 FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id WHERE a.id = d.appointment_id AND a.status = 'confirmed' AND s.slot_start_at > now())`);
+  const claimed = (await db.execute(sql`select * from public.claim_notification_deliveries(50)`)) as unknown as Array<{ id: string; recipient_id: string; appointment_id: string; channel: string; template: string; dedupe_key: string; attempts: number }>;
   let delivered = 0;
-  for (const delivery of deliveries as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>) {
-    const result = await sendNotificationEmail({ to: delivery.email, subject: delivery.template === "appointment_reminder_24h" ? "Appointment reminder (24 hours)" : delivery.template === "appointment_reminder_2h" ? "Appointment reminder (2 hours)" : delivery.title, text: delivery.message }, delivery.dedupe_key);
-    await db.execute(sql`update public.notification_deliveries set status = ${result === "sent" ? "sent" : "failed"}::delivery_status, attempts = attempts + 1, last_error = ${result === "failed" ? "Email provider rejected delivery" : null}, updated_at = now() where id = ${delivery.id}::uuid`);
-    if (result === "sent") delivered += 1;
+  for (const delivery of claimed) {
+    let details: Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }> = [];
+    try {
+      details = (await db.execute(sql`
+      SELECT u.email, COALESCE(patient.phone, doctor.phone) AS phone, COALESCE(recipient_profile.full_name, 'Schedula user') AS recipient_name,
+             doctor_profile.full_name AS doctor_name, doctor.clinic_name, doctor.timezone, s.slot_start_at, s.slot_end_at
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.doctors doctor ON doctor.id = a.doctor_id
+      JOIN public.profiles doctor_profile ON doctor_profile.id = doctor.id
+      JOIN public.profiles recipient_profile ON recipient_profile.id = ${delivery.recipient_id}::uuid
+      LEFT JOIN public.patients patient ON patient.id = ${delivery.recipient_id}::uuid
+      LEFT JOIN auth.users u ON u.id = ${delivery.recipient_id}::uuid
+      WHERE a.id = ${delivery.appointment_id}::uuid
+    `)) as unknown as Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }>;
+    } catch {
+      continue;
+    }
+    const row = details[0];
+    if (!row) {
+      await db.execute(sql`UPDATE public.notification_deliveries SET status = 'failed'::notification_delivery_status, failed_at = now(), last_error = 'appointment_context_missing', updated_at = now() WHERE id = ${delivery.id}::uuid`);
+      continue;
+    }
+    const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
+    const result = delivery.channel === "sms"
+      ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
+      : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "resend", errorCode: "email_missing" });
+    await db.insert(notificationAttempts).values({ deliveryId: delivery.id, attemptNumber: delivery.attempts, provider: result.provider, outcome: result.status, providerMessageId: result.providerMessageId ?? null, errorCode: result.errorCode ?? null }).onConflictDoNothing();
+    if (result.status === "sent") {
+      await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+      delivered += 1;
+    } else {
+      const retry = result.status === "failed" && delivery.attempts < 5;
+      await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = ${result.provider}, processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = ${result.errorCode ?? "delivery_failed"}, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+    }
   }
-  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, delivered });
+  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, delivered, claimed: claimed.length });
 }

@@ -7,6 +7,7 @@ import { availabilitySessionSchema } from "@/lib/validation/availability";
 import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
 import { getDoctorScheduleAppointments } from "@/lib/appointments/queries";
 import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
+import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
 
 export type AvailabilityActionState = FormActionState;
 
@@ -33,10 +34,11 @@ async function currentDoctor() {
 export async function updateDoctorProfileAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
   const parsed = doctorProfileSchema.safeParse(values(formData));
   if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the profile details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: values(formData) };
+  try { await requireVerifiedUser(); } catch (error) { if (error instanceof Error && error.message === "EMAIL_NOT_VERIFIED") return { error: "Verify your email before editing your profile.", values: values(formData) }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
-  const { fullName, specialty, clinicName, experienceYears, biography, timezone, consultationFee } = parsed.data;
-  const { error } = await supabase.rpc("update_doctor_profile", { p_full_name: fullName, p_specialty: specialty, p_clinic_name: clinicName, p_experience_years: experienceYears, p_biography: biography, p_timezone: timezone, p_consultation_fee_minor: Math.round(consultationFee * 100) });
+  const { fullName, phone, specialty, clinicName, experienceYears, biography, timezone, consultationFee } = parsed.data;
+  const { error } = await supabase.rpc("update_doctor_profile", { p_full_name: fullName, p_phone: phone, p_specialty: specialty, p_clinic_name: clinicName, p_experience_years: experienceYears, p_biography: biography, p_timezone: timezone, p_consultation_fee_minor: Math.round(consultationFee * 100) });
   if (error) return { error: "We could not update your professional details. Please try again.", values: values(formData) };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
@@ -52,6 +54,7 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
     consultingDays: mode === "weekly" ? formData.getAll("consultingDays") : undefined,
   });
   if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: submittedValues };
+  try { await requireCompleteProfile("doctor"); } catch (error) { if (error instanceof Error && error.message === "PROFILE_INCOMPLETE") return { error: "Complete your doctor profile before creating availability.", values: submittedValues }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
   const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : "create_custom_availability_with_slots";
@@ -80,6 +83,7 @@ function nextConsultingDate(days: number[], timezone: string) {
 }
 
 export async function getDoctorSchedule(sessionDate: string | "all") {
+  await requireVerifiedUser();
   const { supabase, user } = await currentDoctor();
   if (!user) redirect("/auth/login");
   await supabase.rpc("materialize_recurring_availability_slots", { p_doctor_id: user.id });

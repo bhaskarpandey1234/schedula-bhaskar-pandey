@@ -25,7 +25,7 @@ export default async function DoctorProfilePage() {
   const supabase = await createClient();
   const { data: doctor, error } = await supabase
     .from("doctors")
-    .select("specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor")
+    .select("phone, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor")
     .eq("id", account.user.id)
     .maybeSingle();
 
@@ -63,6 +63,7 @@ export default async function DoctorProfilePage() {
 
   const profile = {
     fullName: account.profile.full_name,
+    phone: doctor.phone,
     specialty: doctor.specialty,
     clinicName: doctor.clinic_name,
     experienceYears: doctor.experience_years,

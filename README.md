@@ -16,6 +16,7 @@ Implemented:
 - Reusable responsive navigation, layout, state, and shadcn-style UI primitives.
 - Public landing page and shared branded authentication shell.
 - Supabase email/password authentication through validated Server Actions, email confirmation, password reset, and cookie-based session routing.
+- Mandatory Supabase email verification with resend recovery for new and existing unverified users; verified email is required before authenticated application actions.
 - Role-aware sign-up and protected patient/doctor onboarding with portal redirects.
 - Local Drizzle migration with profile provisioning trigger, immutable roles, audit timestamp triggers, and owner-only RLS policies.
 - Doctor profile editing, recurring weekly consulting days, custom date overrides, and generated wave-scheduling slots in a rolling 30-day booking window.
@@ -69,7 +70,7 @@ Copy `frontend/.env.example` to `frontend/.env.local` (use `Copy-Item` in PowerS
 
 Fill in `frontend/.env.local` with the project URL, publishable key, and server-only PostgreSQL `DATABASE_URL`. Never commit that file. The publishable key is safe for browser use; database credentials are not.
 
-Optional transactional email can be enabled by adding `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `frontend/.env.local`. Payment and reminder delivery additionally requires the server-only Razorpay and `JOB_RUNNER_SECRET` values documented in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md). These values must never be committed.
+Optional transactional email can be enabled by adding `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `frontend/.env.local`. Enable Supabase Auth **Confirm email** and allow the `/auth/confirm` redirect before testing signup. Payment, reminder, and verification operations are documented in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md). These values must never be committed.
 
 Start local Supabase when Docker is available:
 
