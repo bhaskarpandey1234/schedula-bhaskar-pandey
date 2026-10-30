@@ -18,9 +18,9 @@ function SubmitButton() {
   return <Button type="submit" disabled={pending}>{pending ? "Generating slots…" : "Create availability"}</Button>;
 }
 
-export function AvailabilityForm({ timezone, defaultDate }: { timezone: string; defaultDate: string }) {
+export function AvailabilityForm({ timezone, defaultDate, initialMode = "weekly" }: { timezone: string; defaultDate: string; initialMode?: "weekly" | "custom" }) {
   const [state, action] = useActionState(createAvailabilityAction, {} as AvailabilityActionState);
-  const [mode, setMode] = useState<"weekly" | "custom">("weekly");
+  const [mode, setMode] = useState<"weekly" | "custom">(initialMode);
   useEffect(() => {
     const submittedMode = state.values?.mode;
     if (submittedMode === "weekly" || submittedMode === "custom") setMode(submittedMode);

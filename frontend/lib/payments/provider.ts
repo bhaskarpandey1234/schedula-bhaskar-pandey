@@ -5,7 +5,7 @@ export type ProviderPayment = { id: string; orderId: string; amount: number; cur
 export type ProviderRefund = { id: string; paymentId: string; amount: number; status: string };
 
 export interface PaymentProvider {
-  createOrder(input: { amountMinor: number; currency: string; receipt: string }): Promise<PaymentOrder>;
+  createOrder(input: { amountMinor: number; currency: string; receipt: string; notes?: Record<string, string> }): Promise<PaymentOrder>;
   fetchPayment(paymentId: string): Promise<ProviderPayment>;
   createRefund(input: { paymentId: string; amountMinor: number; receipt: string }): Promise<ProviderRefund>;
   verifyCheckoutSignature(input: { orderId: string; paymentId: string; signature: string }): boolean;
@@ -35,8 +35,8 @@ export class RazorpayProvider implements PaymentProvider {
     return response.json() as Promise<T>;
   }
 
-  async createOrder(input: { amountMinor: number; currency: string; receipt: string }) {
-    return this.request<PaymentOrder>("/orders", { method: "POST", body: JSON.stringify({ amount: input.amountMinor, currency: input.currency, receipt: input.receipt, payment_capture: 1 }) });
+  async createOrder(input: { amountMinor: number; currency: string; receipt: string; notes?: Record<string, string> }) {
+    return this.request<PaymentOrder>("/orders", { method: "POST", body: JSON.stringify({ amount: input.amountMinor, currency: input.currency, receipt: input.receipt, payment_capture: 1, notes: input.notes }) });
   }
 
   async fetchPayment(paymentId: string) {

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -17,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PortalShell } from "@/components/portal-shell";
-import { getDoctorPortrait } from "@/components/doctor-card-proposals";
+import { DoctorAvatar } from "@/components/doctor-avatar";
 import { SlotBookingDialog } from "@/components/slot-booking-dialog";
 import { getCurrentAccount } from "@/lib/auth/guards";
 import {
@@ -50,7 +49,6 @@ export default async function PublicDoctorDetailPage({
       ? account.profile.role
       : undefined;
   const groups = groupSlotsByDate(slots, doctor.timezone);
-  const portrait = getDoctorPortrait(doctor);
 
   return (
     <PortalShell role={role} name={account?.profile?.full_name ?? undefined}>
@@ -68,16 +66,7 @@ export default async function PublicDoctorDetailPage({
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             {/* Physician Portrait */}
-            <div className="relative size-32 sm:size-36 shrink-0 overflow-hidden rounded-2xl border-2 border-primary/20 shadow-md bg-slate-100">
-              <Image
-                src={portrait}
-                alt={doctor.full_name}
-                fill
-                unoptimized
-                className="object-cover object-top"
-                sizes="150px"
-              />
-            </div>
+            <div className="shrink-0 rounded-2xl border-2 border-primary/20 bg-slate-100 p-1 shadow-md"><DoctorAvatar name={doctor.full_name} className="size-32 sm:size-36" /></div>
 
             {/* Doctor Info & Credentials */}
             <div className="flex-1 space-y-2.5">

@@ -143,7 +143,10 @@ export function getDoctorPortrait(
   if (customUrl && typeof customUrl === "string" && customUrl.trim().length > 0) {
     return customUrl.trim();
   }
+  // No uploaded portrait: callers display the local initials/profile fallback.
+  return "";
 
+  /* Legacy stock portrait catalogue intentionally disabled.
   const portraitsBySpecialty: Record<string, string[]> = {
     cardiology: [
       "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=600",
@@ -211,6 +214,7 @@ export function getDoctorPortrait(
   }
   const index = Math.abs(hash) % pool.length;
   return pool[index];
+  */
 }
 
 /**

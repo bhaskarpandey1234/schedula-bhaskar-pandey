@@ -64,7 +64,7 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   const redirectDate = parsed.data.sessionDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
-  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&created=1#schedule`);
+  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${parsed.data.mode}&created=1#schedule`);
 }
 
 function nextConsultingDate(days: number[], timezone: string) {
@@ -79,13 +79,13 @@ function nextConsultingDate(days: number[], timezone: string) {
   return today;
 }
 
-export async function getDoctorSchedule(sessionDate: string) {
+export async function getDoctorSchedule(sessionDate: string | "all") {
   const { supabase, user } = await currentDoctor();
   if (!user) redirect("/auth/login");
   await supabase.rpc("materialize_recurring_availability_slots", { p_doctor_id: user.id });
   const { data: slots } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status").eq("doctor_id", user.id).order("slot_start_at");
   const { data: doctor } = await supabase.from("doctors").select("timezone").eq("id", user.id).single();
-  const selectedSlots = (slots ?? []).filter((slot) => doctor && new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate);
+  const selectedSlots = (slots ?? []).filter((slot) => doctor && (sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate));
   const sessions: Array<never> = [];
   if (!selectedSlots.length) return { sessions, slots: [], appointments: [] };
   const appointments = await getDoctorScheduleAppointments(sessionDate);

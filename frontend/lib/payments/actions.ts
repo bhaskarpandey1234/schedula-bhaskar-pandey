@@ -12,8 +12,11 @@ export async function startCheckoutAction(input: { slotId: string; reason?: stri
   if (error) throw new Error(error.message);
   const reservation = (data as Array<{ appointment_id: string; payment_id: string; reservation_id: string; amount_minor: number; currency: string; expires_at: string }> | null)?.[0];
   if (!reservation) throw new Error("Could not reserve this appointment");
+  const { data: appointment } = await supabase.from("appointments").select("doctor_id").eq("id", reservation.appointment_id).single();
+  const { data: doctor } = appointment ? await supabase.from("doctors").select("clinic_name").eq("id", appointment.doctor_id).single() : { data: null };
+  const { data: doctorProfile } = appointment ? await supabase.from("profiles").select("full_name").eq("id", appointment.doctor_id).single() : { data: null };
   const provider = getPaymentProvider();
-  const order = await provider.createOrder({ amountMinor: reservation.amount_minor, currency: reservation.currency, receipt: reservation.payment_id });
+  const order = await provider.createOrder({ amountMinor: reservation.amount_minor, currency: reservation.currency, receipt: reservation.payment_id, notes: { appointment_id: reservation.appointment_id, payment_id: reservation.payment_id, doctor_id: appointment?.doctor_id ?? "", doctor_name: doctorProfile?.full_name ?? "", clinic_name: doctor?.clinic_name ?? "" } });
   const { error: attachError } = await supabase.rpc("attach_payment_order", { p_payment_id: reservation.payment_id, p_order_id: order.id });
   if (attachError) throw new Error("Payment order could not be attached safely");
   return { appointmentId: reservation.appointment_id, paymentId: reservation.payment_id, orderId: order.id, keyId: process.env.RAZORPAY_KEY_ID ?? "", amountMinor: order.amount, currency: order.currency, expiresAt: reservation.expires_at };
