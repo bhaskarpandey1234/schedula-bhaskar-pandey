@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarDays, ClipboardList, CreditCard, Home, Search, UserRound } from "lucide-react";
+import { BarChart2, Bell, CalendarDays, ClipboardList, CreditCard, Home, Search, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/validation/auth";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ const patientItems = [
   { href: "/doctors", label: "Find doctors", icon: Search },
   { href: "/patient/appointments", label: "Appointments", icon: CalendarDays },
   { href: "/patient/payments", label: "Payments & receipts", icon: CreditCard },
+  { href: "/patient/notifications", label: "Notifications", icon: Bell },
   { href: "/patient/profile", label: "Profile", icon: UserRound },
 ];
 
@@ -18,6 +19,8 @@ const doctorItems = [
   { href: "/doctor", label: "Overview", icon: Home },
   { href: "/doctor/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/doctor/appointments", label: "Appointments", icon: ClipboardList },
+  { href: "/doctor/analytics", label: "Analytics", icon: BarChart2 },
+  { href: "/doctor/notifications", label: "Notifications", icon: Bell },
   { href: "/doctor/profile", label: "Profile", icon: UserRound },
 ];
 

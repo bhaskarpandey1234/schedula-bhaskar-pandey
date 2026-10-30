@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Stethoscope } from "lucide-react";
+import { Bell, Menu, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Phase3LogoutButton } from "@/components/phase3-logout-button";
@@ -36,7 +36,7 @@ function linksFor(role?: Role): NavigationLink[] {
   ];
 }
 
-export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
+export function SiteHeader({ role, name, unreadCount = 0 }: { role?: Role; name?: string; unreadCount?: number }) {
   const [open, setOpen] = useState(false);
   const links = linksFor(role);
   const home = "/";
@@ -64,7 +64,7 @@ export function SiteHeader({ role, name }: { role?: Role; name?: string }) {
       </Link>
       <nav aria-label="Primary navigation" className="hidden flex-1 items-center justify-center gap-7 md:flex">{navigation()}</nav>
       <div className="hidden items-center gap-2 md:flex">
-        {role ? <><span className="max-w-44 truncate text-sm text-muted-foreground">{name}</span><Phase3LogoutButton /></> : <><Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button><Button asChild size="sm"><Link href="/auth/sign-up">Create account</Link></Button></>}
+        {role ? <><Link href={`/${role}/notifications`} aria-label="Notifications" className="relative inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{unreadCount > 0 && <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">{unreadCount > 9 ? "9+" : unreadCount}</span>}<Bell className="size-4" aria-hidden="true" /></Link><span className="max-w-44 truncate text-sm text-muted-foreground">{name}</span><Phase3LogoutButton /></> : <><Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button><Button asChild size="sm"><Link href="/auth/sign-up">Create account</Link></Button></>}
       </div>
       <Sheet open={open} onOpenChange={setOpen}><SheetTrigger className="inline-flex size-9 items-center justify-center rounded-md border border-input text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Open navigation"><Menu className="size-4" aria-hidden="true" /></SheetTrigger><SheetContent id="mobile-navigation"><div className="flex h-full flex-col"><div className="mb-5 flex items-center justify-between"><span className="font-semibold">Menu</span><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Button></div><nav aria-label="Mobile navigation" className="grid gap-1">{navigation(true)}</nav><div className="mt-auto grid gap-2 border-t pt-4">{role ? <><p className="px-3 text-sm text-muted-foreground">{name}</p><Phase3LogoutButton /></> : <><Button asChild variant="outline"><Link href="/auth/login">Sign in</Link></Button><Button asChild><Link href="/auth/sign-up">Create account</Link></Button></>}</div></div></SheetContent></Sheet>
     </PageContainer>

@@ -3,14 +3,16 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import type { Role } from "@/lib/validation/auth";
+import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
-export function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
+export async function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
+  const unreadCount = role ? await getUnreadNotificationCount() : 0;
   const accent = role === "patient" ? "[--primary:210_80%_45%] [--ring:210_80%_45%]" : role === "doctor" ? "[--primary:174_72%_31%] [--ring:174_72%_31%]" : "";
   if (!role) {
     return (
       <div className={`min-h-svh flex flex-col justify-between bg-background ${accent}`}>
         <div>
-          <SiteHeader role={role} name={name} />
+          <SiteHeader role={role} name={name} unreadCount={unreadCount} />
           <main>
             <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
           </main>
@@ -19,5 +21,5 @@ export function PortalShell({ children, role, name }: { children: React.ReactNod
       </div>
     );
   }
-  return <div className={`min-h-svh bg-background ${accent}`}><SiteHeader role={role} name={name} /><div className="flex min-h-[calc(100svh-4rem)]"><DashboardSidebar role={role} /><main className="min-w-0 flex-1"><PageContainer className="py-6 sm:py-8">{children}</PageContainer></main></div></div>;
+  return <div className={`min-h-svh bg-background ${accent}`}><SiteHeader role={role} name={name} unreadCount={unreadCount} /><div className="flex min-h-[calc(100svh-4rem)]"><DashboardSidebar role={role} /><main className="min-w-0 flex-1"><PageContainer className="py-6 sm:py-8">{children}</PageContainer></main></div></div>;
 }
