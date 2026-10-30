@@ -4,6 +4,13 @@ export type PaymentOrder = { id: string; amount: number; currency: string; recei
 export type ProviderPayment = { id: string; orderId: string; amount: number; currency: string; status: string };
 export type ProviderRefund = { id: string; paymentId: string; amount: number; status: string };
 
+export class PaymentProviderError extends Error {
+  constructor(readonly status?: number) {
+    super(status ? `Payment provider request failed (${status})` : "Payment provider request failed");
+    this.name = "PaymentProviderError";
+  }
+}
+
 export interface PaymentProvider {
   createOrder(input: { amountMinor: number; currency: string; receipt: string; notes?: Record<string, string> }): Promise<PaymentOrder>;
   fetchPayment(paymentId: string): Promise<ProviderPayment>;
@@ -31,7 +38,7 @@ export class RazorpayProvider implements PaymentProvider {
       headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from(`${this.keyId}:${this.keySecret}`).toString("base64")}`, ...(init.headers ?? {}) },
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Razorpay request failed (${response.status})`);
+    if (!response.ok) throw new PaymentProviderError(response.status);
     return response.json() as Promise<T>;
   }
 
@@ -45,7 +52,7 @@ export class RazorpayProvider implements PaymentProvider {
   }
 
   async createRefund(input: { paymentId: string; amountMinor: number; receipt: string }) {
-    const refund = await this.request<{ id: string; payment_id: string; amount: number; status: string }>(`/payments/${encodeURIComponent(input.paymentId)}/refund`, { method: "POST", body: JSON.stringify({ amount: input.amountMinor, receipt: input.receipt }) });
+    const refund = await this.request<{ id: string; payment_id: string; amount: number; status: string }>(`/payments/${encodeURIComponent(input.paymentId)}/refund`, { method: "POST", headers: { "x-refund-idempotency": input.receipt }, body: JSON.stringify({ amount: input.amountMinor, receipt: input.receipt }) });
     return { id: refund.id, paymentId: refund.payment_id, amount: refund.amount, status: refund.status };
   }
 

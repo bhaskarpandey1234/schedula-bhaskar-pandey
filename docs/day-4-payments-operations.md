@@ -52,6 +52,13 @@ The dispatcher is idempotent. Database dedupe keys and guarded state transitions
 repeated invocation safe. Inspect the outbox and provider event rows before retrying
 an operational failure manually.
 
+For Preview, use a stable branch Preview URL and Razorpay Test Mode credentials.
+Create the matching `JOB_RUNNER_SECRET` in Vercel Preview and Supabase Vault, then
+schedule the request with `pg_net`. A `requested` refund is only queued. The
+dispatcher claims it before calling Razorpay, marks it `pending` after Razorpay
+accepts it, and retries only transient provider errors. A `processed` webhook is
+the source of truth for a completed refund.
+
 ## Refund policy
 
 The seeded global policy is:

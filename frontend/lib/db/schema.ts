@@ -179,6 +179,9 @@ export const refunds = pgTable("refunds", {
   providerRefundId: text("provider_refund_id"),
   idempotencyKey: text("idempotency_key").notNull(),
   failureReason: text("failure_reason"),
+  attempts: integer("attempts").notNull().default(0),
+  processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
   processedAt: timestamp("processed_at", { withTimezone: true }),
   ...auditColumns(),
 }, (table) => ({ requestIdx: index("refunds_request_idx").on(table.requestId), providerUnique: uniqueIndex("refunds_provider_unique").on(table.providerRefundId), idempotencyUnique: uniqueIndex("refunds_idempotency_unique").on(table.idempotencyKey) }));

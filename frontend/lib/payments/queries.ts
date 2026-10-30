@@ -20,6 +20,8 @@ export type PatientPayment = {
   slot_end_at: string;
   refund_status: "requested" | "pending" | "processed" | "failed" | null;
   refund_amount_minor: number;
+  provider_refund_id: string | null;
+  refund_processed_at: string | null;
 };
 
 export async function getPatientPayments(paymentId?: string) {
