@@ -1,4 +1,11 @@
 export type RefundState = "requested" | "pending" | "processed" | "failed";
+export type SettledRefundState = Exclude<RefundState, "requested">;
+
+export function normalizeProviderRefundState(status: string): SettledRefundState {
+  if (status === "processed" || status === "completed") return "processed";
+  if (status === "failed" || status === "rejected") return "failed";
+  return "pending";
+}
 
 /** Provider state is allowed to advance a refund, but never regress a settled one. */
 export function nextRefundState(current: RefundState, event: "processed" | "failed"): RefundState {
