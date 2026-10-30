@@ -11,6 +11,11 @@ import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/ac
 export type AvailabilityActionState = FormActionState;
 
 function values(formData: FormData) { return formValues(formData); }
+function availabilityValues(formData: FormData) {
+  const submitted = values(formData);
+  submitted.consultingDays = formData.getAll("consultingDays").map(String).join(",");
+  return submitted;
+}
 function firstIssue(error: unknown) {
   if (error && typeof error === "object" && "issues" in error) return (error as { issues: Array<{ message: string }> }).issues[0]?.message;
   return undefined;
@@ -39,21 +44,22 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
 }
 
 export async function createAvailabilityAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
-  const raw = values(formData);
+  const submittedValues = availabilityValues(formData);
+  const raw = submittedValues;
   const parsed = availabilitySessionSchema.safeParse({
     ...raw,
     consultingDays: formData.getAll("consultingDays"),
   });
-  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: values(formData) };
+  if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: submittedValues };
   const { supabase, user } = await currentDoctor();
-  if (!user) return { error: "Your doctor session is no longer valid.", values: values(formData) };
+  if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
   const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : "create_custom_availability_with_slots";
   const rpcArgs = parsed.data.mode === "weekly"
     ? { p_consulting_days: parsed.data.consultingDays, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, p_interval_minutes: parsed.data.intervalMinutes, p_capacity: parsed.data.capacity }
     : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, p_interval_minutes: parsed.data.intervalMinutes, p_capacity: parsed.data.capacity };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
-  if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: values(formData) };
-  if (!data) return { error: "We could not create this availability.", values: values(formData) };
+  if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
+  if (!data) return { error: "We could not create this availability.", values: submittedValues };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   const redirectDate = parsed.data.sessionDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
