@@ -76,7 +76,12 @@ export async function POST(request: Request) {
       }
     }
   }
-  const deliveries = await db.execute(sql`select d.id, d.dedupe_key, d.template, u.email, coalesce(n.title, 'Appointment reminder') as title, coalesce(n.message, 'This is a reminder for your upcoming Schedula appointment.') as message from public.notification_deliveries d join auth.users u on u.id = d.recipient_id left join public.notifications n on n.id = d.notification_id left join public.appointments a on a.id = d.appointment_id left join public.appointment_slots s on s.id = a.slot_id where d.channel = 'email' and d.status = 'pending' and d.scheduled_at <= now() and (d.template not like 'appointment_reminder%' or (a.status = 'confirmed' and s.slot_start_at > now())) order by d.scheduled_at limit 50`);
+  let deliveries: Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }> = [];
+  try {
+    deliveries = (await db.execute(sql`select d.id, d.dedupe_key, d.template, u.email, coalesce(n.title, 'Appointment reminder') as title, coalesce(n.message, 'This is a reminder for your upcoming Schedula appointment.') as message from public.notification_deliveries d join auth.users u on u.id = d.recipient_id left join public.notifications n on n.id = d.notification_id left join public.appointments a on a.id = d.appointment_id left join public.appointment_slots s on s.id = a.slot_id where d.channel = 'email' and d.status = 'pending' and d.scheduled_at <= now() and (d.template not like 'appointment_reminder%' or (a.status = 'confirmed' and s.slot_start_at > now())) order by d.scheduled_at limit 50`)) as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>;
+  } catch {
+    // A restricted database role may not be able to read auth.users. Leave the outbox pending and continue refunds.
+  }
   let delivered = 0;
   for (const delivery of deliveries as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>) {
     const result = await sendNotificationEmail({ to: delivery.email, subject: delivery.template === "appointment_reminder_24h" ? "Appointment reminder (24 hours)" : delivery.template === "appointment_reminder_2h" ? "Appointment reminder (2 hours)" : delivery.title, text: delivery.message }, delivery.dedupe_key);

@@ -52,7 +52,8 @@ export class RazorpayProvider implements PaymentProvider {
   }
 
   async createRefund(input: { paymentId: string; amountMinor: number; receipt: string }) {
-    const refund = await this.request<{ id: string; payment_id: string; amount: number; status: string }>(`/payments/${encodeURIComponent(input.paymentId)}/refund`, { method: "POST", headers: { "x-refund-idempotency": input.receipt }, body: JSON.stringify({ amount: input.amountMinor, receipt: input.receipt }) });
+    const receipt = input.receipt.replace(/[^A-Za-z0-9_-]/g, "_");
+    const refund = await this.request<{ id: string; payment_id: string; amount: number; status: string }>(`/payments/${encodeURIComponent(input.paymentId)}/refund`, { method: "POST", headers: { "x-refund-idempotency": receipt }, body: JSON.stringify({ amount: input.amountMinor, receipt }) });
     return { id: refund.id, paymentId: refund.payment_id, amount: refund.amount, status: refund.status };
   }
 
