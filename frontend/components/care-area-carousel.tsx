@@ -51,7 +51,7 @@ export function CareAreaCarousel({ specialties }: { specialties: string[] }) {
               href={`/doctors?specialty=${encodeURIComponent(specialty)}`}
               className="group flex w-[min(88vw,21rem)] sm:w-[22rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {/* Practo-Style Disease / Health Concern Image Banner */}
+              {/* Schedula health concern image banner */}
               <div className="relative h-44 w-full overflow-hidden bg-muted">
                 <Image
                   src={meta.imageUrl}
@@ -82,7 +82,7 @@ export function CareAreaCarousel({ specialties }: { specialties: string[] }) {
               {/* Card Body */}
               <div className="flex flex-1 flex-col justify-between p-5 space-y-4">
                 <div>
-                  {/* Health Issue Heading (Practo Style) */}
+          {/* Health concern heading */}
                   <h3 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary leading-snug">
                     {meta.concernTitle}
                   </h3>

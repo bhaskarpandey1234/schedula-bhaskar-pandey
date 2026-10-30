@@ -57,13 +57,13 @@ export default async function Home() {
       <SiteHeader role={role} name={account?.profile?.full_name ?? undefined} />
 
       <main>
-        {/* Practo-Style Top Hero & Search Console */}
+        {/* Schedula hero and search console */}
         <section
           data-testid="hero"
           className="relative border-b border-border/50 bg-gradient-to-b from-white via-slate-50/50 to-white py-8 sm:py-12"
         >
           <PageContainer className="w-full">
-            {/* Dual Pill Search Console (Practo Exact Top Bar) */}
+          {/* Dual-pill search console */}
             <div className="mx-auto max-w-4xl mb-10">
               <form
                 action="/doctors"
@@ -119,24 +119,24 @@ export default async function Home() {
               </form>
             </div>
 
-            {/* 4 Pastel Hero Service Cards (Practo Signature Layout) */}
+            {/* Schedula service cards */}
             <HeroServicesCards />
           </PageContainer>
         </section>
 
-        {/* Practo Tier 1: "Consult top doctors for any health concern" (Circular Tiles) */}
+        {/* Schedula care areas */}
         <div id="browse-care">
           <PageContainer>
           <HealthConcernTiles />
           </PageContainer>
         </div>
 
-        {/* Practo Tier 2: "Book an appointment for an in-clinic consultation" (Procedure Cards Carousel) */}
+        {/* In-clinic consultation specialties */}
         <PageContainer>
           <InClinicSpecialties />
         </PageContainer>
 
-        {/* Practo Tier 3: "Doctors with upcoming times" (Split-Card Physician Carousel) */}
+        {/* Doctors with upcoming times */}
         <section className="py-12 sm:py-16 bg-white border-b border-border/60">
           <PageContainer>
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -162,7 +162,7 @@ export default async function Home() {
           </PageContainer>
         </section>
 
-        {/* Practo Tier 4: "Download the Schedula app" Banner (Mockup + SMS Sender) */}
+        {/* Schedula app banner */}
         <AppDownloadBanner />
 
         {/* For Doctors Callout Strip */}
@@ -188,7 +188,7 @@ export default async function Home() {
         </section>
       </main>
 
-      {/* Practo Signature Deep Navy Footer */}
+      {/* Schedula footer */}
       <SiteFooter />
     </div>
   );

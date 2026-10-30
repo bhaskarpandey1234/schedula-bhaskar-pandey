@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-  PRACTO_HEALTH_CONCERNS,
-  type PractoHealthConcern,
+  SCHEDULA_HEALTH_CONCERNS,
+  type SchedulaHealthConcern,
 } from "@/lib/discovery/care-areas";
 
 function HealthConcernIllustration({
   type,
 }: {
-  type: PractoHealthConcern["illustrationType"];
+  type: SchedulaHealthConcern["illustrationType"];
 }) {
   switch (type) {
     case "pregnancy":
@@ -165,7 +165,7 @@ export function HealthConcernTiles() {
   return (
     <section className="py-12 sm:py-16 bg-white border-b border-border/60">
       <div className="w-full">
-        {/* Header matching Practo Screenshot 2 */}
+        {/* Schedula health-concern header */}
         <div className="mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-[#1D2153] sm:text-3xl">
@@ -186,9 +186,9 @@ export function HealthConcernTiles() {
           </Button>
         </div>
 
-        {/* Circular Symptom / Condition Tiles Row (Practo Signature Aesthetic) */}
+        {/* Health-concern tiles */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-6 sm:gap-4">
-          {PRACTO_HEALTH_CONCERNS.map((concern) => (
+          {SCHEDULA_HEALTH_CONCERNS.map((concern) => (
             <Link
               key={concern.id}
               href={concern.href}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarDays, ClipboardList, Home, Search, UserRound } from "lucide-react";
+import { CalendarDays, ClipboardList, CreditCard, Home, Search, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/validation/auth";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ const patientItems = [
   { href: "/patient", label: "Overview", icon: Home },
   { href: "/doctors", label: "Find doctors", icon: Search },
   { href: "/patient/appointments", label: "Appointments", icon: CalendarDays },
+  { href: "/patient/payments", label: "Payments & receipts", icon: CreditCard },
   { href: "/patient/profile", label: "Profile", icon: UserRound },
 ];
 

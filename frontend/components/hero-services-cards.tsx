@@ -59,7 +59,7 @@ export const HERO_SERVICES: HeroService[] = [
 export function HeroServicesCards() {
   return (
     <div className="w-full">
-      {/* 4 Pastel Pill Service Cards (Practo Signature Layout) */}
+      {/* Schedula service cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {HERO_SERVICES.map((service) => (
           <Link

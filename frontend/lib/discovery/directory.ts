@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatLocalTime, localDateKey as getLocalDateKey } from "@/lib/scheduling/time";
+import { formatLocalTime, formatLocalSlotRange, localDateKey as getLocalDateKey } from "@/lib/scheduling/time";
 import { type DirectoryFilters } from "@/lib/discovery/filters";
 import { formatDateLabel } from "@/lib/discovery/format";
 import type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
@@ -129,6 +129,10 @@ export function localDateKey(value: string | Date, timezone: string) {
 
 export function formatSlotTime(value: string, timezone: string) {
   return formatLocalTime(value, timezone);
+}
+
+export function formatSlotRange(start: string, end: string, timezone: string) {
+  return formatLocalSlotRange(start, end, timezone);
 }
 
 export function groupSlotsByDate(slots: DoctorSlot[], timezone: string) {

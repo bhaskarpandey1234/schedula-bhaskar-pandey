@@ -6,9 +6,9 @@ import { randomUUID } from "node:crypto";
 
 export type CheckoutSession = { appointmentId: string; paymentId: string; orderId: string; keyId: string; amountMinor: number; currency: string; expiresAt: string };
 
-export async function startCheckoutAction(input: { slotId: string; reason?: string; idempotencyKey?: string }): Promise<CheckoutSession> {
+export async function startCheckoutAction(input: { slotId: string; reason?: string; expectedAmountMinor?: number; idempotencyKey?: string }): Promise<CheckoutSession> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("reserve_paid_appointment", { p_slot_id: input.slotId, p_reason: input.reason ?? null, p_idempotency_key: input.idempotencyKey ?? randomUUID() });
+  const { data, error } = await supabase.rpc("reserve_paid_appointment", { p_slot_id: input.slotId, p_reason: input.reason ?? null, p_idempotency_key: input.idempotencyKey ?? randomUUID(), p_expected_amount_minor: input.expectedAmountMinor ?? null });
   if (error) throw new Error(error.message);
   const reservation = (data as Array<{ appointment_id: string; payment_id: string; reservation_id: string; amount_minor: number; currency: string; expires_at: string }> | null)?.[0];
   if (!reservation) throw new Error("Could not reserve this appointment");

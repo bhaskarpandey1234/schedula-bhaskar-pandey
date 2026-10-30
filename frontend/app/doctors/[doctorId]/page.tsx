@@ -18,9 +18,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PortalShell } from "@/components/portal-shell";
 import { getDoctorPortrait } from "@/components/doctor-card-proposals";
+import { SlotBookingDialog } from "@/components/slot-booking-dialog";
 import { getCurrentAccount } from "@/lib/auth/guards";
 import {
-  formatSlotTime,
   getPublicDoctorDetail,
   getPublicDoctorSlots,
   groupSlotsByDate,
@@ -50,14 +50,6 @@ export default async function PublicDoctorDetailPage({
       ? account.profile.role
       : undefined;
   const groups = groupSlotsByDate(slots, doctor.timezone);
-  const bookingHref = (slotId: string) =>
-    `/patient/doctors/${doctorId}/book/${slotId}`;
-  const callToAction = (slotId: string) => {
-    if (!role)
-      return `/auth/login?next=${encodeURIComponent(bookingHref(slotId))}`;
-    return role === "patient" ? bookingHref(slotId) : "/doctor";
-  };
-
   const portrait = getDoctorPortrait(doctor);
 
   return (
@@ -72,7 +64,7 @@ export default async function PublicDoctorDetailPage({
           Back to all doctors
         </Link>
 
-        {/* Practo-Style Doctor Header Card */}
+        {/* Schedula doctor header card */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             {/* Physician Portrait */}
@@ -95,7 +87,7 @@ export default async function PublicDoctorDetailPage({
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
                   <ShieldCheck className="size-3.5 text-emerald-600" />
-                  Practo Verified
+                  Schedula Verified
                 </span>
                 <Badge variant="secondary" className="text-xs">
                   {doctor.experience_years} years practice
@@ -118,7 +110,7 @@ export default async function PublicDoctorDetailPage({
                 </p>
               </div>
 
-              {/* Patient Trust Metrics (Practo Style) */}
+              {/* Patient Trust Metrics */}
               <div className="pt-2 flex flex-wrap items-center gap-4 text-xs font-medium">
                 <div className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
                   <Star className="size-3.5 fill-emerald-600 text-emerald-600" />
@@ -126,7 +118,7 @@ export default async function PublicDoctorDetailPage({
                 </div>
                 <div className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
                   <CheckCircle2 className="size-3.5 text-primary" />
-                  <span>₹600 Consultation Fee</span>
+                  <span>{doctor.consultation_fee_minor == null ? "Fee not configured" : `₹${(doctor.consultation_fee_minor / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })} consultation fee`}</span>
                 </div>
               </div>
             </div>
@@ -170,7 +162,7 @@ export default async function PublicDoctorDetailPage({
               <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
                 <p className="font-semibold text-slate-800">{doctor.clinic_name}</p>
                 <p className="text-[11px] text-slate-500">Instant slot confirmation on Schedula</p>
-                <p className="text-primary font-bold pt-1">₹600 at clinic</p>
+                <p className="text-primary font-bold pt-1">{doctor.consultation_fee_minor == null ? "Consultation fee not configured" : `₹${(doctor.consultation_fee_minor / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })} at clinic`}</p>
               </div>
 
               <p className="text-slate-500 leading-relaxed">
@@ -201,25 +193,7 @@ export default async function PublicDoctorDetailPage({
                       </span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    {group.slots.map((slot) => (
-                      <Button
-                        key={slot.slot_id}
-                        asChild
-                        variant="outline"
-                        className="h-auto border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground font-medium text-xs px-3 py-2 rounded-xl transition-all"
-                      >
-                        <Link href={callToAction(slot.slot_id)}>
-                          <span>
-                            {formatSlotTime(slot.slot_start_at, doctor.timezone)}
-                          </span>
-                          <span className="ml-1.5 text-[10px] opacity-75">
-                            ({slot.remaining_capacity} left)
-                          </span>
-                        </Link>
-                      </Button>
-                    ))}
-                  </CardContent>
+                  <CardContent><SlotBookingDialog doctor={doctor} slots={group.slots} role={role} /></CardContent>
                 </Card>
               ))}
             </div>

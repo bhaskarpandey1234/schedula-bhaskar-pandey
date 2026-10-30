@@ -10,7 +10,8 @@ export async function bookAppointmentAction(_: BookingActionState, formData: For
   const parsed = bookingSchema.safeParse({ slotId: formData.get("slotId"), reason: formData.get("reason") || undefined });
   if (!parsed.success) return { error: firstZodError(parsed.error) ?? "Check your booking details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: formValues(formData) };
   try {
-    const checkout = await startCheckoutAction({ slotId: parsed.data.slotId, reason: parsed.data.reason });
+    const expectedAmountMinor = Number(formData.get("expectedAmountMinor"));
+    const checkout = await startCheckoutAction({ slotId: parsed.data.slotId, reason: parsed.data.reason, expectedAmountMinor: Number.isFinite(expectedAmountMinor) ? expectedAmountMinor : undefined });
     return { checkout, values: formValues(formData) };
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : "";
