@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { DoctorDirectoryCard } from "@/components/doctor-directory-card";
 import { Button } from "@/components/ui/button";
 import type { DoctorDirectoryRecord } from "@/lib/discovery/types";
+import { getDummyDoctorPortrait } from "@/lib/discovery/dummy-portraits";
 
 type DemoDoctor = {
   name: string;
@@ -55,6 +56,10 @@ function demoDoctorToRecord(d: DemoDoctor): DoctorDirectoryRecord {
     specialty: d.specialty,
     clinic_name: d.clinic,
     experience_years: years,
+    profile_image_url: getDummyDoctorPortrait(
+      `demo-${d.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      d.specialty,
+    ),
     available_dates: [today, tomorrow],
   };
 }

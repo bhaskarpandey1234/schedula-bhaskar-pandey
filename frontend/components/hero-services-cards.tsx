@@ -31,7 +31,7 @@ export const HERO_SERVICES: HeroService[] = [
     href: "/doctors",
     bgClass: "bg-[#EBF9F7] hover:bg-[#DFF5F2] border-teal-100",
     badgeClass: "bg-teal-600/10 text-teal-700",
-    imageUrl: "https://images.unsplash.com/photo-1594824813572-8f240f92b77a?auto=format&fit=crop&q=80&w=480",
+    imageUrl: "/images/appointment-hero.png",
     imageAlt: "Find Experienced Doctors Near You",
   },
   {

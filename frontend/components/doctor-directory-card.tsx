@@ -1,4 +1,4 @@
-import { SplitCardDoctorProposal, getDoctorPortrait } from "@/components/doctor-card-proposals";
+import { SplitCardDoctorProposal } from "@/components/doctor-card-proposals";
 import type { DoctorDirectoryRecord } from "@/lib/discovery/types";
 
 export type DoctorDirectoryCardProps = {
@@ -12,7 +12,8 @@ export type DoctorDirectoryCardProps = {
 
 /**
  * Production DoctorDirectoryCard implementing Proposal 1: Clinical Trust & Split-Card Direct Booking.
- * Modernizes the reference appointment directory layout with authentic physician portraits/initials,
+ * Modernizes the reference appointment directory layout with authentic physician portraits
+ * and a consistent local clinician fallback,
  * WCAG AAA contrast compliance, animated availability pulse, and primary/secondary button hierarchy.
  */
 export function DoctorDirectoryCard({
@@ -23,7 +24,7 @@ export function DoctorDirectoryCard({
   verified = true,
   compact = false,
 }: DoctorDirectoryCardProps) {
-  const effectivePhoto = getDoctorPortrait(doctor, photoUrl);
+  const effectivePhoto = photoUrl?.trim() || doctor.profile_image_url?.trim() || undefined;
 
   return (
     <SplitCardDoctorProposal

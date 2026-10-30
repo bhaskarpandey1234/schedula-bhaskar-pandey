@@ -163,8 +163,8 @@ describe("doctor card prototype component rendering & accessibility", () => {
     // Screen reader accessible action button labels
     expect(html).toContain('aria-label="Book appointment with Dr. Sarah Johnson, MD"');
     expect(html).toContain('aria-label="View more information about Dr. Sarah Johnson, MD"');
-    // Fallback initials avatar
-    expect(html).toContain("SJ");
+    expect(html).toContain("default-doctor-avatar.png");
+    expect(html).toContain('alt="Dr. Sarah Johnson, MD profile"');
   });
 
   it("renders SplitCardDoctorProposal safely when doctor fields are empty or partial", () => {
@@ -204,7 +204,7 @@ describe("doctor card prototype component rendering & accessibility", () => {
     );
 
     expect(html).toContain("https://example.com/portraits/sarah.jpg");
-    expect(html).toContain('alt="Portrait of Dr. Sarah Johnson, MD"');
+    expect(html).toContain('alt="Dr. Sarah Johnson, MD profile"');
   });
 
   it("renders SlotForwardDoctorProposal with slot chips and accessible link labels", () => {
@@ -255,7 +255,7 @@ describe("doctor card prototype component rendering & accessibility", () => {
     expect(html).toContain("Request Appointment");
     expect(html).toContain("Physician Dossier");
     expect(html).toContain("https://example.com/portraits/sarah-whitecoat.jpg");
-    expect(html).toContain('alt="Clinical portrait of Dr. Sarah Johnson, MD"');
+    expect(html).toContain('alt="Dr. Sarah Johnson, MD profile"');
     expect(html).toContain('aria-label="Request appointment with Dr. Sarah Johnson, MD"');
   });
 

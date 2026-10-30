@@ -5,6 +5,7 @@ export type DoctorDirectoryRecord = {
   clinic_name: string;
   experience_years: number;
   available_dates: string[];
+  profile_image_url?: string | null;
   consultation_fee_minor?: number | null;
   consultation_currency?: string | null;
 };

@@ -2,17 +2,39 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function doctorInitials(name?: string | null) {
-  const words = (name ?? "").trim().replace(/^(dr\.?|doctor)\s+/i, "").split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "";
-  return words.length === 1 ? words[0].slice(0, 2).toUpperCase() : `${words[0][0]}${words.at(-1)?.[0] ?? ""}`.toUpperCase();
-}
+export const DEFAULT_DOCTOR_PROFILE_IMAGE = "/images/default-doctor-avatar.png";
 
-export function DoctorAvatar({ name, src, className = "size-14", imageClassName = "object-cover" }: { name?: string | null; src?: string | null; className?: string; imageClassName?: string }) {
-  const [failed, setFailed] = useState(false);
-  const initials = doctorInitials(name);
-  if (!src?.trim() || failed) return <div role="img" aria-label={`${name || "Doctor"} profile`} className={`flex items-center justify-center rounded-full bg-primary/15 text-primary ${className}`}>{initials ? <span className="font-semibold" aria-hidden="true">{initials}</span> : <UserRound className="size-1/2" aria-hidden="true" />}</div>;
-  return <div className={`relative overflow-hidden rounded-full ${className}`}><Image src={src.trim()} alt={`${name || "Doctor"} profile`} fill unoptimized sizes="160px" className={imageClassName} onError={() => setFailed(true)} /></div>;
+export function DoctorAvatar({
+  name,
+  src,
+  className = "size-14 rounded-full",
+  imageClassName = "object-cover",
+  fallbackImageClassName = "object-contain p-1",
+  sizes = "160px",
+}: {
+  name?: string | null;
+  src?: string | null;
+  className?: string;
+  imageClassName?: string;
+  fallbackImageClassName?: string;
+  sizes?: string;
+}) {
+  const normalizedSource = src?.trim() || "";
+  const [failedSource, setFailedSource] = useState("");
+  const usesFallback = !normalizedSource || failedSource === normalizedSource;
+  return (
+    <div className={cn("relative overflow-hidden", className)}>
+      <Image
+        src={usesFallback ? DEFAULT_DOCTOR_PROFILE_IMAGE : normalizedSource}
+        alt={`${name?.trim() || "Doctor"} profile`}
+        fill
+        unoptimized={!usesFallback}
+        sizes={sizes}
+        className={usesFallback ? fallbackImageClassName : imageClassName}
+        onError={usesFallback ? undefined : () => setFailedSource(normalizedSource)}
+      />
+    </div>
+  );
 }
