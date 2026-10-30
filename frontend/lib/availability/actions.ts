@@ -46,9 +46,10 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
 export async function createAvailabilityAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
   const submittedValues = availabilityValues(formData);
   const raw = submittedValues;
+  const mode = String(raw.mode ?? "");
   const parsed = availabilitySessionSchema.safeParse({
     ...raw,
-    consultingDays: formData.getAll("consultingDays"),
+    consultingDays: mode === "weekly" ? formData.getAll("consultingDays") : undefined,
   });
   if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: submittedValues };
   const { supabase, user } = await currentDoctor();

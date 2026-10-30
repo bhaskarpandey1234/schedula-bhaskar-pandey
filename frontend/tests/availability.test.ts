@@ -31,6 +31,8 @@ describe("Phase 4 validation", () => {
     form.set("intervalMinutes", "30");
     form.set("capacity", "3");
     const result = await createAvailabilityAction({}, form);
+    expect(result.error).toBe("End time must be after start time.");
+    expect(result.fieldErrors?.endTime).toBe("End time must be after start time.");
     expect(result.values).toMatchObject({ mode: "custom", sessionDate: "2099-04-20", startTime: "11:00", endTime: "09:00", intervalMinutes: "30", capacity: "3" });
   });
   it("preserves all selected weekly days after a validation error", async () => {
