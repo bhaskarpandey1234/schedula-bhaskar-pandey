@@ -22,9 +22,7 @@ export default async function DoctorSchedulePage({ searchParams }: { searchParam
   const params = await searchParams;
   const today = localDate(doctor.timezone);
   const selectedDate = params?.date === "all" || (params?.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) ? params.date : today;
-  // The server query supports "all" after migration 0013. Until a deployed
-  // database receives that migration, the normal daily view remains available.
-  const schedule = await getDoctorSchedule(selectedDate === "all" ? today : selectedDate);
+  const schedule = await getDoctorSchedule("all");
   const dates = [...new Set(schedule.slots.map((slot) => localDateKey(slot.slot_start_at, doctor.timezone)))];
   const visibleSlots = selectedDate === "all" ? schedule.slots : schedule.slots.filter((slot) => localDateKey(slot.slot_start_at, doctor.timezone) === selectedDate);
   const appointmentsBySlot = new Map<string, typeof schedule.appointments>();
