@@ -5,7 +5,7 @@ import { paymentWebhookEvents } from "@/lib/db/schema";
 import { sendNotificationEmail } from "@/lib/email";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
-import { isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
+import { findMatchingProviderRefund, isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
 
 async function applyRefundState(db: ReturnType<typeof createDb>, refundId: string, state: "pending" | "processed" | "failed", failureReason?: string | null) {
   return db.transaction(async (tx) => {
@@ -99,11 +99,31 @@ export async function POST(request: Request) {
       }
     }
   }
-  const submittedRefunds = await db.execute(sql`SELECT id, provider_refund_id FROM public.refunds WHERE provider_refund_id IS NOT NULL AND status IN ('requested'::refund_status, 'pending'::refund_status) LIMIT 50`);
-  for (const refund of submittedRefunds as unknown as Array<{ id: string; provider_refund_id: string }>) {
+  const submittedRefunds = await db.execute(sql`
+    SELECT r.id, r.amount_minor, r.provider_refund_id, p.provider_payment_id
+    FROM public.refunds r
+    JOIN public.payments p ON p.id = r.payment_id
+    WHERE r.status IN ('requested'::refund_status, 'pending'::refund_status)
+      AND p.provider_payment_id IS NOT NULL
+    ORDER BY r.created_at
+    LIMIT 50
+  `);
+  for (const refund of submittedRefunds as unknown as Array<{ id: string; amount_minor: number; provider_refund_id: string | null; provider_payment_id: string }>) {
     try {
-      const providerRefund = await getPaymentProvider().fetchRefund(refund.provider_refund_id);
-      await applyRefundState(db, refund.id, normalizeProviderRefundState(providerRefund.status));
+      const provider = getPaymentProvider();
+      let providerRefund = refund.provider_refund_id ? await provider.fetchRefund(refund.provider_refund_id) : undefined;
+      if (!providerRefund) {
+        const linkedRows = await db.execute(sql`SELECT provider_refund_id FROM public.refunds WHERE payment_id = (SELECT payment_id FROM public.refunds WHERE id = ${refund.id}::uuid) AND provider_refund_id IS NOT NULL`);
+        const linkedIds = new Set((linkedRows as unknown as Array<{ provider_refund_id: string }>).map((row) => row.provider_refund_id));
+        const candidates = await provider.listPaymentRefunds(refund.provider_payment_id);
+        const match = findMatchingProviderRefund(candidates, refund.provider_payment_id, refund.amount_minor, linkedIds);
+        if (!match) continue;
+        providerRefund = match;
+        await db.execute(sql`UPDATE public.refunds SET provider_refund_id = ${match.id}, updated_at = now() WHERE id = ${refund.id}::uuid AND provider_refund_id IS NULL`);
+      }
+      const currentRefund = providerRefund;
+      if (!currentRefund) continue;
+      await applyRefundState(db, refund.id, normalizeProviderRefundState(currentRefund.status));
     } catch (error) {
       const statusCode = error instanceof PaymentProviderError ? error.status : undefined;
       if (!isRetryableRefundError(statusCode)) await applyRefundState(db, refund.id, "failed", safeRefundFailureReason(statusCode));

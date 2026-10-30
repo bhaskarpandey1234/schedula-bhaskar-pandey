@@ -1,6 +1,10 @@
 export type RefundState = "requested" | "pending" | "processed" | "failed";
 export type SettledRefundState = Exclude<RefundState, "requested">;
 
+export function findMatchingProviderRefund(refunds: Array<{ id: string; paymentId: string; amount: number; status: string }>, paymentId: string, amountMinor: number, linkedIds: Set<string>) {
+  return refunds.find((refund) => refund.paymentId === paymentId && refund.amount === amountMinor && !linkedIds.has(refund.id));
+}
+
 export function normalizeProviderRefundState(status: string): SettledRefundState {
   if (status === "processed" || status === "completed") return "processed";
   if (status === "failed" || status === "rejected") return "failed";
