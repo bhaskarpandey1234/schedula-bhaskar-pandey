@@ -66,7 +66,7 @@ export default async function PublicDoctorDetailPage({
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             {/* Physician Portrait */}
-            <div className="shrink-0 rounded-2xl border-2 border-primary/20 bg-slate-100 p-1 shadow-md"><DoctorAvatar name={doctor.full_name} className="size-32 sm:size-36" /></div>
+            <div className="shrink-0 rounded-2xl border-2 border-primary/20 bg-slate-100 p-1 shadow-md"><DoctorAvatar name={doctor.full_name} src={doctor.profile_image_url} className="size-32 rounded-xl sm:size-36" fallbackImageClassName="object-contain p-2" /></div>
 
             {/* Doctor Info & Credentials */}
             <div className="flex-1 space-y-2.5">

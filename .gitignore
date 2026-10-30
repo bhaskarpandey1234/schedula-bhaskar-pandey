@@ -60,3 +60,5 @@ ehthumbs.db
 *.seed
 
 /docs/schedula-healthcare-roadmap.md
+.vercel
+.env*
