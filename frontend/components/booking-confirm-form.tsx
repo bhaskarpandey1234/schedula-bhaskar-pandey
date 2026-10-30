@@ -21,7 +21,7 @@ export function BookingConfirmForm({ slotId, reason, backHref, amountMinor, curr
     if (!checkout) return;
     const openCheckout = () => {
       if (!window.Razorpay) { setPaymentError("Payment checkout could not load. Please try again."); return; }
-      const instance = new window.Razorpay({ key: checkout.keyId, amount: checkout.amountMinor, currency: checkout.currency, order_id: checkout.orderId, name: "Schedula Healthcare", description: "Online consultation", handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+      const instance = new window.Razorpay({ key: checkout.keyId, amount: checkout.amountMinor, currency: checkout.currency, order_id: checkout.orderId, name: "Schedula Healthcare", description: "Online consultation", prefill: checkout.prefill, handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
         try { await verifyPaymentAction({ paymentId: checkout.paymentId, orderId: response.razorpay_order_id, providerPaymentId: response.razorpay_payment_id, signature: response.razorpay_signature }); router.push(`/patient/appointments/${checkout.appointmentId}/confirmation`); } catch (error) { setPaymentError(error instanceof Error ? error.message : "Payment could not be verified yet."); }
       }, modal: { ondismiss: () => { void markPaymentAbandoned({ paymentId: checkout.paymentId }); } } });
       instance.on?.("payment.failed", (response) => { setPaymentError(response.error?.description ?? response.error?.reason ?? "Payment failed. You can retry while the slot is held."); });
