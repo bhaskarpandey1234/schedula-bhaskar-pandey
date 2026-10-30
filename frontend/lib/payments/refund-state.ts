@@ -1,0 +1,30 @@
+export type RefundState = "requested" | "pending" | "processed" | "failed";
+export type SettledRefundState = Exclude<RefundState, "requested">;
+
+export function findMatchingProviderRefund(refunds: Array<{ id: string; paymentId: string; amount: number; status: string }>, paymentId: string, amountMinor: number, linkedIds: Set<string>) {
+  return refunds.find((refund) => refund.paymentId === paymentId && refund.amount === amountMinor && !linkedIds.has(refund.id));
+}
+
+export function normalizeProviderRefundState(status: string): SettledRefundState {
+  if (status === "processed" || status === "completed") return "processed";
+  if (status === "failed" || status === "rejected") return "failed";
+  return "pending";
+}
+
+/** Provider state is allowed to advance a refund, but never regress a settled one. */
+export function nextRefundState(current: RefundState, event: "processed" | "failed"): RefundState {
+  if (current === "processed") return "processed";
+  return event;
+}
+
+export function isRetryableRefundError(status?: number) {
+  return status === undefined || status === 0 || status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+export function safeRefundFailureReason(status?: number) {
+  if (status === 401 || status === 403) return "Refund provider authentication failed";
+  if (status === 400 || status === 404 || status === 422) return "Refund provider rejected the request";
+  if (status === 429) return "Refund provider is temporarily rate limited";
+  if (status && status >= 500) return "Refund provider is temporarily unavailable";
+  return "Refund provider could not be reached";
+}

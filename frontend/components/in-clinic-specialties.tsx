@@ -106,7 +106,7 @@ export function InClinicSpecialties() {
   return (
     <section className="py-12 sm:py-16 bg-surface-muted/40 border-b border-border/60">
       <div className="w-full">
-        {/* Header matching Practo Screenshot 2 */}
+        {/* Schedula specialty header */}
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-[#1D2153] sm:text-3xl">
@@ -139,7 +139,7 @@ export function InClinicSpecialties() {
           </div>
         </div>
 
-        {/* Horizontal Photo Cards Carousel (Practo Signature Photographic Cards) */}
+              {/* Horizontal specialty cards */}
         <div
           ref={ref}
           role="region"
@@ -165,7 +165,7 @@ export function InClinicSpecialties() {
                 />
               </div>
 
-              {/* Title & Description Below (Practo Exact Typography) */}
+              {/* Title and description */}
               <div className="flex flex-1 flex-col justify-between p-4 space-y-1.5">
                 <div>
                   <h3 className="text-base font-bold tracking-tight text-[#1D2153] transition-colors group-hover:text-primary">

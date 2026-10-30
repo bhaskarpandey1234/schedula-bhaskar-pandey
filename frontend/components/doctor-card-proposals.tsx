@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -15,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DoctorAvatar } from "@/components/doctor-avatar";
 import { formatDateLabel } from "@/lib/discovery/format";
 import type { DoctorDirectoryRecord } from "@/lib/discovery/types";
 
@@ -143,7 +143,10 @@ export function getDoctorPortrait(
   if (customUrl && typeof customUrl === "string" && customUrl.trim().length > 0) {
     return customUrl.trim();
   }
+  // No uploaded portrait: DoctorAvatar displays the local clinician fallback.
+  return "";
 
+  /* Legacy stock portrait catalogue intentionally disabled.
   const portraitsBySpecialty: Record<string, string[]> = {
     cardiology: [
       "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=600",
@@ -211,6 +214,7 @@ export function getDoctorPortrait(
   }
   const index = Math.abs(hash) % pool.length;
   return pool[index];
+  */
 }
 
 /**
@@ -322,7 +326,6 @@ export function SplitCardDoctorProposal({
   const rawDates = Array.isArray(doctor?.available_dates) ? doctor.available_dates : [];
 
   const status = getAvailabilityStatus(rawDates, referenceDate);
-  const initials = getDoctorInitials(doctorName);
   const sampleBio =
     biography ||
     `Specializing in ${specialty.toLowerCase()} with ${experienceYears} ${experienceYears === 1 ? "year" : "years"} of dedicated clinical practice and compassionate, evidence-based patient care.`;
@@ -359,26 +362,14 @@ export function SplitCardDoctorProposal({
             : "min-h-[220px] w-full sm:w-5/12 sm:min-w-[13rem] sm:self-stretch"
         }`}
       >
-        {photoUrl ? (
-          <Image
-            src={photoUrl}
-            alt={`Portrait of ${doctorName}`}
-            fill
-            unoptimized
-            className="object-cover object-top transition-transform duration-300 group-hover:scale-105"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 45vw, 320px"
-          />
-        ) : (
-          <div className="flex h-full w-full min-h-[200px] flex-col items-center justify-center gap-2 p-6 text-center">
-            <div className="flex size-20 items-center justify-center rounded-2xl bg-primary/20 text-primary shadow-inner sm:size-24">
-              <span className="font-mono text-2xl font-bold tracking-wider">{initials}</span>
-            </div>
-            <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-              <Stethoscope className="size-3.5 text-primary" aria-hidden="true" />
-              <span>Verified Clinical Profile</span>
-            </div>
-          </div>
-        )}
+        <DoctorAvatar
+          name={doctorName}
+          src={photoUrl}
+          className="h-full min-h-[200px] w-full rounded-none"
+          imageClassName="object-cover object-top transition-transform duration-300 group-hover:scale-105"
+          fallbackImageClassName="object-contain object-bottom p-4 sm:p-6"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 45vw, 320px"
+        />
 
         {/* Availability Status Badge: Floating at the bottom-left of the portrait */}
         <div className="absolute bottom-3 left-3 z-10">
@@ -548,7 +539,6 @@ export function SlotForwardDoctorProposal({
   const experienceYears = typeof doctor?.experience_years === "number" ? doctor.experience_years : 0;
   const doctorId = doctor?.doctor_id || "";
 
-  const initials = getDoctorInitials(doctorName);
   const isCustomProvided = slots !== undefined;
   const activeSlots = isCustomProvided
     ? slots
@@ -565,20 +555,11 @@ export function SlotForwardDoctorProposal({
         {/* Top Identity Header */}
         <div className="flex items-start gap-3 sm:gap-4">
           <div className="relative shrink-0">
-            {photoUrl ? (
-              <Image
-                src={photoUrl}
-                alt={`Portrait of ${doctorName}`}
-                width={56}
-                height={56}
-                unoptimized
-                className="size-14 rounded-full border border-border object-cover"
-              />
-            ) : (
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/15 font-bold text-primary">
-                {initials}
-              </div>
-            )}
+            <DoctorAvatar
+              name={doctorName}
+              src={photoUrl}
+              className="size-14 rounded-full border border-border bg-surface-muted"
+            />
             <span
               className="absolute -bottom-1 -right-1 rounded-full bg-emerald-600 p-0.5 text-white ring-2 ring-white dark:ring-card"
               title="Verified Physician"
@@ -715,7 +696,6 @@ export function InstitutionalDoctorProposal({
   const clinicName = doctor?.clinic_name?.trim() || "Schedula Medical Center";
   const doctorId = doctor?.doctor_id || "";
 
-  const initials = getDoctorInitials(doctorName);
 
   return (
     <Card className="flex h-full flex-col justify-between border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-lg sm:p-6 lg:p-8">
@@ -726,20 +706,11 @@ export function InstitutionalDoctorProposal({
         </div>
 
         <div className="mt-3 flex items-start gap-3 sm:gap-4">
-          {photoUrl ? (
-            <Image
-              src={photoUrl}
-              alt={`Clinical portrait of ${doctorName}`}
-              width={80}
-              height={100}
-              unoptimized
-              className="size-16 shrink-0 rounded-xl border border-border object-cover shadow-sm sm:size-24"
-            />
-          ) : (
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-serif text-lg font-bold text-slate-800 shadow-inner dark:bg-slate-800 dark:text-slate-100 sm:size-20 sm:text-xl">
-              {initials}
-            </div>
-          )}
+          <DoctorAvatar
+            name={doctorName}
+            src={photoUrl}
+            className="size-16 shrink-0 rounded-xl border border-border bg-slate-100 shadow-sm sm:size-24 dark:bg-slate-800"
+          />
           <div className="min-w-0 flex-1">
             <h3 className="font-serif text-xl font-bold tracking-tight text-foreground break-words sm:text-2xl">
               {doctorName}

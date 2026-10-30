@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateSlots } from "../lib/availability/slots";
 import { availabilitySessionSchema } from "../lib/validation/availability";
 import { doctorProfileSchema } from "../lib/validation/doctor-profile";
+import { createAvailabilityAction } from "../lib/availability/actions";
 
 describe("Phase 4 validation", () => {
   it("accepts weekly consulting days without a session date", () => {
@@ -19,6 +20,34 @@ describe("Phase 4 validation", () => {
   });
   it("validates editable doctor profile data", () => {
     expect(doctorProfileSchema.safeParse({ fullName: "Dr. Asha Rao", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" }).success).toBe(true);
+  });
+  it("preserves custom mode values after a validation error", async () => {
+    const form = new FormData();
+    form.set("mode", "custom");
+    form.set("sessionDate", "2099-04-20");
+    form.set("startTime", "11:00");
+    form.set("endTime", "09:00");
+    form.set("timezone", "Asia/Kolkata");
+    form.set("intervalMinutes", "30");
+    form.set("capacity", "3");
+    const result = await createAvailabilityAction({}, form);
+    expect(result.error).toBe("End time must be after start time.");
+    expect(result.fieldErrors?.endTime).toBe("End time must be after start time.");
+    expect(result.values).toMatchObject({ mode: "custom", sessionDate: "2099-04-20", startTime: "11:00", endTime: "09:00", intervalMinutes: "30", capacity: "3" });
+  });
+  it("preserves all selected weekly days after a validation error", async () => {
+    const form = new FormData();
+    form.set("mode", "weekly");
+    form.append("consultingDays", "1");
+    form.append("consultingDays", "4");
+    form.set("startTime", "11:00");
+    form.set("endTime", "09:00");
+    form.set("timezone", "Asia/Kolkata");
+    form.set("intervalMinutes", "30");
+    form.set("capacity", "3");
+    const result = await createAvailabilityAction({}, form);
+    expect(result.values?.mode).toBe("weekly");
+    expect(result.values?.consultingDays).toBe("1,4");
   });
 });
 

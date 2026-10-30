@@ -169,7 +169,7 @@ export function getCareAreaMeta(specialty: string): CareAreaMeta {
   };
 }
 
-export type PractoHealthConcern = {
+export type SchedulaHealthConcern = {
   id: string;
   title: string;
   subtitle: string;
@@ -189,7 +189,7 @@ export type PractoHealthConcern = {
     | "dentistry";
 };
 
-export const PRACTO_HEALTH_CONCERNS: PractoHealthConcern[] = [
+export const SCHEDULA_HEALTH_CONCERNS: SchedulaHealthConcern[] = [
   {
     id: "pregnancy",
     title: "Period doubts or Pregnancy",

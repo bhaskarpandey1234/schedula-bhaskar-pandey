@@ -64,6 +64,20 @@
       "when": 1793205600000,
       "tag": "0008-recurring-availability",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793300000000,
+      "tag": "0009-day4-payment-enums",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793301000000,
+      "tag": "0010-day4-payments-refunds-notifications",
+      "breakpoints": true
     }
   ]
 }

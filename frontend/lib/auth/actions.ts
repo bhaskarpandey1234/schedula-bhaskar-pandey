@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { authErrorDiagnostic, authErrorMessage } from "@/lib/auth/errors";
 import { safeReturnPath } from "@/lib/auth/return-path";
 import { formValues, firstZodError, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 import {
@@ -37,9 +37,16 @@ export async function signUpAction(_: ActionState, formData: FormData): Promise<
 export async function signInAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = signInSchema.safeParse(formValues(formData));
   if (!parsed.success) return validationError(parsed.error, formData);
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) { const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
+  let error: unknown;
+  try {
+    const supabase = await createClient();
+    ({ error } = await supabase.auth.signInWithPassword(parsed.data));
+  } catch (exception) {
+    console.error("[auth] sign-in exception", authErrorDiagnostic(exception, "password_sign_in_exception"));
+    const friendly = authErrorMessage(exception);
+    return { error: friendly.message, code: friendly.code, values: formValues(formData) };
+  }
+  if (error) { console.error("[auth] sign-in failed", authErrorDiagnostic(error)); const friendly = authErrorMessage(error); return { error: friendly.message, code: friendly.code, values: formValues(formData) }; }
   redirect(safeReturnPath(formData.get("next")) ?? "/auth/continue");
 }
 
@@ -104,6 +111,7 @@ export async function completeDoctorOnboarding(_: ActionState, formData: FormDat
     p_experience_years: parsed.data.experienceYears,
     p_biography: parsed.data.biography,
     p_timezone: parsed.data.timezone,
+    p_consultation_fee_minor: Math.round(parsed.data.consultationFee * 100),
   });
   if (error) return { error: "We could not save your doctor details. Please review the highlighted fields and try again.", values: formValues(formData) };
   redirect("/doctor");

@@ -13,7 +13,7 @@ function isFutureLocal(date: string, time: string, zone: string) {
 export const availabilitySessionSchema = z.object({
   mode: z.enum(["weekly", "custom"]).default("custom"),
   sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional(),
-  consultingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1).optional(),
+  consultingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Choose at least one consulting day.").optional(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid start time."),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid end time."),
   timezone,

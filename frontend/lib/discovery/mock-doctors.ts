@@ -4,6 +4,7 @@ import type {
   DoctorSlot,
 } from "./types";
 import type { DirectoryFilters } from "./filters";
+import { getDummyDoctorPortrait } from "./dummy-portraits";
 
 function getRollingDateKeys(): string[] {
   const dates: string[] = [];
@@ -186,6 +187,7 @@ export function getDummyDoctors(): DoctorDirectoryRecord[] {
     specialty: d.specialty,
     clinic_name: d.clinic_name,
     experience_years: d.experience_years,
+    profile_image_url: getDummyDoctorPortrait(d.doctor_id, d.specialty),
     available_dates: d.dayOffsets
       .map((offset) => rollingDates[offset])
       .filter((date): date is string => Boolean(date)),
@@ -205,6 +207,7 @@ export function getDummyDoctorDetail(doctorId: string): DoctorDetailRecord | nul
     experience_years: found.experience_years,
     biography: found.biography,
     timezone: found.timezone,
+    profile_image_url: getDummyDoctorPortrait(found.doctor_id, found.specialty),
     available_dates: found.dayOffsets
       .map((offset) => rollingDates[offset])
       .filter((date): date is string => Boolean(date)),

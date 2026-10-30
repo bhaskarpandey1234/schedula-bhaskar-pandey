@@ -2,7 +2,7 @@
 
 Schedula is a healthcare appointment-booking application. The TypeScript-first Next.js application supports authenticated patient discovery and transactional appointment booking against future doctor availability.
 
-## Phase 9 status
+## Day 4 status
 
 Implemented:
 
@@ -25,8 +25,10 @@ Implemented:
 - Patient appointment management with upcoming, past, and cancelled views plus ownership-enforced future cancellation that releases exactly one slot allocation.
 - Doctor schedule appointment visibility with patient names and lifecycle status.
 - Optional server-side Resend booking confirmation email delivery; missing configuration or delivery failure never invalidates a confirmed appointment.
+- Razorpay-ready payment architecture with INR fee snapshots, capacity-safe payment holds, webhook idempotency, refund tracking, and payment-aware appointment states.
+- Durable notification/outbox delivery for payment, cancellation, refund, and appointment reminders, with a provider-neutral rescheduling foundation.
 
-Phase 8 quality gates are complete. Phase 9 adds deployment-safe authentication redirects and the release handoff runbook. Hosted Supabase migration and Vercel deployment require provider dashboard access and are recorded in [`docs/phase-9-handoff.md`](docs/phase-9-handoff.md).
+Phase 8 quality gates are complete. Phase 9 adds deployment-safe authentication redirects and the release handoff runbook. Day 4 extends the existing booking flow with payment and notification infrastructure. Hosted Supabase migration, Razorpay configuration, Supabase Cron, and Vercel deployment require provider dashboard access and are recorded in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md) and [`docs/phase-9-handoff.md`](docs/phase-9-handoff.md).
 
 Doctor-initiated appointment cancellation remains explicitly deferred. The deployed release validates patient cancellation and capacity restoration.
 
@@ -41,7 +43,8 @@ schedula-bhaskar-pandey/
 │   └── .env.example          # Safe environment-variable template
 ├── supabase/config.toml      # Local Supabase CLI configuration
 ├── docs/
-│   ├── er-diagram.md         # Conceptual future scheduling ERD
+│   ├── er-diagram.md         # Conceptual five-module scheduling ERD
+│   ├── day-4-payments-operations.md
 │   └── schedula-healthcare-roadmap.md
 ├── package.json              # Workspace scripts
 └── pnpm-workspace.yaml
@@ -66,7 +69,7 @@ Copy `frontend/.env.example` to `frontend/.env.local` (use `Copy-Item` in PowerS
 
 Fill in `frontend/.env.local` with the project URL, publishable key, and server-only PostgreSQL `DATABASE_URL`. Never commit that file. The publishable key is safe for browser use; database credentials are not.
 
-Optional transactional email can be enabled by adding `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `frontend/.env.local`. These values are server-only and must never be committed.
+Optional transactional email can be enabled by adding `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `frontend/.env.local`. Payment and reminder delivery additionally requires the server-only Razorpay and `JOB_RUNNER_SECRET` values documented in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md). These values must never be committed.
 
 Start local Supabase when Docker is available:
 
@@ -116,7 +119,7 @@ The Vercel project should use `frontend/` as its root directory and Node 22. Con
 
 ## Future roadmap
 
-The roadmap covers shared UI, authentication onboarding, doctor availability, patient discovery, booking concurrency, cancellation and notifications, integration quality gates, and deployment. The conceptual five-module ERD is documented in [`docs/er-diagram.md`](docs/er-diagram.md).
+The roadmap covers shared UI, authentication onboarding, doctor availability, patient discovery, payment-backed booking, refunds, rescheduling, durable notifications, reminders, integration quality gates, and deployment. The conceptual five-module ERD is documented in [`docs/er-diagram.md`](docs/er-diagram.md); implementation and provider setup are documented in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md).
 
 ## Security
 

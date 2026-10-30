@@ -31,7 +31,7 @@ export const HERO_SERVICES: HeroService[] = [
     href: "/doctors",
     bgClass: "bg-[#EBF9F7] hover:bg-[#DFF5F2] border-teal-100",
     badgeClass: "bg-teal-600/10 text-teal-700",
-    imageUrl: "https://images.unsplash.com/photo-1594824813572-8f240f92b77a?auto=format&fit=crop&q=80&w=480",
+    imageUrl: "/images/appointment-hero.png",
     imageAlt: "Find Experienced Doctors Near You",
   },
   {
@@ -59,7 +59,7 @@ export const HERO_SERVICES: HeroService[] = [
 export function HeroServicesCards() {
   return (
     <div className="w-full">
-      {/* 4 Pastel Pill Service Cards (Practo Signature Layout) */}
+      {/* Schedula service cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {HERO_SERVICES.map((service) => (
           <Link

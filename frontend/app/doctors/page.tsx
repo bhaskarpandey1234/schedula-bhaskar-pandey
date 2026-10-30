@@ -104,7 +104,7 @@ export default async function DoctorsPage({
           </Button>
         </form>
 
-        {/* Practo-Style Quick Specialty Filter Pills */}
+        {/* Schedula quick specialty filters */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link
             href="/doctors"

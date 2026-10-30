@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { destinationForRole, portalDestinationFor } from "../lib/auth/portal-destination";
 import { safeReturnPath } from "../lib/auth/return-path";
-import { authErrorMessage } from "../lib/auth/errors";
+import { authErrorCategory, authErrorDiagnostic, authErrorMessage } from "../lib/auth/errors";
 import { parseDirectoryFilters } from "../lib/discovery/filters";
 import { intervalsOverlap, generateSlots } from "../lib/availability/slots";
 import { formatLocalTime, localDateKey } from "../lib/scheduling/time";
@@ -39,6 +39,22 @@ describe("public discovery and authentication helpers", () => {
     expect(authErrorMessage({ code: "email_not_confirmed" }).code).toBe("email_not_confirmed");
     expect(authErrorMessage({ message: "Invalid login credentials" }).code).toBe("invalid_credentials");
     expect(authErrorMessage({ message: "untrusted provider response" }).message).not.toContain("provider");
+  });
+
+  it("classifies rate limits, configuration failures, and provider failures", () => {
+    expect(authErrorCategory({ status: 429 })).toBe("rate_limited");
+    expect(authErrorCategory({ message: "Invalid API key" })).toBe("configuration");
+    expect(authErrorCategory({ message: "Invalid Supabase URL" })).toBe("configuration");
+    expect(authErrorCategory({ status: 503 })).toBe("provider_error");
+    expect(authErrorMessage({ status: 429 }).message).toContain("Too many");
+  });
+
+  it("redacts sensitive provider details from diagnostics", () => {
+    const diagnostic = authErrorDiagnostic({ name: "AuthApiError", status: 400, code: "invalid_credentials", message: "password=super-secret email=person@example.com" });
+    const serialized = JSON.stringify(diagnostic);
+    expect(diagnostic).toEqual({ request: "password_sign_in", category: "invalid_credentials", name: "AuthApiError", status: 400, code: "invalid_credentials" });
+    expect(serialized).not.toContain("super-secret");
+    expect(serialized).not.toContain("person@example.com");
   });
 });
 
