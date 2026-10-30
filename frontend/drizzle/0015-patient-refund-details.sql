@@ -9,7 +9,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'patient') THEN RAISE EXCEPTION 'Only authenticated patients can view payment history'; END IF;
   RETURN QUERY
   SELECT p.id, a.id, p.purpose, p.status, p.amount_minor, p.currency, p.provider, p.provider_order_id, p.provider_payment_id, p.failure_reason, p.captured_at, p.created_at, dp.full_name, d.clinic_name, d.timezone, s.slot_start_at, s.slot_end_at,
-    refund.status, COALESCE(refund.amount_minor, 0), refund.provider_refund_id, refund.processed_at
+    refund.status, COALESCE(refund.amount_minor, 0)::integer, refund.provider_refund_id, refund.processed_at
   FROM payments p
   JOIN appointments a ON a.id = p.appointment_id
   JOIN doctors d ON d.id = a.doctor_id
