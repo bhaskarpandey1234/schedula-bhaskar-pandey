@@ -120,6 +120,13 @@
       "when": 1793653800000,
       "tag": "0022-secure-notification-read-state",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793740200000,
+      "tag": "0023-doctor-appointment-detail",
+      "breakpoints": true
     }
   ]
 }

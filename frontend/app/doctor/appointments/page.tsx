@@ -179,11 +179,16 @@ export default async function DoctorAppointmentsPage({
                     )}
 
                     {/* Action Footer */}
-                    {tab === "upcoming" && appointment.status === "confirmed" && (
-                      <div className="pt-2 border-t border-border flex items-center justify-end">
+                    <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-2">
+                      <Button asChild size="sm" variant="ghost" className="text-xs font-semibold text-primary">
+                        <Link href={`/doctor/appointments/${appointment.appointment_id}`}>
+                          View appointment →
+                        </Link>
+                      </Button>
+                      {tab === "upcoming" && appointment.status === "confirmed" && (
                         <CancelDoctorAppointmentForm appointmentId={appointment.appointment_id} />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );

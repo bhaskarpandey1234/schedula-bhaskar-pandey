@@ -58,3 +58,22 @@ export async function getDoctorAppointments(tab: "upcoming" | "past" | "cancelle
   if (error) throw new Error(`Doctor appointment query failed: ${error.message}`);
   return (data ?? []) as DoctorAppointment[];
 }
+
+export type DoctorAppointmentDetail = {
+  appointment_id: string;
+  status: "payment_pending" | "confirmed" | "cancelled" | "expired";
+  reason: string | null;
+  patient_name: string;
+  clinic_name: string;
+  timezone: string;
+  slot_start_at: string;
+  slot_end_at: string;
+  is_cancellable: boolean;
+};
+
+export async function getDoctorAppointmentDetail(appointmentId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("doctor_appointment_detail", { p_appointment_id: appointmentId });
+  if (error) throw new Error(`Doctor appointment detail query failed: ${error.message}`);
+  return ((data ?? []) as DoctorAppointmentDetail[])[0] ?? null;
+}

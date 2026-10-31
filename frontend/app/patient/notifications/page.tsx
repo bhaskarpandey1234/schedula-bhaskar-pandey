@@ -11,7 +11,7 @@ export const instant = false;
 export default async function PatientNotificationsPage() {
   await connection();
   const account = await requireRole("patient");
-  const notificationFeed = await getNotifications();
+  const notificationFeed = await getNotifications("patient");
   const supabase = await createClient();
   const { data: preferences } = await supabase.from("notification_preferences").select("operational_email, operational_sms, reminder_email, reminder_sms").eq("recipient_id", account.user.id).maybeSingle();
   const { data: patient } = await supabase.from("patients").select("phone").eq("id", account.user.id).maybeSingle();

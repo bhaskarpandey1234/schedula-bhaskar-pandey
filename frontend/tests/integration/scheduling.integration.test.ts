@@ -199,6 +199,13 @@ describe("local Supabase scheduling RPCs", () => {
     expect(deliveries?.every((delivery) => delivery.status === "pending")).toBe(true);
     const { data: doctorDeliveries } = await doctor.client.from("notification_deliveries").select("channel").eq("appointment_id", reservation.appointment_id);
     expect(doctorDeliveries).toEqual([]);
+    const { data: doctorDetail, error: doctorDetailError } = await doctor.client.rpc("doctor_appointment_detail", { p_appointment_id: reservation.appointment_id });
+    expect(doctorDetailError).toBeNull();
+    expect(doctorDetail).toHaveLength(1);
+    expect(doctorDetail?.[0]).toMatchObject({ appointment_id: reservation.appointment_id, patient_name: expect.any(String), clinic_name: expect.any(String) });
+    const { data: unrelatedDetail, error: unrelatedDetailError } = await unrelatedDoctor.client.rpc("doctor_appointment_detail", { p_appointment_id: reservation.appointment_id });
+    expect(unrelatedDetailError).toBeNull();
+    expect(unrelatedDetail).toEqual([]);
   });
 
   it("creates one payment-failed notification for a failed payment replay", async () => {

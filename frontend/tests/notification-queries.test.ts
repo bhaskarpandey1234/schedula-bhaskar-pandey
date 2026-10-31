@@ -38,7 +38,7 @@ describe("notification query mapping", () => {
     } as never);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(getNotifications()).resolves.toEqual({ notifications: [], loadFailed: true });
+    await expect(getNotifications("patient")).resolves.toEqual({ notifications: [], loadFailed: true });
     expect(errorSpy).toHaveBeenCalledWith("[notifications] feed_query_failed", { code: "42501" });
     errorSpy.mockRestore();
   });

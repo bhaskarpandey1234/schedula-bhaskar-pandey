@@ -23,6 +23,7 @@ describe("NotificationList", () => {
         readAt: null,
         createdAt: new Date(),
         appointmentId: "appointment-1",
+        href: "/patient/appointments/appointment-1/confirmation",
       }],
     }));
 

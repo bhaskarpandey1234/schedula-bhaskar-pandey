@@ -1,9 +1,9 @@
 "use client";
 
-import { Bell, BellOff } from "lucide-react";
+import { ArrowUpRight, Bell, BellOff } from "lucide-react";
 import { useTransition } from "react";
 import type { NotificationRow } from "@/lib/notifications/queries";
-import { markAllNotificationsRead, markNotificationRead } from "@/lib/notifications/actions";
+import { markAllNotificationsRead, markNotificationRead, openNotificationAction } from "@/lib/notifications/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -78,16 +78,21 @@ export function NotificationList({
             )}
           >
             <Bell className={cn("mt-0.5 size-4 shrink-0", !n.readAt ? "text-primary" : "text-muted-foreground")} />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {typeLabels[n.type] ?? n.type}
+            <form action={openNotificationAction.bind(null, n.id)} className="min-w-0 flex-1">
+              <button type="submit" className="group w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label={`View details: ${n.title}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {typeLabels[n.type] ?? n.type}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                </div>
+                <p className="mt-1 font-medium group-hover:underline">{n.title}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{n.message}</p>
+                <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                  View details <ArrowUpRight className="size-3.5" aria-hidden="true" />
                 </span>
-                <span className="text-xs text-muted-foreground">{timeAgo(n.createdAt)}</span>
-              </div>
-              <p className="mt-1 font-medium">{n.title}</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{n.message}</p>
-            </div>
+              </button>
+            </form>
             {!n.readAt && (
               <button
                 className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"

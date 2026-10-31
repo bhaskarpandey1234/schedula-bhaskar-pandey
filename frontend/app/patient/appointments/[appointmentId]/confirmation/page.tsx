@@ -5,6 +5,8 @@ import {
   MapPin,
   Receipt,
   ShieldCheck,
+  XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
@@ -42,20 +44,28 @@ export default async function AppointmentConfirmationPage({
       : appointment.status === "payment_pending"
       ? "Payment is still pending."
       : "Appointment status updated.";
+  const statusPresentation = appointment.status === "confirmed"
+    ? { title, label: "Confirmed visit", description: "Your appointment has been registered with the clinic. Please arrive 10 minutes prior to your scheduled time.", icon: CheckCircle2, className: "bg-emerald-50 text-emerald-600 border-emerald-200", badgeClassName: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    : appointment.status === "payment_pending"
+    ? { title, label: "Payment pending", description: "Your slot is reserved while payment is being completed. Review the payment section below for the latest status.", icon: Clock, className: "bg-amber-50 text-amber-600 border-amber-200", badgeClassName: "bg-amber-50 text-amber-700 border-amber-200" }
+    : appointment.status === "cancelled"
+    ? { title: "Your appointment was cancelled.", label: "Cancelled visit", description: "This appointment is no longer active. Any applicable refund status is shown in the payment section below.", icon: XCircle, className: "bg-rose-50 text-rose-600 border-rose-200", badgeClassName: "bg-rose-50 text-rose-700 border-rose-200" }
+    : { title: "This appointment has expired.", label: "Expired visit", description: "This appointment is no longer active. Review the payment section below for any available payment or refund details.", icon: AlertCircle, className: "bg-slate-100 text-slate-600 border-slate-200", badgeClassName: "bg-slate-100 text-slate-700 border-slate-200" };
+  const StatusIcon = statusPresentation.icon;
 
   return (
     <PortalShell role="patient" name={account.profile.full_name}>
       <div className="mx-auto grid max-w-2xl gap-8">
         {/* Success Header */}
         <div className="text-center space-y-3">
-          <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
-            <CheckCircle2 className="size-8" aria-hidden="true" />
+          <div className={`mx-auto flex size-16 items-center justify-center rounded-2xl border shadow-sm ${statusPresentation.className}`}>
+            <StatusIcon className="size-8" aria-hidden="true" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[#1D2153]">
-            {title}
+            {statusPresentation.title}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Your appointment has been registered with the clinic. Please arrive 10 minutes prior to your scheduled time.
+            {statusPresentation.description}
           </p>
         </div>
 
@@ -70,9 +80,9 @@ export default async function AppointmentConfirmationPage({
                 {doctor.clinic_name}
               </CardTitle>
             </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 self-start sm:self-auto">
-              <ShieldCheck className="size-3.5 text-emerald-600" />
-              <span>Confirmed Visit</span>
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border self-start sm:self-auto ${statusPresentation.badgeClassName}`}>
+              {appointment.status === "confirmed" ? <ShieldCheck className="size-3.5" /> : <StatusIcon className="size-3.5" />}
+              <span>{statusPresentation.label}</span>
             </div>
           </CardHeader>
 
@@ -118,7 +128,7 @@ export default async function AppointmentConfirmationPage({
 
             {/* Payment Record */}
             {payment && (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+              <div id="payment" className="scroll-mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Receipt className="size-4 text-primary" />

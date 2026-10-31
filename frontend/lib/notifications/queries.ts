@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import type { Role } from "@/lib/validation/auth";
+import { notificationDestination } from "@/lib/notifications/destinations";
 
 export type NotificationRow = {
   id: string;
@@ -8,6 +10,7 @@ export type NotificationRow = {
   readAt: Date | null;
   createdAt: Date;
   appointmentId: string;
+  href: string;
 };
 
 export type NotificationFeedResult = {
@@ -25,7 +28,7 @@ type NotificationDatabaseRow = {
   appointment_id: string;
 };
 
-export function mapNotificationRows(rows: NotificationDatabaseRow[]): NotificationRow[] {
+export function mapNotificationRows(rows: NotificationDatabaseRow[], role: Role = "patient"): NotificationRow[] {
   return rows.map((row) => ({
     id: row.id,
     type: row.type,
@@ -34,10 +37,11 @@ export function mapNotificationRows(rows: NotificationDatabaseRow[]): Notificati
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
     appointmentId: row.appointment_id,
+    href: notificationDestination(role, row.type, row.appointment_id),
   }));
 }
 
-export async function getNotifications(): Promise<NotificationFeedResult> {
+export async function getNotifications(role: Role): Promise<NotificationFeedResult> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notifications")
@@ -51,7 +55,7 @@ export async function getNotifications(): Promise<NotificationFeedResult> {
   }
 
   return {
-    notifications: mapNotificationRows((data ?? []) as NotificationDatabaseRow[]),
+    notifications: mapNotificationRows((data ?? []) as NotificationDatabaseRow[], role),
     loadFailed: false,
   };
 }
