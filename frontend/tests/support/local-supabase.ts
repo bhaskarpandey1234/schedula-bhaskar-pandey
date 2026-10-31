@@ -50,7 +50,7 @@ export async function onboardTestUser(user: TestUser) {
     if (error) throw new Error(`Could not onboard patient: ${error.message}`);
     return;
   }
-  const { error } = await user.client.rpc("complete_doctor_onboarding", { p_full_name: "Dr. Phase 8", p_specialty: "Cardiology", p_clinic_name: "Phase 8 Clinic", p_experience_years: 8, p_biography: "A test-only physician profile used to validate appointment scheduling behavior.", p_timezone: "Asia/Kolkata" });
+  const { error } = await user.client.rpc("complete_doctor_onboarding", { p_full_name: "Dr. Phase 8", p_phone: "+14155552671", p_specialty: "Cardiology", p_clinic_name: "Phase 8 Clinic", p_experience_years: 8, p_biography: "A test-only physician profile used to validate appointment scheduling behavior.", p_timezone: "Asia/Kolkata", p_consultation_fee_minor: 100000 });
   if (error) throw new Error(`Could not onboard doctor: ${error.message}`);
 }
 
