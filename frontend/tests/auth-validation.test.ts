@@ -12,11 +12,12 @@ describe("Phase 3 auth validation", () => {
     expect(signInSchema.safeParse({ email: "not-an-email", password: "password" }).success).toBe(false);
   });
   it("validates patient details", () => {
-    expect(patientOnboardingSchema.safeParse({ fullName: "Asha Rao", phone: "+14155552671", dateOfBirth: "1990-04-20" }).success).toBe(true);
-    expect(patientOnboardingSchema.safeParse({ fullName: "A", phone: "555-0100", dateOfBirth: "2090-04-20" }).success).toBe(false);
+    expect(patientOnboardingSchema.safeParse({ fullName: "Asha Rao", countryCode: "+1", phone: "+14155552671", dateOfBirth: "1990-04-20" }).success).toBe(true);
+    expect(patientOnboardingSchema.safeParse({ fullName: "Asha Rao", phone: "+14155552671", dateOfBirth: "1990-04-20" }).success).toBe(false);
+    expect(patientOnboardingSchema.safeParse({ fullName: "A", countryCode: "+1", phone: "555-0100", dateOfBirth: "2090-04-20" }).success).toBe(false);
   });
   it("validates doctor details and IANA timezones", () => {
-    const valid = { fullName: "Dr. Asha Rao", phone: "+14155552671", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" };
+    const valid = { fullName: "Dr. Asha Rao", countryCode: "+1", phone: "+14155552671", specialty: "Cardiology", clinicName: "River Clinic", experienceYears: 8, biography: "A board-certified physician focused on preventive care and clear communication.", timezone: "Asia/Kolkata" };
     expect(doctorOnboardingSchema.safeParse(valid).success).toBe(true);
     expect(doctorOnboardingSchema.safeParse({ ...valid, timezone: "Not/A_Timezone", experienceYears: 81 }).success).toBe(false);
   });

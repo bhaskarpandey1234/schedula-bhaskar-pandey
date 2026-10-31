@@ -3,6 +3,7 @@ import { doctorOnboardingSchema } from "./auth";
 
 export const doctorProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
+  countryCode: doctorOnboardingSchema.shape.countryCode,
   phone: doctorOnboardingSchema.shape.phone,
   specialty: doctorOnboardingSchema.shape.specialty,
   clinicName: doctorOnboardingSchema.shape.clinicName,

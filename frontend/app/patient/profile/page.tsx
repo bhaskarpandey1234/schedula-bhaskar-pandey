@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 import { PortalShell } from "@/components/portal-shell";
 import { PatientProfileForm } from "@/components/patient-profile-form";
+import { AccountProfileSummary } from "@/components/account-profile-summary";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
@@ -45,6 +46,17 @@ export default async function PatientProfilePage() {
             Manage your personal contact details, verified mobile number, and healthcare communication preferences.
           </p>
         </div>
+
+        <AccountProfileSummary
+          roleLabel="Patient"
+          email={account.user.email}
+          emailVerified={account.emailVerified}
+          fullName={account.profile.full_name}
+          phone={patient.phone}
+          completion={account.completion}
+          notificationHref="/patient/notifications"
+          details={[{ label: "Date of birth", value: new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(new Date(patient.date_of_birth)) }]}
+        />
 
         {/* Identity & Contact Card */}
         <Card className="overflow-hidden rounded-3xl border-border bg-card shadow-xs">
