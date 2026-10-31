@@ -1,6 +1,3 @@
-import { desc, eq, isNull, and } from "drizzle-orm";
-import { createDb } from "@/lib/db";
-import { notifications } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 export type NotificationRow = {
@@ -13,39 +10,63 @@ export type NotificationRow = {
   appointmentId: string;
 };
 
-async function currentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+export type NotificationFeedResult = {
+  notifications: NotificationRow[];
+  loadFailed: boolean;
+};
+
+type NotificationDatabaseRow = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  read_at: string | null;
+  created_at: string;
+  appointment_id: string;
+};
+
+export function mapNotificationRows(rows: NotificationDatabaseRow[]): NotificationRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    message: row.message,
+    readAt: row.read_at ? new Date(row.read_at) : null,
+    createdAt: new Date(row.created_at),
+    appointmentId: row.appointment_id,
+  }));
 }
 
-export async function getNotifications(): Promise<NotificationRow[]> {
-  const userId = await currentUserId();
-  if (!userId) return [];
-  const db = createDb();
-  return db
-    .select({
-      id: notifications.id,
-      type: notifications.type,
-      title: notifications.title,
-      message: notifications.message,
-      readAt: notifications.readAt,
-      createdAt: notifications.createdAt,
-      appointmentId: notifications.appointmentId,
-    })
-    .from(notifications)
-    .where(eq(notifications.recipientId, userId))
-    .orderBy(desc(notifications.createdAt))
+export async function getNotifications(): Promise<NotificationFeedResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, type, title, message, read_at, created_at, appointment_id")
+    .order("created_at", { ascending: false })
     .limit(50);
+
+  if (error) {
+    console.error("[notifications] feed_query_failed", { code: error.code });
+    return { notifications: [], loadFailed: true };
+  }
+
+  return {
+    notifications: mapNotificationRows((data ?? []) as NotificationDatabaseRow[]),
+    loadFailed: false,
+  };
 }
 
 export async function getUnreadNotificationCount(): Promise<number> {
-  const userId = await currentUserId();
-  if (!userId) return 0;
-  const db = createDb();
-  const rows = await db
-    .select({ id: notifications.id })
-    .from(notifications)
-    .where(and(eq(notifications.recipientId, userId), isNull(notifications.readAt)));
-  return rows.length;
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .is("read_at", null);
+
+  if (error) {
+    console.error("[notifications] unread_count_query_failed", { code: error.code });
+    return 0;
+  }
+
+  return count ?? 0;
 }

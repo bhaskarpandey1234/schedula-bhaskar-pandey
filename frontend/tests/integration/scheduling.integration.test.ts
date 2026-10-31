@@ -147,6 +147,7 @@ describe("local Supabase scheduling RPCs", () => {
 
   it("confirms paid bookings and deduplicates replayed payment notifications", async () => {
     const doctor = await user("doctor", "paid-notification-doctor");
+    const unrelatedDoctor = await user("doctor", "unrelated-notification-doctor");
     const patient = await user("patient", "paid-notification-patient");
     const slot = await createSlot(doctor);
     const { error: preferenceError } = await patient.client.from("notification_preferences").upsert({ recipient_id: patient.id, operational_email: true, operational_sms: true, reminder_email: true, reminder_sms: true });
@@ -170,11 +171,34 @@ describe("local Supabase scheduling RPCs", () => {
     expect(appointment?.status).toBe("confirmed");
     const { data: patientNotifications } = await patient.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
     expect(patientNotifications?.filter((notification) => notification.type === "payment_confirmed")).toHaveLength(1);
-    const { data: doctorNotifications } = await doctor.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
+    const { data: doctorNotifications } = await doctor.client.from("notifications").select("id, type, read_at").eq("appointment_id", reservation.appointment_id);
     expect(doctorNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
+    const doctorNotification = doctorNotifications?.find((notification) => notification.type === "appointment_booked");
+    expect(doctorNotification?.read_at).toBeNull();
+    const { data: unrelatedNotifications, error: unrelatedError } = await unrelatedDoctor.client.from("notifications").select("id").eq("appointment_id", reservation.appointment_id);
+    expect(unrelatedError).toBeNull();
+    expect(unrelatedNotifications).toEqual([]);
+    const { data: unauthorizedRead, error: unauthorizedReadError } = await patient.client.rpc("mark_notification_read", { p_notification_id: doctorNotification!.id });
+    expect(unauthorizedReadError).toBeNull();
+    expect(unauthorizedRead).toBe(false);
+    const { data: markedRead, error: markedReadError } = await doctor.client.rpc("mark_notification_read", { p_notification_id: doctorNotification!.id });
+    expect(markedReadError).toBeNull();
+    expect(markedRead).toBe(true);
+    const { data: replayedRead, error: replayedReadError } = await doctor.client.rpc("mark_notification_read", { p_notification_id: doctorNotification!.id });
+    expect(replayedReadError).toBeNull();
+    expect(replayedRead).toBe(true);
+    const { data: refreshedDoctorNotification } = await doctor.client.from("notifications").select("read_at").eq("id", doctorNotification!.id).single();
+    expect(refreshedDoctorNotification?.read_at).toBeTruthy();
+    const { data: patientMarkedCount, error: patientMarkAllError } = await patient.client.rpc("mark_all_notifications_read");
+    expect(patientMarkAllError).toBeNull();
+    expect(patientMarkedCount).toBe(1);
+    const { data: patientReplayCount } = await patient.client.rpc("mark_all_notifications_read");
+    expect(patientReplayCount).toBe(0);
     const { data: deliveries } = await patient.client.from("notification_deliveries").select("channel, status").eq("appointment_id", reservation.appointment_id).order("channel");
     expect(deliveries?.map((delivery) => delivery.channel)).toEqual(["email", "sms"]);
     expect(deliveries?.every((delivery) => delivery.status === "pending")).toBe(true);
+    const { data: doctorDeliveries } = await doctor.client.from("notification_deliveries").select("channel").eq("appointment_id", reservation.appointment_id);
+    expect(doctorDeliveries).toEqual([]);
   });
 
   it("creates one payment-failed notification for a failed payment replay", async () => {

@@ -113,6 +113,13 @@
       "when": 1793567400000,
       "tag": "0021-restore-notification-delivery-default",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793653800000,
+      "tag": "0022-secure-notification-read-state",
+      "breakpoints": true
     }
   ]
 }

@@ -29,13 +29,21 @@ function timeAgo(date: Date): string {
 
 export function NotificationList({
   notifications,
-  role,
+  loadFailed = false,
 }: {
   notifications: NotificationRow[];
-  role: "patient" | "doctor";
+  loadFailed?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const unreadCount = notifications.filter((n) => !n.readAt).length;
+
+  if (loadFailed) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
+        Notifications could not be loaded. Refresh the page or try again shortly.
+      </div>
+    );
+  }
 
   if (notifications.length === 0) {
     return (
@@ -54,7 +62,7 @@ export function NotificationList({
             variant="outline"
             size="sm"
             disabled={pending}
-            onClick={() => startTransition(() => markAllNotificationsRead(role))}
+            onClick={() => startTransition(() => markAllNotificationsRead())}
           >
             Mark all as read
           </Button>
@@ -84,7 +92,7 @@ export function NotificationList({
               <button
                 className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
                 disabled={pending}
-                onClick={() => startTransition(() => markNotificationRead(n.id, role))}
+                onClick={() => startTransition(() => markNotificationRead(n.id))}
               >
                 Dismiss
               </button>

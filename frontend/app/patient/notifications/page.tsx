@@ -11,7 +11,7 @@ export const instant = false;
 export default async function PatientNotificationsPage() {
   await connection();
   const account = await requireRole("patient");
-  const notifications = await getNotifications();
+  const notificationFeed = await getNotifications();
   const supabase = await createClient();
   const { data: preferences } = await supabase.from("notification_preferences").select("operational_email, operational_sms, reminder_email, reminder_sms").eq("recipient_id", account.user.id).maybeSingle();
   const { data: patient } = await supabase.from("patients").select("phone").eq("id", account.user.id).maybeSingle();
@@ -22,7 +22,7 @@ export default async function PatientNotificationsPage() {
           <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
           <p className="mt-2 text-muted-foreground">Updates on your appointments and payments.</p>
         </div>
-        <NotificationList notifications={notifications} role="patient" />
+        <NotificationList {...notificationFeed} />
         <NotificationPreferencesForm role="patient" preferences={{ ...(preferences ?? { operational_email: false, operational_sms: false, reminder_email: false, reminder_sms: false }), phone: patient?.phone }} />
       </div>
     </PortalShell>
