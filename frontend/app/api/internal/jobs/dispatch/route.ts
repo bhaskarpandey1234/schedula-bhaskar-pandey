@@ -8,6 +8,7 @@ import { notificationAttempts } from "@/lib/db/schema";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
 import { findMatchingProviderRefund, isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
+import { findMatchingCapturedPayment } from "@/lib/payments/reconciliation";
 
 async function applyRefundState(db: ReturnType<typeof createDb>, refundId: string, state: "pending" | "processed" | "failed", failureReason?: string | null) {
   return db.transaction(async (tx) => {
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   const expired = await db.execute(sql`select public.expire_payment_holds() as count`);
   const events = await db.select().from(paymentWebhookEvents).where(inArray(paymentWebhookEvents.status, ["pending", "failed"])).limit(50);
   let processed = 0;
+  let reconciled = 0;
   for (const event of events) {
     try {
       const parsed = JSON.parse(event.payload) as { event?: string; entityId?: string; orderId?: string };
@@ -80,6 +82,29 @@ export async function POST(request: Request) {
       processed += 1;
     } catch (error) {
       await db.update(paymentWebhookEvents).set({ status: "pending", attempts: event.attempts + 1, lastError: error instanceof Error ? error.message.slice(0, 500) : "Webhook processing failed" }).where(eq(paymentWebhookEvents.id, event.id));
+    }
+  }
+  const pendingPayments = await db.execute(sql`
+    SELECT p.id, p.provider_order_id, p.amount_minor, p.currency
+    FROM public.payments p
+    JOIN public.slot_reservations r ON r.id = p.reservation_id
+    WHERE p.provider = 'razorpay'
+      AND p.status IN ('creating'::payment_status, 'pending'::payment_status)
+      AND p.provider_order_id IS NOT NULL
+      AND r.status IN ('active'::reservation_status, 'expired'::reservation_status)
+    ORDER BY p.created_at
+    LIMIT 50
+  `);
+  const reconciliationProvider = getPaymentProvider();
+  for (const payment of pendingPayments as unknown as Array<{ id: string; provider_order_id: string; amount_minor: number; currency: string }>) {
+    try {
+      const candidates = await reconciliationProvider.listOrderPayments(payment.provider_order_id);
+      const captured = findMatchingCapturedPayment(candidates, { orderId: payment.provider_order_id, amountMinor: payment.amount_minor, currency: payment.currency });
+      if (!captured) continue;
+      await db.execute(sql`select public.complete_payment(${payment.id}::uuid, ${captured.id}, 'captured')`);
+      reconciled += 1;
+    } catch (error) {
+      if (!(error instanceof PaymentProviderError)) console.error("[payments] reconciliation failed", { code: "reconciliation_error" });
     }
   }
   const refunds = await db.execute(sql`select * from public.claim_pending_refunds(25)`);
@@ -203,5 +228,5 @@ export async function POST(request: Request) {
       await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = ${result.provider}, processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = ${result.errorCode ?? "delivery_failed"}, updated_at = now() WHERE id = ${delivery.id}::uuid`);
     }
   }
-  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, delivered, claimed: claimed.length });
+  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, reconciled, delivered, claimed: claimed.length });
 }

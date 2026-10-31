@@ -1,4 +1,4 @@
-const genericPaymentError = "We could not confirm this payment yet. Check Payments before retrying so you do not pay twice.";
+const genericPaymentError = "Payment is being reconciled. Check Payments before retrying so you do not pay twice.";
 
 export function presentPaymentError(error: unknown) {
   const message = error instanceof Error ? error.message : "";

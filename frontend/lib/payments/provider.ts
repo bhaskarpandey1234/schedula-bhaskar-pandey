@@ -14,6 +14,7 @@ export class PaymentProviderError extends Error {
 export interface PaymentProvider {
   createOrder(input: { amountMinor: number; currency: string; receipt: string; notes?: Record<string, string> }): Promise<PaymentOrder>;
   fetchPayment(paymentId: string): Promise<ProviderPayment>;
+  listOrderPayments(orderId: string): Promise<ProviderPayment[]>;
   fetchRefund(refundId: string): Promise<ProviderRefund>;
   listPaymentRefunds(paymentId: string): Promise<ProviderRefund[]>;
   createRefund(input: { paymentId: string; amountMinor: number; receipt: string }): Promise<ProviderRefund>;
@@ -51,6 +52,11 @@ export class RazorpayProvider implements PaymentProvider {
   async fetchPayment(paymentId: string) {
     const payment = await this.request<{ id: string; order_id: string; amount: number; currency: string; status: string }>(`/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
     return { id: payment.id, orderId: payment.order_id, amount: payment.amount, currency: payment.currency, status: payment.status };
+  }
+
+  async listOrderPayments(orderId: string) {
+    const response = await this.request<{ items?: Array<{ id: string; order_id: string; amount: number; currency: string; status: string }> }>(`/orders/${encodeURIComponent(orderId)}/payments`, { method: "GET" });
+    return (response.items ?? []).map((payment) => ({ id: payment.id, orderId: payment.order_id, amount: payment.amount, currency: payment.currency, status: payment.status }));
   }
 
   async fetchRefund(refundId: string) {

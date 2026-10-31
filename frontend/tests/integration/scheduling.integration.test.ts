@@ -149,6 +149,8 @@ describe("local Supabase scheduling RPCs", () => {
     const doctor = await user("doctor", "paid-notification-doctor");
     const patient = await user("patient", "paid-notification-patient");
     const slot = await createSlot(doctor);
+    const { error: preferenceError } = await patient.client.from("notification_preferences").upsert({ recipient_id: patient.id, operational_email: true, operational_sms: true, reminder_email: true, reminder_sms: true });
+    expect(preferenceError).toBeNull();
     const { data: reservationRows, error: reserveError } = await patient.client.rpc("reserve_paid_appointment", {
       p_slot_id: slot.id,
       p_reason: "Paid notification test",
@@ -170,6 +172,9 @@ describe("local Supabase scheduling RPCs", () => {
     expect(patientNotifications?.filter((notification) => notification.type === "payment_confirmed")).toHaveLength(1);
     const { data: doctorNotifications } = await doctor.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
     expect(doctorNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
+    const { data: deliveries } = await patient.client.from("notification_deliveries").select("channel, status").eq("appointment_id", reservation.appointment_id).order("channel");
+    expect(deliveries?.map((delivery) => delivery.channel)).toEqual(["email", "sms"]);
+    expect(deliveries?.every((delivery) => delivery.status === "pending")).toBe(true);
   });
 
   it("creates one payment-failed notification for a failed payment replay", async () => {
