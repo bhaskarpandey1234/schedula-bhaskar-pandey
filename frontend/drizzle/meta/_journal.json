@@ -99,6 +99,13 @@
       "when": 1793560200000,
       "tag": "0019-email-verification-gates",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793563800000,
+      "tag": "0020-fix-notification-conflict-target",
+      "breakpoints": true
     }
   ]
 }

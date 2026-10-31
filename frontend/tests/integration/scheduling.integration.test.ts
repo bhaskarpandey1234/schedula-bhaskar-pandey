@@ -139,7 +139,57 @@ describe("local Supabase scheduling RPCs", () => {
     expect(appointment?.status).toBe("cancelled");
     const { data: notifications } = await patient.client.from("notifications").select("type").eq("appointment_id", appointmentId!);
     expect(notifications?.filter((notification) => notification.type === "appointment_cancelled")).toHaveLength(1);
+    const { data: doctorNotifications } = await doctor.client.from("notifications").select("type").eq("appointment_id", appointmentId!);
+    expect(doctorNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
     const { error: repeatCancellation } = await patient.client.rpc("cancel_patient_appointment", { p_appointment_id: appointmentId! });
     expect(repeatCancellation?.message).toContain("already cancelled");
+  });
+
+  it("confirms paid bookings and deduplicates replayed payment notifications", async () => {
+    const doctor = await user("doctor", "paid-notification-doctor");
+    const patient = await user("patient", "paid-notification-patient");
+    const slot = await createSlot(doctor);
+    const { data: reservationRows, error: reserveError } = await patient.client.rpc("reserve_paid_appointment", {
+      p_slot_id: slot.id,
+      p_reason: "Paid notification test",
+      p_idempotency_key: `integration-paid-${Date.now()}`,
+      p_expected_amount_minor: 100000,
+    });
+    expect(reserveError).toBeNull();
+    const reservation = reservationRows?.[0];
+    expect(reservation).toBeTruthy();
+    const { error: attachError } = await patient.client.rpc("attach_payment_order", { p_payment_id: reservation.payment_id, p_order_id: `order-integration-${Date.now()}` });
+    expect(attachError).toBeNull();
+    const { error: completeError } = await patient.client.rpc("complete_payment", { p_payment_id: reservation.payment_id, p_provider_payment_id: `pay-integration-${Date.now()}`, p_outcome: "captured" });
+    expect(completeError).toBeNull();
+    const { error: replayError } = await patient.client.rpc("complete_payment", { p_payment_id: reservation.payment_id, p_provider_payment_id: "pay-integration-replay", p_outcome: "captured" });
+    expect(replayError).toBeNull();
+    const { data: appointment } = await patient.client.from("appointments").select("status").eq("id", reservation.appointment_id).single();
+    expect(appointment?.status).toBe("confirmed");
+    const { data: patientNotifications } = await patient.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
+    expect(patientNotifications?.filter((notification) => notification.type === "payment_confirmed")).toHaveLength(1);
+    const { data: doctorNotifications } = await doctor.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
+    expect(doctorNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
+  });
+
+  it("creates one payment-failed notification for a failed payment replay", async () => {
+    const doctor = await user("doctor", "failed-payment-doctor");
+    const patient = await user("patient", "failed-payment-patient");
+    const slot = await createSlot(doctor);
+    const { data: reservationRows, error: reserveError } = await patient.client.rpc("reserve_paid_appointment", {
+      p_slot_id: slot.id,
+      p_reason: "Failed notification test",
+      p_idempotency_key: `integration-failed-${Date.now()}`,
+      p_expected_amount_minor: 100000,
+    });
+    expect(reserveError).toBeNull();
+    const reservation = reservationRows?.[0];
+    expect(reservation).toBeTruthy();
+    const { error: failedError } = await patient.client.rpc("complete_payment", { p_payment_id: reservation.payment_id, p_provider_payment_id: null, p_outcome: "failed" });
+    expect(failedError).toBeNull();
+    const { error: replayError } = await patient.client.rpc("complete_payment", { p_payment_id: reservation.payment_id, p_provider_payment_id: null, p_outcome: "failed" });
+    expect(replayError).toBeNull();
+    const { data: notifications } = await patient.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
+    expect(notifications?.filter((notification) => notification.type === "payment_failed")).toHaveLength(1);
   });
 });
