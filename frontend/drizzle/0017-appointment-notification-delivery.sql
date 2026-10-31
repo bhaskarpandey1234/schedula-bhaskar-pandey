@@ -4,6 +4,8 @@ CREATE TYPE public.notification_delivery_status AS ENUM
 
 ALTER TABLE public.doctors ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE public.notification_deliveries
+  ALTER COLUMN status DROP DEFAULT;
+ALTER TABLE public.notification_deliveries
   ALTER COLUMN status TYPE public.notification_delivery_status
   USING CASE status::text
     WHEN 'pending' THEN 'pending'::public.notification_delivery_status
