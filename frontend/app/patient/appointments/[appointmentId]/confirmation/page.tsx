@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   CheckCircle2,
+  CalendarDays,
   Clock,
   MapPin,
   Receipt,
@@ -14,7 +15,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { getAppointmentConfirmation } from "@/lib/booking/queries";
 import { getPatientPayments } from "@/lib/payments/queries";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
-import { formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
 import { PortalShell } from "@/components/portal-shell";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,10 @@ export default async function AppointmentConfirmationPage({
 
             {/* Time & Clinic Location */}
             <div className="rounded-2xl border border-border/80 bg-surface-muted/40 p-4 space-y-2.5">
+              <div className="flex items-center gap-2 font-bold text-foreground">
+                <CalendarDays className="size-4 text-primary shrink-0" />
+                <span>{formatLocalDate(slot.slot_start_at, doctor.timezone)}</span>
+              </div>
               <div className="flex items-center gap-2 font-bold text-foreground">
                 <Clock className="size-4 text-primary shrink-0" />
                 <span>

@@ -9,7 +9,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
 
 export const instant = false;
@@ -40,7 +40,8 @@ export default async function DoctorAppointmentDetailPage({ params }: { params: 
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
             <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 font-medium"><CalendarDays className="size-4 text-primary" />{formatLocalSlotRange(appointment.slot_start_at, appointment.slot_end_at, appointment.timezone)}</div>
+              <div className="flex items-center gap-2 font-medium"><CalendarDays className="size-4 text-primary" /><span>{formatLocalDate(appointment.slot_start_at, appointment.timezone)}</span></div>
+              <p className="mt-2 flex items-center gap-2 font-medium"><Clock className="size-4 text-primary" /><span>{formatLocalSlotRange(appointment.slot_start_at, appointment.slot_end_at, appointment.timezone)}</span></p>
               <p className="mt-2 flex items-center gap-2 text-muted-foreground"><Clock className="size-4" />Timezone: {appointment.timezone}</p>
               <p className="mt-2 flex items-center gap-2 text-muted-foreground"><MapPin className="size-4" />{appointment.clinic_name}</p>
             </div>

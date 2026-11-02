@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatLocalSlotRange } from "../lib/scheduling/time";
+import { formatLocalDate, formatLocalSlotRange } from "../lib/scheduling/time";
 
 describe("slot range formatting", () => {
+  it("renders the appointment day in the appointment timezone", () => {
+    expect(formatLocalDate("2099-04-20T03:30:00.000Z", "Asia/Kolkata")).toBe("Monday, April 20, 2099");
+  });
+
   it("renders both times on the same local date", () => {
     expect(formatLocalSlotRange("2099-04-20T03:30:00.000Z", "2099-04-20T04:00:00.000Z", "Asia/Kolkata")).toBe("9:00 AM – 9:30 AM");
   });
