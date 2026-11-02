@@ -1,19 +1,47 @@
 import { Resend } from "resend";
 
-export type ProviderResult = { status: "sent" | "failed" | "skipped" | "ambiguous"; provider: string; providerMessageId?: string; errorCode?: string };
-export type EmailClient = { emails: { send(message: { from: string; to: string; subject: string; text: string }, options?: { idempotencyKey?: string }): Promise<{ data?: { id?: string } | null } | unknown> } };
+export const EMAIL_PROVIDER_TIMEOUT_MS = 10_000;
 
-export async function sendEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, client?: EmailClient): Promise<ProviderResult> {
+export type ProviderResult = { status: "sent" | "failed" | "skipped" | "ambiguous"; provider: string; providerMessageId?: string; errorCode?: string; retryable?: boolean };
+export type EmailClient = { emails: { send(message: { from: string; to: string; subject: string; text: string }, options?: { idempotencyKey?: string; signal?: AbortSignal }): Promise<{ data?: { id?: string } | null; error?: { name?: string } | null } | unknown> } };
+
+function resendFailure(result: unknown): ProviderResult | null {
+  if (typeof result !== "object" || result === null || !("error" in result) || !result.error) return null;
+  const name = typeof result.error === "object" && result.error !== null && "name" in result.error && typeof result.error.name === "string" ? result.error.name : "";
+  if (name === "rate_limit_exceeded") return { status: "failed", provider: "resend", errorCode: "provider_rate_limited", retryable: true };
+  if (name === "internal_server_error" || name === "application_error") return { status: "failed", provider: "resend", errorCode: "provider_unavailable", retryable: true };
+  return { status: "failed", provider: "resend", errorCode: "provider_rejected", retryable: false };
+}
+
+export async function sendEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, client?: EmailClient, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!from || (!apiKey && !client)) return { status: "skipped", provider: "resend", errorCode: "provider_not_configured" };
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await (client ?? new Resend(apiKey!)).emails.send({ from, to: input.to, subject: input.subject, text: input.text }, { idempotencyKey: input.idempotencyKey });
+    const request = (client ?? new Resend(apiKey!)).emails.send(
+      { from, to: input.to, subject: input.subject, text: input.text },
+      { idempotencyKey: input.idempotencyKey, signal: controller.signal },
+    );
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        reject(new Error("provider_timeout"));
+      }, timeoutMs);
+    });
+    const result = await Promise.race([request, timeout]);
+    const failed = resendFailure(result);
+    if (failed) return failed;
     const id = typeof result === "object" && result !== null && "data" in result ? (result as { data?: { id?: string } }).data?.id : undefined;
+    if (!id) return { status: "failed", provider: "resend", errorCode: "provider_invalid_response", retryable: true };
     return { status: "sent", provider: "resend", providerMessageId: id };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "email_provider_error";
-    return { status: "failed", provider: "resend", errorCode: message.slice(0, 120) };
+  } catch {
+    return { status: "failed", provider: "resend", errorCode: timedOut ? "provider_timeout" : "provider_error", retryable: true };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

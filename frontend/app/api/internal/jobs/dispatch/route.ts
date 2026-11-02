@@ -229,7 +229,7 @@ export async function POST(request: Request) {
       await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
       delivered += 1;
     } else {
-      const retry = result.status === "failed" && delivery.attempts < 5;
+      const retry = result.status === "failed" && result.retryable !== false && delivery.attempts < 5;
       await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = ${result.provider}, processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = ${result.errorCode ?? "delivery_failed"}, updated_at = now() WHERE id = ${delivery.id}::uuid`);
     }
   }

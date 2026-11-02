@@ -23,6 +23,18 @@ describe("notification provider adapters", () => {
     expect(received).toBe("delivery-1");
   });
 
+  it("does not treat a Resend error response as a successful email", async () => {
+    process.env.RESEND_FROM_EMAIL = "appointments@example.test";
+    const client = { emails: { send: async () => ({ data: null, error: { name: "invalid_from_address" } }) } };
+    await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-2" }, client)).resolves.toEqual({ status: "failed", provider: "resend", errorCode: "provider_rejected", retryable: false });
+  });
+
+  it("times out an unresponsive email provider without recording recipient data", async () => {
+    process.env.RESEND_FROM_EMAIL = "appointments@example.test";
+    const client = { emails: { send: async () => new Promise<never>(() => undefined) } };
+    await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-3" }, client, 1)).resolves.toEqual({ status: "failed", provider: "resend", errorCode: "provider_timeout", retryable: true });
+  });
+
   it("does not call Twilio when SMS is not configured", async () => {
     delete process.env.TWILIO_ACCOUNT_SID; delete process.env.TWILIO_AUTH_TOKEN; delete process.env.TWILIO_MESSAGING_SERVICE_SID;
     await expect(sendSms({ to: "+919876543210", text: "Reminder", idempotencyKey: "delivery-2" })).resolves.toMatchObject({ status: "skipped", provider: "twilio" });
