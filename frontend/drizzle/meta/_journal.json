@@ -134,6 +134,13 @@
       "when": 1793801600000,
       "tag": "0024-secure-notification-delivery-context",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793801700000,
+      "tag": "0025-notification-attempt-rpc",
+      "breakpoints": true
     }
   ]
 }
