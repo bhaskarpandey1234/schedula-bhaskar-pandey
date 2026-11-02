@@ -197,17 +197,22 @@ export async function POST(request: Request) {
     let details: Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }> = [];
     try {
       details = (await db.execute(sql`
-      SELECT u.email, COALESCE(patient.phone, doctor.phone) AS phone, COALESCE(recipient_profile.full_name, 'Schedula user') AS recipient_name,
-             doctor_profile.full_name AS doctor_name, doctor.clinic_name, doctor.timezone, s.slot_start_at, s.slot_end_at
-      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
-      JOIN public.doctors doctor ON doctor.id = a.doctor_id
-      JOIN public.profiles doctor_profile ON doctor_profile.id = doctor.id
-      JOIN public.profiles recipient_profile ON recipient_profile.id = ${delivery.recipient_id}::uuid
-      LEFT JOIN public.patients patient ON patient.id = ${delivery.recipient_id}::uuid
-      LEFT JOIN auth.users u ON u.id = ${delivery.recipient_id}::uuid
-      WHERE a.id = ${delivery.appointment_id}::uuid
+        SELECT * FROM public.notification_delivery_context(${delivery.id}::uuid)
     `)) as unknown as Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }>;
     } catch {
+      const retry = delivery.attempts < 5;
+      await db.insert(notificationAttempts).values({ deliveryId: delivery.id, attemptNumber: delivery.attempts, provider: "internal", outcome: "failed", errorCode: "delivery_context_lookup_failed" }).onConflictDoNothing();
+      await db.execute(sql`
+        UPDATE public.notification_deliveries
+        SET status = ${retry ? "pending" : "failed"}::notification_delivery_status,
+            processing_started_at = NULL,
+            next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null},
+            failed_at = ${retry ? null : new Date()},
+            last_error = 'delivery_context_lookup_failed',
+            updated_at = now()
+        WHERE id = ${delivery.id}::uuid
+      `);
+      console.error("[notifications] delivery_context_lookup_failed");
       continue;
     }
     const row = details[0];
