@@ -25,6 +25,10 @@ export function createDb() {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
+      connection: {
+        statement_timeout: 10_000,
+        lock_timeout: 5_000,
+      },
     });
     globalDb.__schedulaDb = drizzle(client, { schema });
   }

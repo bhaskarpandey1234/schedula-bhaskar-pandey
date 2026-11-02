@@ -220,17 +220,24 @@ export async function POST(request: Request) {
       await db.execute(sql`UPDATE public.notification_deliveries SET status = 'failed'::notification_delivery_status, failed_at = now(), last_error = 'appointment_context_missing', updated_at = now() WHERE id = ${delivery.id}::uuid`);
       continue;
     }
-    const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
-    const result = delivery.channel === "sms"
-      ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
-      : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "resend", errorCode: "email_missing" });
-    await db.insert(notificationAttempts).values({ deliveryId: delivery.id, attemptNumber: delivery.attempts, provider: result.provider, outcome: result.status, providerMessageId: result.providerMessageId ?? null, errorCode: result.errorCode ?? null }).onConflictDoNothing();
-    if (result.status === "sent") {
-      await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
-      delivered += 1;
-    } else {
-      const retry = result.status === "failed" && result.retryable !== false && delivery.attempts < 5;
-      await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = ${result.provider}, processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = ${result.errorCode ?? "delivery_failed"}, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+    try {
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
+      const result = delivery.channel === "sms"
+        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
+        : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "resend", errorCode: "email_missing" });
+      await db.insert(notificationAttempts).values({ deliveryId: delivery.id, attemptNumber: delivery.attempts, provider: result.provider, outcome: result.status, providerMessageId: result.providerMessageId ?? null, errorCode: result.errorCode ?? null }).onConflictDoNothing();
+      if (result.status === "sent") {
+        await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+        delivered += 1;
+      } else {
+        const retry = result.status === "failed" && result.retryable !== false && delivery.attempts < 5;
+        await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = ${result.provider}, processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = ${result.errorCode ?? "delivery_failed"}, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+      }
+    } catch {
+      const retry = delivery.attempts < 5;
+      await db.insert(notificationAttempts).values({ deliveryId: delivery.id, attemptNumber: delivery.attempts, provider: "internal", outcome: "failed", errorCode: "delivery_processing_failed" }).onConflictDoNothing();
+      await db.execute(sql`UPDATE public.notification_deliveries SET status = ${retry ? "pending" : "failed"}::notification_delivery_status, provider = 'internal', processing_started_at = null, next_attempt_at = ${retry ? new Date(Date.now() + [60, 300, 900, 3600, 21600][Math.min(delivery.attempts - 1, 4)] * 1000) : null}, failed_at = ${retry ? null : new Date()}, last_error = 'delivery_processing_failed', updated_at = now() WHERE id = ${delivery.id}::uuid`);
+      console.error("[notifications] delivery_processing_failed");
     }
   }
   return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, reconciled, delivered, claimed: claimed.length });
