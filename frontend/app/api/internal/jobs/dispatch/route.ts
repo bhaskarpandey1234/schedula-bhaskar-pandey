@@ -2,10 +2,39 @@ import { NextResponse } from "next/server";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "@/lib/db";
 import { paymentWebhookEvents } from "@/lib/db/schema";
-import { sendNotificationEmail } from "@/lib/email";
+import { sendEmail, sendSms } from "@/lib/notifications/providers";
+import { renderNotificationTemplate } from "@/lib/notifications/templates";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
 import { findMatchingProviderRefund, isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
+import { findMatchingCapturedPayment } from "@/lib/payments/reconciliation";
+
+const DELIVERY_RETRY_DELAYS_SECONDS = [60, 300, 900, 3600, 21600] as const;
+
+function deliveryRetryDelaySeconds(attempts: number) {
+  return DELIVERY_RETRY_DELAYS_SECONDS[Math.min(Math.max(attempts - 1, 0), DELIVERY_RETRY_DELAYS_SECONDS.length - 1)];
+}
+
+async function finalizeDeliveryFailure(
+  db: ReturnType<typeof createDb>,
+  delivery: { id: string; attempts: number },
+  provider: string,
+  errorCode: string,
+  retryable: boolean,
+) {
+  const retry = retryable && delivery.attempts < 5;
+  await db.execute(sql`
+    UPDATE public.notification_deliveries
+    SET status = ${retry ? "pending" : "failed"}::notification_delivery_status,
+        provider = ${provider},
+        processing_started_at = NULL,
+        next_attempt_at = CASE WHEN ${retry} THEN now() + ${deliveryRetryDelaySeconds(delivery.attempts)} * interval '1 second' ELSE NULL END,
+        failed_at = CASE WHEN ${retry} THEN NULL ELSE now() END,
+        last_error = ${errorCode},
+        updated_at = now()
+    WHERE id = ${delivery.id}::uuid
+  `);
+}
 
 async function applyRefundState(db: ReturnType<typeof createDb>, refundId: string, state: "pending" | "processed" | "failed", failureReason?: string | null) {
   return db.transaction(async (tx) => {
@@ -60,6 +89,7 @@ export async function POST(request: Request) {
   const expired = await db.execute(sql`select public.expire_payment_holds() as count`);
   const events = await db.select().from(paymentWebhookEvents).where(inArray(paymentWebhookEvents.status, ["pending", "failed"])).limit(50);
   let processed = 0;
+  let reconciled = 0;
   for (const event of events) {
     try {
       const parsed = JSON.parse(event.payload) as { event?: string; entityId?: string; orderId?: string };
@@ -78,6 +108,29 @@ export async function POST(request: Request) {
       processed += 1;
     } catch (error) {
       await db.update(paymentWebhookEvents).set({ status: "pending", attempts: event.attempts + 1, lastError: error instanceof Error ? error.message.slice(0, 500) : "Webhook processing failed" }).where(eq(paymentWebhookEvents.id, event.id));
+    }
+  }
+  const pendingPayments = await db.execute(sql`
+    SELECT p.id, p.provider_order_id, p.amount_minor, p.currency
+    FROM public.payments p
+    JOIN public.slot_reservations r ON r.id = p.reservation_id
+    WHERE p.provider = 'razorpay'
+      AND p.status IN ('creating'::payment_status, 'pending'::payment_status)
+      AND p.provider_order_id IS NOT NULL
+      AND r.status IN ('active'::reservation_status, 'expired'::reservation_status)
+    ORDER BY p.created_at
+    LIMIT 50
+  `);
+  const reconciliationProvider = getPaymentProvider();
+  for (const payment of pendingPayments as unknown as Array<{ id: string; provider_order_id: string; amount_minor: number; currency: string }>) {
+    try {
+      const candidates = await reconciliationProvider.listOrderPayments(payment.provider_order_id);
+      const captured = findMatchingCapturedPayment(candidates, { orderId: payment.provider_order_id, amountMinor: payment.amount_minor, currency: payment.currency });
+      if (!captured) continue;
+      await db.execute(sql`select public.complete_payment(${payment.id}::uuid, ${captured.id}, 'captured')`);
+      reconciled += 1;
+    } catch (error) {
+      if (!(error instanceof PaymentProviderError)) console.error("[payments] reconciliation failed", { code: "reconciliation_error" });
     }
   }
   const refunds = await db.execute(sql`select * from public.claim_pending_refunds(25)`);
@@ -129,17 +182,84 @@ export async function POST(request: Request) {
       if (!isRetryableRefundError(statusCode)) await applyRefundState(db, refund.id, "failed", safeRefundFailureReason(statusCode));
     }
   }
-  let deliveries: Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }> = [];
-  try {
-    deliveries = (await db.execute(sql`select d.id, d.dedupe_key, d.template, u.email, coalesce(n.title, 'Appointment reminder') as title, coalesce(n.message, 'This is a reminder for your upcoming Schedula appointment.') as message from public.notification_deliveries d join auth.users u on u.id = d.recipient_id left join public.notifications n on n.id = d.notification_id left join public.appointments a on a.id = d.appointment_id left join public.appointment_slots s on s.id = a.slot_id where d.channel = 'email' and d.status = 'pending' and d.scheduled_at <= now() and (d.template not like 'appointment_reminder%' or (a.status = 'confirmed' and s.slot_start_at > now())) order by d.scheduled_at limit 50`)) as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>;
-  } catch {
-    // A restricted database role may not be able to read auth.users. Leave the outbox pending and continue refunds.
+  const configuredIntervals = (process.env.APPOINTMENT_REMINDER_INTERVALS_MINUTES ?? "1440,120").split(",").map((value) => Number(value.trim())).filter((value) => Number.isInteger(value) && value > 0 && value <= 60 * 24 * 30);
+  for (const minutes of [...new Set(configuredIntervals)]) {
+    const template = `appointment_reminder_${minutes}m`;
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.patient_id, a.id, 'email'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/email'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.patient_id AND pref.reminder_email
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.patient_id, a.id, 'sms'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/sms'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.patient_id AND pref.reminder_sms
+      JOIN public.patients patient ON patient.id = a.patient_id
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now() AND patient.phone IS NOT NULL
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.doctor_id, a.id, 'email'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-email'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_email
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.doctor_id, a.id, 'sms'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-sms'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_sms
+      JOIN public.doctors doctor ON doctor.id = a.doctor_id AND doctor.phone IS NOT NULL
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
   }
+  await db.execute(sql`UPDATE public.notification_deliveries d SET status = 'cancelled'::notification_delivery_status, updated_at = now() WHERE d.template LIKE 'appointment_reminder%' AND d.status IN ('pending'::notification_delivery_status, 'processing'::notification_delivery_status) AND NOT EXISTS (SELECT 1 FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id WHERE a.id = d.appointment_id AND a.status = 'confirmed' AND s.slot_start_at > now())`);
+  const claimed = (await db.execute(sql`select * from public.claim_notification_deliveries(50)`)) as unknown as Array<{ id: string; recipient_id: string; appointment_id: string; channel: string; template: string; dedupe_key: string; attempts: number }>;
   let delivered = 0;
-  for (const delivery of deliveries as unknown as Array<{ id: string; dedupe_key: string; template: string; email: string; title: string; message: string }>) {
-    const result = await sendNotificationEmail({ to: delivery.email, subject: delivery.template === "appointment_reminder_24h" ? "Appointment reminder (24 hours)" : delivery.template === "appointment_reminder_2h" ? "Appointment reminder (2 hours)" : delivery.title, text: delivery.message }, delivery.dedupe_key);
-    await db.execute(sql`update public.notification_deliveries set status = ${result === "sent" ? "sent" : "failed"}::delivery_status, attempts = attempts + 1, last_error = ${result === "failed" ? "Email provider rejected delivery" : null}, updated_at = now() where id = ${delivery.id}::uuid`);
-    if (result === "sent") delivered += 1;
+  for (const delivery of claimed) {
+    let details: Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }> = [];
+    try {
+      details = (await db.execute(sql`
+        SELECT * FROM public.notification_delivery_context(${delivery.id}::uuid)
+    `)) as unknown as Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }>;
+    } catch {
+      await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'delivery_context_lookup_failed')`);
+      await finalizeDeliveryFailure(db, delivery, "internal", "delivery_context_lookup_failed", true);
+      console.error("[notifications] delivery_context_lookup_failed");
+      continue;
+    }
+    const row = details[0];
+    if (!row) {
+      await db.execute(sql`UPDATE public.notification_deliveries SET status = 'failed'::notification_delivery_status, failed_at = now(), last_error = 'appointment_context_missing', updated_at = now() WHERE id = ${delivery.id}::uuid`);
+      continue;
+    }
+    try {
+      const recipientRole = row.recipient_role === "doctor" || row.recipient_role === "patient" ? row.recipient_role : null;
+      const expectedRecipientId = recipientRole === "doctor" ? row.doctor_id : recipientRole === "patient" ? row.patient_id : null;
+      if (!recipientRole || !expectedRecipientId || row.recipient_id !== delivery.recipient_id || expectedRecipientId !== delivery.recipient_id) {
+        await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'recipient_mismatch')`);
+        await finalizeDeliveryFailure(db, delivery, "internal", "recipient_mismatch", false);
+        continue;
+      }
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
+      const result = delivery.channel === "sms"
+        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
+        : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.BREVO_API_KEY ? "brevo" : "resend", errorCode: "email_missing" });
+      await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, ${result.provider}, ${result.status}, ${result.providerMessageId ?? null}, ${result.errorCode ?? null})`);
+      if (result.status === "sent") {
+        await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+        delivered += 1;
+      } else {
+        await finalizeDeliveryFailure(db, delivery, result.provider, result.errorCode ?? "delivery_failed", result.status === "failed" && result.retryable !== false);
+      }
+    } catch {
+      await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'delivery_processing_failed')`);
+      await finalizeDeliveryFailure(db, delivery, "internal", "delivery_processing_failed", true);
+      console.error("[notifications] delivery_processing_failed");
+    }
   }
-  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, delivered });
+  return NextResponse.json({ expired: Number((expired as unknown as Array<{ count: number }>)[0]?.count ?? 0), processed, reconciled, delivered, claimed: claimed.length });
 }

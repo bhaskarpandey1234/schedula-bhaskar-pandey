@@ -28,6 +28,7 @@ import {
 } from "@/lib/scheduling/schedule-filters";
 import { formatLocalDate, formatLocalSlotRange, localDateKey } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
+import { CancelSessionForm } from "@/components/cancel-session-form";
 
 export const instant = false;
 
@@ -173,11 +174,14 @@ export default async function DoctorSchedulePage({
                 <div className="space-y-6">
                   {groups.map((group) => (
                     <section key={group.date} className="space-y-2.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
                         <CalendarCheck2 className="size-4 text-primary" />
                         <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
                           {formatLocalDate(`${group.date}T12:00:00Z`, doctor.timezone)}
                         </h2>
+                        </div>
+                        {group.slots[0] && <CancelSessionForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} />}
                       </div>
 
                       <div className="overflow-x-auto rounded-2xl border border-border/80">

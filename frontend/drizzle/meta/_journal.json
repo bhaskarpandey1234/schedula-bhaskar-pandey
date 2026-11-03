@@ -78,6 +78,76 @@
       "when": 1793301000000,
       "tag": "0010-day4-payments-refunds-notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793387400000,
+      "tag": "0017-appointment-notification-delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793473800000,
+      "tag": "0018-profile-completeness-gates",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793560200000,
+      "tag": "0019-email-verification-gates",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793563800000,
+      "tag": "0020-fix-notification-conflict-target",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793567400000,
+      "tag": "0021-restore-notification-delivery-default",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793653800000,
+      "tag": "0022-secure-notification-read-state",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793740200000,
+      "tag": "0023-doctor-appointment-detail",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793801600000,
+      "tag": "0024-secure-notification-delivery-context",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793801700000,
+      "tag": "0025-notification-attempt-rpc",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793801800000,
+      "tag": "0026-prevent-stale-delivery-replays",
+      "breakpoints": true
     }
   ]
 }

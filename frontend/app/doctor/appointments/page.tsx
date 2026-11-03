@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PendingLink } from "@/components/pending-link";
-import { formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
 import { CancelDoctorAppointmentForm } from "@/components/cancel-doctor-appointment-form";
 
 export const instant = false;
@@ -148,6 +148,10 @@ export default async function DoctorAppointmentsPage({
                     {/* Time Window Card */}
                     <div className="rounded-xl border border-border/80 bg-surface-muted/50 p-3 space-y-1">
                       <div className="flex items-center gap-1.5 font-bold text-foreground">
+                        <CalendarDays className="size-3.5 text-primary" />
+                        <span>{formatLocalDate(appointment.slot_start_at, appointment.timezone)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-bold text-foreground">
                         <Clock className="size-3.5 text-primary" />
                         <span>
                           {formatLocalSlotRange(
@@ -179,11 +183,16 @@ export default async function DoctorAppointmentsPage({
                     )}
 
                     {/* Action Footer */}
-                    {tab === "upcoming" && appointment.status === "confirmed" && (
-                      <div className="pt-2 border-t border-border flex items-center justify-end">
+                    <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-2">
+                      <Button asChild size="sm" variant="ghost" className="text-xs font-semibold text-primary">
+                        <Link href={`/doctor/appointments/${appointment.appointment_id}`}>
+                          View appointment →
+                        </Link>
+                      </Button>
+                      {tab === "upcoming" && appointment.status === "confirmed" && (
                         <CancelDoctorAppointmentForm appointmentId={appointment.appointment_id} />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );

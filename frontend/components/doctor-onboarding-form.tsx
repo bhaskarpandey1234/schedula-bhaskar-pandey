@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/phone-input";
 import { specialtyOptions, experienceOptions, timezoneOptions } from "@/lib/profile-options";
 import { FieldError, FormErrorSummary } from "@/components/ui/form-feedback";
 
@@ -17,6 +18,7 @@ export function DoctorOnboardingForm() {
   useEffect(() => { if (state.values) setValues((current) => ({ ...current, ...state.values })); }, [state.values]);
   return <Card><CardHeader><CardTitle>Set up your doctor profile</CardTitle><CardDescription>Patients will see these professional details when they search.</CardDescription></CardHeader><CardContent><form action={action} noValidate className="grid gap-5">
     <div className="grid gap-2"><Label htmlFor="fullName">Full name</Label><Input id="fullName" name="fullName" autoComplete="name" value={values.fullName} onChange={(e) => setValues({ ...values, fullName: e.target.value })} required /><FieldError id="doctor-name-error">{state.fieldErrors?.fullName}</FieldError></div>
+    <div className="grid gap-2"><Label htmlFor="phone">Phone number</Label><PhoneInput id="phone" defaultValue={state.values?.phone} /><p className="text-xs text-muted-foreground">Required for clinic contact and appointment notifications.</p><FieldError id="doctor-phone-error">{state.fieldErrors?.phone}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="specialty">Specialty</Label><CustomSelect id="specialty" name="specialty" value={values.specialty} onValueChange={(value) => setValues({ ...values, specialty: value })} options={specialtyOptions.map((value) => ({ value, label: value }))} required /><FieldError id="doctor-specialty-error">{state.fieldErrors?.specialty}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="clinicName">Clinic name</Label><Input id="clinicName" name="clinicName" value={values.clinicName} onChange={(e) => setValues({ ...values, clinicName: e.target.value })} required /><FieldError id="doctor-clinic-error">{state.fieldErrors?.clinicName}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="experienceYears">Years of experience</Label><CustomSelect id="experienceYears" name="experienceYears" value={values.experienceYears} onValueChange={(value) => setValues({ ...values, experienceYears: value })} options={experienceOptions} required /><FieldError id="doctor-experience-error">{state.fieldErrors?.experienceYears}</FieldError></div>

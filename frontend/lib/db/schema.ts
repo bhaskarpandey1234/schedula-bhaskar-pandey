@@ -10,6 +10,7 @@ import {
   timestamp,
   time,
   uuid,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 const auth = pgSchema("auth");
@@ -61,6 +62,7 @@ export const doctors = pgTable("doctors", {
   timezone: text("timezone").notNull(),
   consultationFeeMinor: integer("consultation_fee_minor"),
   consultationCurrency: text("consultation_currency").notNull().default("INR"),
+  phone: text("phone"),
   ...auditColumns(),
 });
 
@@ -77,6 +79,7 @@ export const refundStatus = pgEnum("refund_status", ["requested", "pending", "pr
 export const rescheduleStatus = pgEnum("reschedule_status", ["pending", "completed", "expired", "failed"]);
 export const notificationChannel = pgEnum("notification_channel", ["email", "sms", "whatsapp"]);
 export const deliveryStatus = pgEnum("delivery_status", ["pending", "processing", "sent", "failed", "cancelled"]);
+export const notificationDeliveryStatus = pgEnum("notification_delivery_status", ["pending", "processing", "sent", "delivered", "failed", "undeliverable", "cancelled"]);
 
 export const refundPolicies = pgTable("refund_policies", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -221,7 +224,20 @@ export const notifications = pgTable("notifications", {
   dedupeKey: text("dedupe_key"),
   readAt: timestamp("read_at", { withTimezone: true }),
   ...auditColumns(),
-}, (table) => ({ recipientIdx: index("notifications_recipient_idx").on(table.recipientId, table.createdAt) }));
+}, (table) => ({ recipientIdx: index("notifications_recipient_idx").on(table.recipientId, table.createdAt), dedupeUnique: uniqueIndex("notifications_dedupe_unique").on(table.dedupeKey) }));
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  recipientId: uuid("recipient_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  operationalEmail: boolean("operational_email").notNull().default(false),
+  operationalSms: boolean("operational_sms").notNull().default(false),
+  reminderEmail: boolean("reminder_email").notNull().default(false),
+  reminderSms: boolean("reminder_sms").notNull().default(false),
+  emailConsentedAt: timestamp("email_consented_at", { withTimezone: true }),
+  smsConsentedAt: timestamp("sms_consented_at", { withTimezone: true }),
+  emailRevokedAt: timestamp("email_revoked_at", { withTimezone: true }),
+  smsRevokedAt: timestamp("sms_revoked_at", { withTimezone: true }),
+  ...auditColumns(),
+});
 
 export const notificationDeliveries = pgTable("notification_deliveries", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -231,11 +247,27 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
   channel: notificationChannel("channel").notNull().default("email"),
   template: text("template").notNull(),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  status: deliveryStatus("status").notNull().default("pending"),
+  status: notificationDeliveryStatus("status").notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   dedupeKey: text("dedupe_key").notNull(),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
   lastError: text("last_error"),
   providerMessageId: text("provider_message_id"),
+  provider: text("provider"),
+  processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  failedAt: timestamp("failed_at", { withTimezone: true }),
   ...auditColumns(),
 }, (table) => ({ dedupeUnique: uniqueIndex("notification_delivery_dedupe_unique").on(table.dedupeKey), dueIdx: index("notification_delivery_due_idx").on(table.status, table.scheduledAt) }));
+
+export const notificationAttempts = pgTable("notification_attempts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  deliveryId: uuid("delivery_id").notNull().references(() => notificationDeliveries.id, { onDelete: "cascade" }),
+  attemptNumber: integer("attempt_number").notNull(),
+  provider: text("provider").notNull(),
+  outcome: text("outcome").notNull(),
+  providerMessageId: text("provider_message_id"),
+  errorCode: text("error_code"),
+  attemptedAt: timestamp("attempted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ deliveryAttemptUnique: uniqueIndex("notification_attempt_delivery_number_unique").on(table.deliveryId, table.attemptNumber) }));

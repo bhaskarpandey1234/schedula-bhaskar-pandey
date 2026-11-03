@@ -8,10 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/phone-input";
 import { specialtyOptions, experienceOptions, timezoneOptions } from "@/lib/profile-options";
 import { FieldError, FormErrorSummary } from "@/components/ui/form-feedback";
 
-type DoctorProfile = { fullName: string; specialty: string; clinicName: string; experienceYears: number; biography: string; timezone: string; consultationFee: number | null };
+type DoctorProfile = { fullName: string; phone: string | null; specialty: string; clinicName: string; experienceYears: number; biography: string; timezone: string; consultationFee: number | null };
 
 export function DoctorProfileForm({ profile }: { profile: DoctorProfile }) {
   const [state, action, pending] = useActionState(updateDoctorProfileAction, {} as AvailabilityActionState);
@@ -19,6 +20,7 @@ export function DoctorProfileForm({ profile }: { profile: DoctorProfile }) {
   useEffect(() => { if (state.values) setValues((current) => ({ ...current, ...state.values })); }, [state.values]);
   return <Card><CardHeader><CardTitle>Doctor profile</CardTitle><CardDescription>Keep your professional details and consultation price up to date.</CardDescription></CardHeader><CardContent><form action={action} noValidate className="grid gap-4">
     <div className="grid gap-2"><Label htmlFor="fullName">Full name</Label><Input id="fullName" name="fullName" value={values.fullName} onChange={(e) => setValues({ ...values, fullName: e.target.value })} required /><FieldError id="profile-name-error">{state.fieldErrors?.fullName}</FieldError></div>
+    <div className="grid gap-2"><Label htmlFor="phone">Phone number</Label><PhoneInput id="phone" defaultValue={state.values?.phone ?? profile.phone ?? ""} /><FieldError id="profile-phone-error">{state.fieldErrors?.phone}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="specialty">Specialty</Label><CustomSelect id="specialty" name="specialty" value={values.specialty} onValueChange={(value) => setValues({ ...values, specialty: value })} options={specialtyOptions.map((value) => ({ value, label: value }))} required /><FieldError id="profile-specialty-error">{state.fieldErrors?.specialty}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="clinicName">Clinic name</Label><Input id="clinicName" name="clinicName" value={values.clinicName} onChange={(e) => setValues({ ...values, clinicName: e.target.value })} required /><FieldError id="profile-clinic-error">{state.fieldErrors?.clinicName}</FieldError></div>
     <div className="grid gap-2"><Label htmlFor="experienceYears">Years of experience</Label><CustomSelect id="experienceYears" name="experienceYears" value={values.experienceYears} onValueChange={(value) => setValues({ ...values, experienceYears: value })} options={experienceOptions} required /><FieldError id="profile-experience-error">{state.fieldErrors?.experienceYears}</FieldError></div>

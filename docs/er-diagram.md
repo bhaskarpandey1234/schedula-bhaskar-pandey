@@ -23,6 +23,7 @@ erDiagram
 
     DOCTOR {
         uuid id PK, FK
+        string phone
         string specialty
         string clinic_name
         int experience_years
@@ -73,8 +74,10 @@ erDiagram
 
 - `USER` represents the application profile joined to Supabase `auth.users`. The email is owned by Supabase Auth; `full_name` and `role` are stored in `profiles`.
 - `PATIENT.id` and `DOCTOR.id` are both the profile ID and enforce one profile per user role. There are no separate `user_id` columns in the implemented schema.
-- Patient onboarding currently stores phone and date of birth.
-- Doctor onboarding and editing store specialty, clinic name, experience, biography, and IANA timezone.
+- The authenticated Supabase user owns the email address; it is intentionally not duplicated into public application tables.
+- Patient onboarding requires a nonblank name, E.164 phone, and valid past date of birth within 120 years.
+- Doctor onboarding requires an E.164 phone, specialty, clinic name, nonnegative experience, biography of at least 20 characters, valid IANA timezone, and a positive INR consultation fee.
+- Existing legacy doctor rows may temporarily have a null phone or fee for migration compatibility, but those users are incomplete and cannot create availability or book/reschedule appointments until they repair the profile.
 - `AVAILABILITY` represents an `availability_sessions` record. A `weekly` record stores an ISO consulting weekday and continues every week; a `custom` record stores one local calendar date and overrides recurring availability for that date. The application generates date-specific `appointment_slots` from both kinds of session; slots are intentionally kept outside this five-module conceptual ERD.
 - `APPOINTMENT` references a generated slot through `slot_id`, while doctor and patient ownership are retained for authorization and reporting.
 - `notifications`, payment, refund, reservation, and reminder tables support the appointment lifecycle but remain implementation-specific support tables, not additional conceptual domain modules. See [`day-4-payments-operations.md`](day-4-payments-operations.md) for the payment and notification operational design.
@@ -90,6 +93,7 @@ erDiagram
 - Appointment lifecycle includes payment-pending, confirmed, cancelled, and expired states; payment and refund records retain the financial state separately from appointment cancellation.
 - All audit timestamps use timezone-aware database timestamps.
 - Passwords are managed by Supabase Auth and are never stored in the application schema.
+- Profile completeness is enforced in both the application guards and database scheduling triggers. Incomplete users may complete their own profile, browse permitted public/read-only content, and cancel existing commitments, but cannot create new bookings, availability, or reschedules.
 
 ## Scope decisions
 

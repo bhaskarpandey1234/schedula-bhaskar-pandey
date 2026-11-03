@@ -9,6 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { DoctorProfileForm } from "@/components/doctor-profile-form";
+import { AccountProfileSummary } from "@/components/account-profile-summary";
 import { PortalShell } from "@/components/portal-shell";
 import { requireRole } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ export default async function DoctorProfilePage() {
   const supabase = await createClient();
   const { data: doctor, error } = await supabase
     .from("doctors")
-    .select("specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor")
+    .select("phone, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor")
     .eq("id", account.user.id)
     .maybeSingle();
 
@@ -63,6 +64,7 @@ export default async function DoctorProfilePage() {
 
   const profile = {
     fullName: account.profile.full_name,
+    phone: doctor.phone,
     specialty: doctor.specialty,
     clinicName: doctor.clinic_name,
     experienceYears: doctor.experience_years,
@@ -97,6 +99,24 @@ export default async function DoctorProfilePage() {
             Manage your public doctor bio, consultation fees, clinic location, and active consulting hours.
           </p>
         </div>
+
+        <AccountProfileSummary
+          roleLabel="Doctor"
+          email={account.user.email}
+          emailVerified={account.emailVerified}
+          fullName={profile.fullName}
+          phone={profile.phone}
+          completion={account.completion}
+          notificationHref="/doctor/notifications"
+          details={[
+            { label: "Specialty", value: profile.specialty },
+            { label: "Clinic", value: profile.clinicName },
+            { label: "Years of experience", value: profile.experienceYears },
+            { label: "Timezone", value: profile.timezone },
+            { label: "Consultation fee", value: profile.consultationFee === null ? null : `₹${profile.consultationFee.toLocaleString("en-IN", { minimumFractionDigits: 2 })} INR` },
+            { label: "Biography", value: profile.biography },
+          ]}
+        />
 
         {/* Identity & Credentials Card */}
         <Card className="overflow-hidden rounded-3xl border-border bg-card shadow-xs">
