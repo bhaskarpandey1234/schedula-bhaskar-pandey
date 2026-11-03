@@ -220,11 +220,11 @@ export async function POST(request: Request) {
   const claimed = (await db.execute(sql`select * from public.claim_notification_deliveries(50)`)) as unknown as Array<{ id: string; recipient_id: string; appointment_id: string; channel: string; template: string; dedupe_key: string; attempts: number }>;
   let delivered = 0;
   for (const delivery of claimed) {
-    let details: Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }> = [];
+    let details: Array<{ email: string | null; phone: string | null; recipient_name: string; recipient_role: "patient" | "doctor"; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }> = [];
     try {
       details = (await db.execute(sql`
         SELECT * FROM public.notification_delivery_context(${delivery.id}::uuid)
-    `)) as unknown as Array<{ email: string | null; phone: string | null; recipient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }>;
+    `)) as unknown as Array<{ email: string | null; phone: string | null; recipient_name: string; recipient_role: "patient" | "doctor"; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string }>;
     } catch {
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'delivery_context_lookup_failed')`);
       await finalizeDeliveryFailure(db, delivery, "internal", "delivery_context_lookup_failed", true);
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
       continue;
     }
     try {
-      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole: row.recipient_role, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
       const result = delivery.channel === "sms"
         ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
         : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.BREVO_API_KEY ? "brevo" : "resend", errorCode: "email_missing" });

@@ -1,6 +1,8 @@
 export type NotificationTemplateInput = {
   template: string;
   recipientName: string;
+  recipientRole: "patient" | "doctor";
+  patientName: string;
   doctorName: string;
   clinicName: string;
   timezone: string;
@@ -18,14 +20,25 @@ function appointmentTime(input: NotificationTemplateInput) {
 
 export function renderNotificationTemplate(input: NotificationTemplateInput, channel: "email" | "sms") {
   const time = appointmentTime(input);
+  const forDoctor = input.recipientRole === "doctor";
   const reminder = input.template.startsWith("appointment_reminder");
   const subject = reminder ? "Upcoming Schedula appointment" : input.template === "appointment_cancelled" ? "Schedula appointment cancelled" : input.template === "appointment_rescheduled" ? "Schedula appointment rescheduled" : input.template === "refund_processed" ? "Schedula refund processed" : input.template === "refund_failed" ? "Schedula refund update" : input.template === "payment_failed" ? "Schedula payment update" : "Schedula appointment update";
-  const body = reminder
-    ? `Reminder: your appointment with ${input.doctorName} at ${input.clinicName} is ${time}.`
-    : input.template === "appointment_cancelled"
-      ? `Your appointment with ${input.doctorName} at ${input.clinicName} was cancelled. Please choose another available time.`
-      : input.template === "appointment_rescheduled"
-        ? `Your appointment with ${input.doctorName} at ${input.clinicName} is now scheduled for ${time}.`
+  const body = forDoctor
+    ? reminder
+      ? `Reminder: ${input.patientName} has an appointment at ${input.clinicName} on ${time}.`
+      : input.template === "appointment_cancelled"
+        ? `${input.patientName}'s appointment at ${input.clinicName} was cancelled.`
+        : input.template === "appointment_rescheduled"
+          ? `${input.patientName}'s appointment at ${input.clinicName} is now scheduled for ${time}.`
+          : input.template === "appointment_booked"
+            ? `New appointment: ${input.patientName} booked a slot at ${input.clinicName} for ${time}.`
+            : `Appointment update: ${input.patientName} has an appointment at ${input.clinicName} on ${time}.`
+    : reminder
+      ? `Reminder: your appointment with ${input.doctorName} at ${input.clinicName} is ${time}.`
+      : input.template === "appointment_cancelled"
+        ? `Your appointment with ${input.doctorName} at ${input.clinicName} was cancelled. Please choose another available time.`
+        : input.template === "appointment_rescheduled"
+          ? `Your appointment with ${input.doctorName} at ${input.clinicName} is now scheduled for ${time}.`
         : input.template === "refund_processed"
           ? `Your refund for the Schedula appointment with ${input.doctorName} was processed.`
           : input.template === "refund_failed"
