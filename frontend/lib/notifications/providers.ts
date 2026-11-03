@@ -52,23 +52,29 @@ async function sendResendEmail(input: { to: string; subject: string; text: strin
 }
 
 function brevoFailure(status: number, payload: unknown): ProviderResult {
-  const code = typeof payload === "object" && payload !== null && "code" in payload && typeof payload.code === "string" ? payload.code : "";
+  const code = typeof payload === "object" && payload !== null && "code" in payload && typeof payload.code === "string" ? payload.code.toLowerCase() : "";
+  if (status === 401) return { status: "failed", provider: "brevo", errorCode: "provider_authentication_failed", retryable: false };
+  if (status === 403 || code === "permission_denied") return { status: "failed", provider: "brevo", errorCode: "provider_account_restricted", retryable: false };
   if (status === 429 || status >= 500 || code === "too_many_requests") return { status: "failed", provider: "brevo", errorCode: status === 429 ? "provider_rate_limited" : "provider_unavailable", retryable: true };
+  if (code === "invalid_sender" || code === "sender_not_verified") return { status: "failed", provider: "brevo", errorCode: "provider_sender_rejected", retryable: false };
+  if (code === "invalid_email" || code === "invalid_recipient") return { status: "failed", provider: "brevo", errorCode: "provider_recipient_rejected", retryable: false };
+  if (code === "invalid_parameter") return { status: "failed", provider: "brevo", errorCode: "provider_invalid_request", retryable: false };
   return { status: "failed", provider: "brevo", errorCode: "provider_rejected", retryable: false };
 }
 
 export async function sendBrevoEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, fetchImpl: BrevoFetch = fetch, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
   const apiKey = process.env.BREVO_API_KEY;
-  const from = process.env.BREVO_FROM_EMAIL;
+  const from = process.env.BREVO_FROM_EMAIL?.trim();
   const fromName = process.env.BREVO_FROM_NAME || "Schedula";
   if (!apiKey || !from) return { status: "skipped", provider: "brevo", errorCode: "provider_not_configured" };
+  if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(from)) return { status: "failed", provider: "brevo", errorCode: "provider_sender_invalid_config", retryable: false };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
-      headers: { accept: "application/json", "api-key": apiKey, "content-type": "application/json", "x-schedula-delivery-key": input.idempotencyKey },
-      body: JSON.stringify({ sender: { name: fromName, email: from }, to: [{ email: input.to }], subject: input.subject, textContent: input.text, tags: ["schedula", input.idempotencyKey] }),
+      headers: { accept: "application/json", "api-key": apiKey, "content-type": "application/json" },
+      body: JSON.stringify({ sender: { name: fromName, email: from }, to: [{ email: input.to }], subject: input.subject, textContent: input.text, headers: { IdempotencyKey: input.idempotencyKey }, tags: ["schedula"] }),
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({})) as { messageId?: string } & Record<string, unknown>;

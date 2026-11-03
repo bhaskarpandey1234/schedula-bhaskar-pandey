@@ -42,7 +42,10 @@ describe("notification provider adapters", () => {
     process.env.BREVO_FROM_EMAIL = "sender@example.test";
     const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({ "api-key": "brevo-key" });
-      expect(String(init?.body)).toContain("patient@example.test");
+      const body = JSON.parse(String(init?.body));
+      expect(body.to[0].email).toBe("patient@example.test");
+      expect(body.headers.IdempotencyKey).toBe("delivery-brevo");
+      expect(body.tags).toEqual(["schedula"]);
       return new Response(JSON.stringify({ messageId: "brevo-1" }), { status: 201 });
     };
     await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-brevo" }, fetchImpl, 1000)).resolves.toMatchObject({ status: "sent", provider: "brevo", providerMessageId: "brevo-1" });
@@ -54,7 +57,25 @@ describe("notification provider adapters", () => {
     const rateLimited = async () => new Response(JSON.stringify({ code: "too_many_requests" }), { status: 429 });
     const rejected = async () => new Response(JSON.stringify({ code: "invalid_parameter" }), { status: 400 });
     await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "rate" }, rateLimited)).resolves.toMatchObject({ status: "failed", retryable: true });
-    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "reject" }, rejected)).resolves.toMatchObject({ status: "failed", errorCode: "provider_rejected", retryable: false });
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "reject" }, rejected)).resolves.toMatchObject({ status: "failed", errorCode: "provider_invalid_request", retryable: false });
+  });
+
+  it("rejects display-name sender configuration before calling Brevo", async () => {
+    process.env.BREVO_API_KEY = "brevo-key";
+    process.env.BREVO_FROM_EMAIL = "Schedula <sender@example.test>";
+    let called = false;
+    const fetchImpl = async () => { called = true; return new Response(null, { status: 201 }); };
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "invalid-sender" }, fetchImpl)).resolves.toMatchObject({ status: "failed", errorCode: "provider_sender_invalid_config", retryable: false });
+    expect(called).toBe(false);
+  });
+
+  it("classifies Brevo authentication and recipient errors without exposing payload text", async () => {
+    process.env.BREVO_API_KEY = "brevo-key";
+    process.env.BREVO_FROM_EMAIL = "sender@example.test";
+    const auth = async () => new Response(JSON.stringify({ code: "unauthorized", message: "secret provider detail" }), { status: 401 });
+    const recipient = async () => new Response(JSON.stringify({ code: "invalid_email", message: "patient@example.test" }), { status: 400 });
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "auth" }, auth)).resolves.toMatchObject({ status: "failed", errorCode: "provider_authentication_failed", retryable: false });
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "recipient" }, recipient)).resolves.toMatchObject({ status: "failed", errorCode: "provider_recipient_rejected", retryable: false });
   });
 
   it("does not call Twilio when SMS is not configured", async () => {
