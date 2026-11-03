@@ -41,6 +41,9 @@ $$;
 DROP FUNCTION IF EXISTS public.notification_delivery_context(uuid);
 CREATE FUNCTION public.notification_delivery_context(p_delivery_id uuid)
 RETURNS TABLE(
+  recipient_id uuid,
+  patient_id uuid,
+  doctor_id uuid,
   email text,
   phone text,
   recipient_name text,
@@ -56,7 +59,10 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public, auth, pg_temp
 AS $$
-  SELECT u.email,
+  SELECT delivery.recipient_id,
+         appointment.patient_id,
+         appointment.doctor_id,
+         u.email,
          COALESCE(recipient_patient.phone, recipient_doctor.phone) AS phone,
          COALESCE(recipient_profile.full_name, 'Schedula user') AS recipient_name,
          recipient_profile.role::text AS recipient_role,

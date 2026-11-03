@@ -18,4 +18,11 @@ describe("notification templates", () => {
     expect(rendered.text).toContain("Raj booked a slot");
     expect(rendered.text).not.toContain("appointment with Aman");
   });
+
+  it("keeps patient messages doctor-focused", () => {
+    const rendered = renderNotificationTemplate({ ...input, template: "payment_confirmed", recipientName: "Raj", recipientRole: "patient", patientName: "Raj", doctorName: "Aman" }, "email");
+    expect(rendered.text).toContain("Hello Raj");
+    expect(rendered.text).toContain("appointment with Aman");
+    expect(rendered.text).not.toContain("Raj booked a slot");
+  });
 });
