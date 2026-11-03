@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { sendEmail, sendSms } from "../lib/notifications/providers";
+import { sendBrevoEmail, sendEmail, sendSms } from "../lib/notifications/providers";
 
-const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID };
+const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, brevoKey: process.env.BREVO_API_KEY, brevoFrom: process.env.BREVO_FROM_EMAIL, brevoName: process.env.BREVO_FROM_NAME, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID };
 
 afterEach(() => {
-  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service })) {
+  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, BREVO_API_KEY: original.brevoKey, BREVO_FROM_EMAIL: original.brevoFrom, BREVO_FROM_NAME: original.brevoName, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service })) {
     if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
@@ -24,15 +24,37 @@ describe("notification provider adapters", () => {
   });
 
   it("does not treat a Resend error response as a successful email", async () => {
+    delete process.env.BREVO_API_KEY; delete process.env.BREVO_FROM_EMAIL;
     process.env.RESEND_FROM_EMAIL = "appointments@example.test";
     const client = { emails: { send: async () => ({ data: null, error: { name: "invalid_from_address" } }) } };
     await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-2" }, client)).resolves.toEqual({ status: "failed", provider: "resend", errorCode: "provider_rejected", retryable: false });
   });
 
   it("times out an unresponsive email provider without recording recipient data", async () => {
+    delete process.env.BREVO_API_KEY; delete process.env.BREVO_FROM_EMAIL;
     process.env.RESEND_FROM_EMAIL = "appointments@example.test";
     const client = { emails: { send: async () => new Promise<never>(() => undefined) } };
     await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-3" }, client, 1)).resolves.toEqual({ status: "failed", provider: "resend", errorCode: "provider_timeout", retryable: true });
+  });
+
+  it("uses Brevo when Brevo credentials are configured", async () => {
+    process.env.BREVO_API_KEY = "brevo-key";
+    process.env.BREVO_FROM_EMAIL = "sender@example.test";
+    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.headers).toMatchObject({ "api-key": "brevo-key" });
+      expect(String(init?.body)).toContain("patient@example.test");
+      return new Response(JSON.stringify({ messageId: "brevo-1" }), { status: 201 });
+    };
+    await expect(sendEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "delivery-brevo" }, fetchImpl, 1000)).resolves.toMatchObject({ status: "sent", provider: "brevo", providerMessageId: "brevo-1" });
+  });
+
+  it("classifies Brevo rate limits as retryable and sender errors as permanent", async () => {
+    process.env.BREVO_API_KEY = "brevo-key";
+    process.env.BREVO_FROM_EMAIL = "sender@example.test";
+    const rateLimited = async () => new Response(JSON.stringify({ code: "too_many_requests" }), { status: 429 });
+    const rejected = async () => new Response(JSON.stringify({ code: "invalid_parameter" }), { status: 400 });
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "rate" }, rateLimited)).resolves.toMatchObject({ status: "failed", retryable: true });
+    await expect(sendBrevoEmail({ to: "patient@example.test", subject: "Test", text: "Test", idempotencyKey: "reject" }, rejected)).resolves.toMatchObject({ status: "failed", errorCode: "provider_rejected", retryable: false });
   });
 
   it("does not call Twilio when SMS is not configured", async () => {

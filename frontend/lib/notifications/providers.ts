@@ -4,6 +4,7 @@ export const EMAIL_PROVIDER_TIMEOUT_MS = 10_000;
 
 export type ProviderResult = { status: "sent" | "failed" | "skipped" | "ambiguous"; provider: string; providerMessageId?: string; errorCode?: string; retryable?: boolean };
 export type EmailClient = { emails: { send(message: { from: string; to: string; subject: string; text: string }, options?: { idempotencyKey?: string; signal?: AbortSignal }): Promise<{ data?: { id?: string } | null; error?: { name?: string } | null } | unknown> } };
+export type BrevoFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function resendFailure(result: unknown): ProviderResult | null {
   if (typeof result !== "object" || result === null || !("error" in result) || !result.error) return null;
@@ -13,7 +14,12 @@ function resendFailure(result: unknown): ProviderResult | null {
   return { status: "failed", provider: "resend", errorCode: "provider_rejected", retryable: false };
 }
 
-export async function sendEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, client?: EmailClient, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
+export async function sendEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, client?: EmailClient | BrevoFetch, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
+  if (process.env.BREVO_API_KEY && process.env.BREVO_FROM_EMAIL) return sendBrevoEmail(input, typeof client === "function" ? client : fetch, timeoutMs);
+  return sendResendEmail(input, typeof client === "function" ? undefined : client, timeoutMs);
+}
+
+async function sendResendEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, client?: EmailClient, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!from || (!apiKey && !client)) return { status: "skipped", provider: "resend", errorCode: "provider_not_configured" };
@@ -42,6 +48,38 @@ export async function sendEmail(input: { to: string; subject: string; text: stri
     return { status: "failed", provider: "resend", errorCode: timedOut ? "provider_timeout" : "provider_error", retryable: true };
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+function brevoFailure(status: number, payload: unknown): ProviderResult {
+  const code = typeof payload === "object" && payload !== null && "code" in payload && typeof payload.code === "string" ? payload.code : "";
+  if (status === 429 || status >= 500 || code === "too_many_requests") return { status: "failed", provider: "brevo", errorCode: status === 429 ? "provider_rate_limited" : "provider_unavailable", retryable: true };
+  return { status: "failed", provider: "brevo", errorCode: "provider_rejected", retryable: false };
+}
+
+export async function sendBrevoEmail(input: { to: string; subject: string; text: string; idempotencyKey: string }, fetchImpl: BrevoFetch = fetch, timeoutMs = EMAIL_PROVIDER_TIMEOUT_MS): Promise<ProviderResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  const from = process.env.BREVO_FROM_EMAIL;
+  const fromName = process.env.BREVO_FROM_NAME || "Schedula";
+  if (!apiKey || !from) return { status: "skipped", provider: "brevo", errorCode: "provider_not_configured" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { accept: "application/json", "api-key": apiKey, "content-type": "application/json", "x-schedula-delivery-key": input.idempotencyKey },
+      body: JSON.stringify({ sender: { name: fromName, email: from }, to: [{ email: input.to }], subject: input.subject, textContent: input.text, tags: ["schedula", input.idempotencyKey] }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({})) as { messageId?: string } & Record<string, unknown>;
+    if (!response.ok) return brevoFailure(response.status, payload);
+    if (!payload.messageId) return { status: "failed", provider: "brevo", errorCode: "provider_invalid_response", retryable: true };
+    return { status: "sent", provider: "brevo", providerMessageId: payload.messageId };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return { status: "ambiguous", provider: "brevo", errorCode: "provider_timeout", retryable: false };
+    return { status: "failed", provider: "brevo", errorCode: "provider_error", retryable: true };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

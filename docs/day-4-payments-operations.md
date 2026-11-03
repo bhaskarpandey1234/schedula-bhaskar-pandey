@@ -14,6 +14,8 @@ manager. Never commit them or place them in browser code:
 - `JOB_RUNNER_SECRET`
 - `RESEND_API_KEY` and `RESEND_FROM_EMAIL` when email delivery is enabled
 - `RESEND_WEBHOOK_SECRET` when Resend delivery-status callbacks are enabled
+- `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` when Brevo email delivery is enabled
+- `BREVO_WEBHOOK_SECRET` when Brevo delivery-status callbacks are enabled
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` when SMS is enabled
 - `APPOINTMENT_REMINDER_INTERVALS_MINUTES` for comma-separated reminder lead times (default `1440,120`)
 
@@ -95,9 +97,11 @@ retries transient failures with bounded backoff, and rechecks appointment eligib
 before sending. Rescheduled, cancelled, expired, and past appointments cannot produce
 stale reminders. Provider failures are asynchronous and do not roll back booking.
 
-Configure Resend's signed webhook URL as `/api/webhooks/resend` and Twilio's status
-callback URL as `/api/webhooks/twilio/status`. Keep both signing secrets in the hosting
-secret manager. Twilio trial accounts are limited to test recipients and expire; India
+Configure Brevo's webhook URL as `/api/webhooks/brevo`, Resend's signed webhook URL as
+`/api/webhooks/resend`, and Twilio's status callback URL as `/api/webhooks/twilio/status`.
+Keep all webhook secrets in the hosting secret manager. Brevo is selected whenever its
+API key and verified sender are configured; Resend is used only when Brevo is absent.
+Twilio trial accounts are limited to test recipients and expire; India
 production SMS also requires the applicable sender-registration/DLT process and is
 usage-priced. A Twilio network timeout is marked ambiguous rather than blindly retried
 to reduce duplicate SMS risk; inspect the provider message log before requeueing it.

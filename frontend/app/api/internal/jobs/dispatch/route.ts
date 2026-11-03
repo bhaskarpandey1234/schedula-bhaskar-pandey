@@ -223,7 +223,7 @@ export async function POST(request: Request) {
       const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
       const result = delivery.channel === "sms"
         ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
-        : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: "resend", errorCode: "email_missing" });
+        : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.dedupe_key }) : { status: "skipped" as const, provider: process.env.BREVO_API_KEY ? "brevo" : "resend", errorCode: "email_missing" });
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, ${result.provider}, ${result.status}, ${result.providerMessageId ?? null}, ${result.errorCode ?? null})`);
       if (result.status === "sent") {
         await db.execute(sql`UPDATE public.notification_deliveries SET status = 'sent'::notification_delivery_status, provider = ${result.provider}, provider_message_id = ${result.providerMessageId ?? null}, sent_at = now(), processing_started_at = null, last_error = null, updated_at = now() WHERE id = ${delivery.id}::uuid`);
