@@ -148,6 +148,13 @@
       "when": 1793801800000,
       "tag": "0026-prevent-stale-delivery-replays",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793801900000,
+      "tag": "0027-sinch-sandbox-appointment-sms",
+      "breakpoints": true
     }
   ]
 }

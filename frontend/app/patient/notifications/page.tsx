@@ -13,7 +13,7 @@ export default async function PatientNotificationsPage() {
   const account = await requireRole("patient");
   const notificationFeed = await getNotifications("patient");
   const supabase = await createClient();
-  const { data: preferences } = await supabase.from("notification_preferences").select("operational_email, operational_sms, reminder_email, reminder_sms").eq("recipient_id", account.user.id).maybeSingle();
+  const { data: preferences } = await supabase.from("notification_preferences").select("operational_email, operational_sms, operational_whatsapp, reminder_email, reminder_sms, reminder_whatsapp").eq("recipient_id", account.user.id).maybeSingle();
   const { data: patient } = await supabase.from("patients").select("phone").eq("id", account.user.id).maybeSingle();
   return (
     <PortalShell role="patient" name={account.profile.full_name}>
@@ -23,7 +23,7 @@ export default async function PatientNotificationsPage() {
           <p className="mt-2 text-muted-foreground">Updates on your appointments and payments.</p>
         </div>
         <NotificationList {...notificationFeed} />
-        <NotificationPreferencesForm role="patient" preferences={{ ...(preferences ?? { operational_email: false, operational_sms: false, reminder_email: false, reminder_sms: false }), phone: patient?.phone }} />
+        <NotificationPreferencesForm role="patient" preferences={{ ...(preferences ?? { operational_email: false, operational_sms: false, operational_whatsapp: false, reminder_email: false, reminder_sms: false, reminder_whatsapp: false }), phone: patient?.phone }} />
       </div>
     </PortalShell>
   );

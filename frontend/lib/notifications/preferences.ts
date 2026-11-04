@@ -13,15 +13,17 @@ export async function updateNotificationPreferencesAction(_: unknown, formData: 
 
   const operationalEmail = formData.get("operationalEmail") === "on";
   const operationalSms = formData.get("operationalSms") === "on";
+  const operationalWhatsapp = formData.get("operationalWhatsapp") === "on";
   const reminderEmail = formData.get("reminderEmail") === "on";
   const reminderSms = formData.get("reminderSms") === "on";
+  const reminderWhatsapp = formData.get("reminderWhatsapp") === "on";
   const phone = String(formData.get("phone") ?? "").trim();
 
-  if (operationalSms || reminderSms) {
+  if (operationalSms || reminderSms || operationalWhatsapp || reminderWhatsapp) {
     const storedPhone = profile.role === "doctor"
       ? phone
       : (await supabase.from("patients").select("phone").eq("id", auth.user.id).maybeSingle()).data?.phone;
-    if (!storedPhone || !phonePattern.test(storedPhone)) return { error: "Add a valid phone number in international format before enabling SMS." };
+    if (!storedPhone || !phonePattern.test(storedPhone)) return { error: "Add a valid phone number in international format before enabling SMS or WhatsApp." };
   }
   if (profile.role === "doctor" && phone && !phonePattern.test(phone)) return { error: "Use an international phone number such as +919876543210." };
 
@@ -35,12 +37,16 @@ export async function updateNotificationPreferencesAction(_: unknown, formData: 
     recipient_id: auth.user.id,
     operational_email: operationalEmail,
     operational_sms: operationalSms,
+    operational_whatsapp: operationalWhatsapp,
     reminder_email: reminderEmail,
     reminder_sms: reminderSms,
+    reminder_whatsapp: reminderWhatsapp,
     email_consented_at: operationalEmail || reminderEmail ? now : null,
     sms_consented_at: operationalSms || reminderSms ? now : null,
     email_revoked_at: operationalEmail || reminderEmail ? null : now,
     sms_revoked_at: operationalSms || reminderSms ? null : now,
+    whatsapp_consented_at: operationalWhatsapp || reminderWhatsapp ? now : null,
+    whatsapp_revoked_at: operationalWhatsapp || reminderWhatsapp ? null : now,
     updated_at: now,
   });
   if (error) return { error: "We could not save your notification preferences." };

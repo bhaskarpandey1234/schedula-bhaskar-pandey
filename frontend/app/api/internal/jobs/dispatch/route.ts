@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "@/lib/db";
 import { paymentWebhookEvents } from "@/lib/db/schema";
-import { sendEmail, sendSms } from "@/lib/notifications/providers";
+import { sendEmail, sendSms, sendWhatsApp } from "@/lib/notifications/providers";
 import { renderNotificationTemplate } from "@/lib/notifications/templates";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
@@ -202,9 +202,25 @@ export async function POST(request: Request) {
       ON CONFLICT (dedupe_key) DO NOTHING`);
     await db.execute(sql`
       INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.patient_id, a.id, 'whatsapp'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/whatsapp'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.patient_id AND pref.reminder_whatsapp
+      JOIN public.patients patient ON patient.id = a.patient_id
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now() AND patient.phone IS NOT NULL
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
       SELECT a.doctor_id, a.id, 'email'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-email'
       FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
       JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_email
+      WHERE a.status = 'confirmed' AND s.slot_start_at > now()
+      ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO public.notification_deliveries(recipient_id, appointment_id, channel, template, scheduled_at, dedupe_key)
+      SELECT a.doctor_id, a.id, 'whatsapp'::notification_channel, ${template}, GREATEST(s.slot_start_at - (${minutes} || ' minutes')::interval, now()), 'reminder/' || a.id::text || '/' || ${minutes} || '/doctor-whatsapp'
+      FROM public.appointments a JOIN public.appointment_slots s ON s.id = a.slot_id
+      JOIN public.notification_preferences pref ON pref.recipient_id = a.doctor_id AND pref.reminder_whatsapp
+      JOIN public.doctors doctor ON doctor.id = a.doctor_id AND doctor.phone IS NOT NULL
       WHERE a.status = 'confirmed' AND s.slot_start_at > now()
       ON CONFLICT (dedupe_key) DO NOTHING`);
     await db.execute(sql`
@@ -244,9 +260,11 @@ export async function POST(request: Request) {
         await finalizeDeliveryFailure(db, delivery, "internal", "recipient_mismatch", false);
         continue;
       }
-      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : delivery.channel === "whatsapp" ? "whatsapp" : "email");
       const result = delivery.channel === "sms"
-        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
+        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.SMS_PROVIDER?.trim().toLowerCase() === "vonage" ? "vonage" : "twilio", errorCode: "phone_missing" })
+        : delivery.channel === "whatsapp"
+          ? (row.phone ? await sendWhatsApp({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: "whatsapp", errorCode: "phone_missing" })
         : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.BREVO_API_KEY ? "brevo" : "resend", errorCode: "email_missing" });
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, ${result.provider}, ${result.status}, ${result.providerMessageId ?? null}, ${result.errorCode ?? null})`);
       if (result.status === "sent") {

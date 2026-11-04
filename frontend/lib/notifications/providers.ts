@@ -1,10 +1,14 @@
 import { Resend } from "resend";
 
 export const EMAIL_PROVIDER_TIMEOUT_MS = 10_000;
+export const SMS_PROVIDER_TIMEOUT_MS = 10_000;
+export const WHATSAPP_PROVIDER_TIMEOUT_MS = 10_000;
 
 export type ProviderResult = { status: "sent" | "failed" | "skipped" | "ambiguous"; provider: string; providerMessageId?: string; errorCode?: string; retryable?: boolean };
 export type EmailClient = { emails: { send(message: { from: string; to: string; subject: string; text: string }, options?: { idempotencyKey?: string; signal?: AbortSignal }): Promise<{ data?: { id?: string } | null; error?: { name?: string } | null } | unknown> } };
 export type BrevoFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type SmsFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type WhatsAppFetch = SmsFetch;
 
 function resendFailure(result: unknown): ProviderResult | null {
   if (typeof result !== "object" || result === null || !("error" in result) || !result.error) return null;
@@ -89,7 +93,57 @@ export async function sendBrevoEmail(input: { to: string; subject: string; text:
   }
 }
 
-export async function sendSms(input: { to: string; text: string; idempotencyKey: string }): Promise<ProviderResult> {
+function vonageFailure(status: number): ProviderResult {
+  const errorCode = status === 401 || status === 403
+    ? "provider_authentication_failed"
+    : status === 429
+      ? "provider_rate_limited"
+      : status >= 500
+        ? "provider_unavailable"
+        : "provider_rejected";
+  return { status: "failed", provider: "vonage", errorCode, retryable: status === 429 || status >= 500 };
+}
+
+export async function sendVonageSms(
+  input: { to: string; text: string; idempotencyKey: string },
+  fetchImpl: SmsFetch = fetch,
+  timeoutMs = SMS_PROVIDER_TIMEOUT_MS,
+): Promise<ProviderResult> {
+  const apiKey = process.env.VONAGE_API_KEY?.trim();
+  const apiSecret = process.env.VONAGE_API_SECRET?.trim();
+  const from = process.env.VONAGE_FROM?.trim();
+  if (!apiKey || !apiSecret || !from) return { status: "skipped", provider: "vonage", errorCode: "provider_not_configured" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl("https://api.nexmo.com/v1/messages", {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        from,
+        to: input.to.trim().replace(/^\+/, ""),
+        channel: "sms",
+        message_type: "text",
+        text: input.text,
+        client_ref: input.idempotencyKey,
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({})) as { message_uuid?: string } & Record<string, unknown>;
+    if (!response.ok) return vonageFailure(response.status);
+    if (!payload.message_uuid) return { status: "failed", provider: "vonage", errorCode: "provider_invalid_response", retryable: true };
+    return { status: "sent", provider: "vonage", providerMessageId: payload.message_uuid };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return { status: "ambiguous", provider: "vonage", errorCode: "provider_timeout", retryable: false };
+    return { status: "failed", provider: "vonage", errorCode: "provider_error", retryable: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function sendSms(input: { to: string; text: string; idempotencyKey: string }, fetchImpl?: SmsFetch): Promise<ProviderResult> {
+  if (process.env.SMS_PROVIDER?.trim().toLowerCase() === "vonage") return sendVonageSms(input, fetchImpl ?? fetch);
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const messagingService = process.env.TWILIO_MESSAGING_SERVICE_SID;
@@ -103,4 +157,48 @@ export async function sendSms(input: { to: string; text: string; idempotencyKey:
   } catch {
     return { status: "ambiguous", provider: "twilio", errorCode: "network_timeout" };
   }
+}
+
+export async function sendVonageWhatsApp(
+  input: { to: string; text: string; idempotencyKey: string },
+  fetchImpl: WhatsAppFetch = fetch,
+  timeoutMs = WHATSAPP_PROVIDER_TIMEOUT_MS,
+): Promise<ProviderResult> {
+  const apiKey = process.env.VONAGE_API_KEY?.trim();
+  const apiSecret = process.env.VONAGE_API_SECRET?.trim();
+  const from = process.env.VONAGE_WHATSAPP_FROM?.trim();
+  const endpoint = process.env.VONAGE_WHATSAPP_ENDPOINT?.trim() || "https://messages-sandbox.nexmo.com/v1/messages";
+  if (!apiKey || !apiSecret || !from) return { status: "skipped", provider: "vonage", errorCode: "provider_not_configured" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        from,
+        to: input.to.trim().replace(/^\+/, ""),
+        channel: "whatsapp",
+        message_type: "text",
+        text: input.text,
+        client_ref: input.idempotencyKey,
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({})) as { message_uuid?: string } & Record<string, unknown>;
+    if (!response.ok) return vonageFailure(response.status);
+    if (!payload.message_uuid) return { status: "failed", provider: "vonage", errorCode: "provider_invalid_response", retryable: true };
+    return { status: "sent", provider: "vonage", providerMessageId: payload.message_uuid };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return { status: "ambiguous", provider: "vonage", errorCode: "provider_timeout", retryable: false };
+    return { status: "failed", provider: "vonage", errorCode: "provider_error", retryable: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function sendWhatsApp(input: { to: string; text: string; idempotencyKey: string }, fetchImpl?: WhatsAppFetch): Promise<ProviderResult> {
+  if (process.env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "vonage") return sendVonageWhatsApp(input, fetchImpl ?? fetch);
+  return { status: "skipped", provider: "whatsapp", errorCode: "provider_not_configured" };
 }

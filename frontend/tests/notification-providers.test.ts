@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { sendBrevoEmail, sendEmail, sendSms } from "../lib/notifications/providers";
+import { sendBrevoEmail, sendEmail, sendSms, sendVonageSms, sendWhatsApp } from "../lib/notifications/providers";
 
-const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, brevoKey: process.env.BREVO_API_KEY, brevoFrom: process.env.BREVO_FROM_EMAIL, brevoName: process.env.BREVO_FROM_NAME, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID };
+const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, brevoKey: process.env.BREVO_API_KEY, brevoFrom: process.env.BREVO_FROM_EMAIL, brevoName: process.env.BREVO_FROM_NAME, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID, smsProvider: process.env.SMS_PROVIDER, whatsappProvider: process.env.WHATSAPP_PROVIDER, vonageKey: process.env.VONAGE_API_KEY, vonageSecret: process.env.VONAGE_API_SECRET, vonageFrom: process.env.VONAGE_FROM, whatsappFrom: process.env.VONAGE_WHATSAPP_FROM, whatsappEndpoint: process.env.VONAGE_WHATSAPP_ENDPOINT };
 
 afterEach(() => {
-  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, BREVO_API_KEY: original.brevoKey, BREVO_FROM_EMAIL: original.brevoFrom, BREVO_FROM_NAME: original.brevoName, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service })) {
+  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, BREVO_API_KEY: original.brevoKey, BREVO_FROM_EMAIL: original.brevoFrom, BREVO_FROM_NAME: original.brevoName, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service, SMS_PROVIDER: original.smsProvider, WHATSAPP_PROVIDER: original.whatsappProvider, VONAGE_API_KEY: original.vonageKey, VONAGE_API_SECRET: original.vonageSecret, VONAGE_FROM: original.vonageFrom, VONAGE_WHATSAPP_FROM: original.whatsappFrom, VONAGE_WHATSAPP_ENDPOINT: original.whatsappEndpoint })) {
     if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
@@ -81,5 +81,78 @@ describe("notification provider adapters", () => {
   it("does not call Twilio when SMS is not configured", async () => {
     delete process.env.TWILIO_ACCOUNT_SID; delete process.env.TWILIO_AUTH_TOKEN; delete process.env.TWILIO_MESSAGING_SERVICE_SID;
     await expect(sendSms({ to: "+919876543210", text: "Reminder", idempotencyKey: "delivery-2" })).resolves.toMatchObject({ status: "skipped", provider: "twilio" });
+  });
+
+  it("sends a Vonage SMS request with the delivery id client reference", async () => {
+    process.env.SMS_PROVIDER = "vonage";
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_FROM = "Vonage APIs";
+    let request: { url: string; init?: RequestInit } | undefined;
+    const fetchImpl = async (url: RequestInfo | URL, init?: RequestInit) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({ message_uuid: "vonage-message-1" }), { status: 202 });
+    };
+    await expect(sendSms({ to: "+919876543210", text: "Schedula appointment confirmed.", idempotencyKey: "delivery-vonage-1" }, fetchImpl)).resolves.toEqual({ status: "sent", provider: "vonage", providerMessageId: "vonage-message-1" });
+    expect(request?.url).toBe("https://api.nexmo.com/v1/messages");
+    expect(request?.init?.headers).toMatchObject({ Authorization: `Basic ${Buffer.from("vonage-key:vonage-secret").toString("base64")}` });
+    expect(JSON.parse(String(request?.init?.body))).toEqual({ from: "Vonage APIs", to: "919876543210", channel: "sms", message_type: "text", text: "Schedula appointment confirmed.", client_ref: "delivery-vonage-1" });
+  });
+
+  it("classifies Vonage throttling as retryable and rejects permanent errors", async () => {
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_FROM = "Vonage APIs";
+    const rateLimited = async () => new Response(JSON.stringify({ title: "rate limited" }), { status: 429 });
+    const rejected = async () => new Response(JSON.stringify({ title: "invalid request" }), { status: 400 });
+    await expect(sendVonageSms({ to: "+919876543210", text: "Test", idempotencyKey: "rate" }, rateLimited)).resolves.toMatchObject({ status: "failed", provider: "vonage", retryable: true, errorCode: "provider_rate_limited" });
+    await expect(sendVonageSms({ to: "+919876543210", text: "Test", idempotencyKey: "reject" }, rejected)).resolves.toMatchObject({ status: "failed", provider: "vonage", retryable: false, errorCode: "provider_rejected" });
+  });
+
+  it("classifies Vonage authentication failures as permanent", async () => {
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_FROM = "Vonage APIs";
+    const unauthorized = async () => new Response(JSON.stringify({ title: "unauthorized" }), { status: 401 });
+    await expect(sendVonageSms({ to: "+919876543210", text: "Test", idempotencyKey: "auth" }, unauthorized)).resolves.toMatchObject({ status: "failed", provider: "vonage", retryable: false, errorCode: "provider_authentication_failed" });
+  });
+
+  it("marks an unresponsive Vonage provider as ambiguous without replaying it", async () => {
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_FROM = "Vonage APIs";
+    const fetchImpl = async (_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError"))));
+    await expect(sendVonageSms({ to: "+919876543210", text: "Test", idempotencyKey: "timeout" }, fetchImpl, 1)).resolves.toEqual({ status: "ambiguous", provider: "vonage", errorCode: "provider_timeout", retryable: false });
+  });
+
+  it("skips Vonage safely when credentials are incomplete", async () => {
+    process.env.SMS_PROVIDER = "vonage";
+    delete process.env.VONAGE_API_KEY;
+    delete process.env.VONAGE_API_SECRET;
+    delete process.env.VONAGE_FROM;
+    await expect(sendSms({ to: "+919876543210", text: "Test", idempotencyKey: "missing" })).resolves.toMatchObject({ status: "skipped", provider: "vonage", errorCode: "provider_not_configured" });
+  });
+
+  it("builds a Vonage WhatsApp sandbox request without calling the live provider", async () => {
+    process.env.WHATSAPP_PROVIDER = "vonage";
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_WHATSAPP_FROM = "14157386102";
+    let request: { url: string; init?: RequestInit } | undefined;
+    const fetchImpl = async (url: RequestInfo | URL, init?: RequestInit) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({ message_uuid: "whatsapp-message-1" }), { status: 202 });
+    };
+    await expect(sendWhatsApp({ to: "+919876543210", text: "Schedula appointment confirmed.", idempotencyKey: "delivery-whatsapp-1" }, fetchImpl)).resolves.toEqual({ status: "sent", provider: "vonage", providerMessageId: "whatsapp-message-1" });
+    expect(request?.url).toBe("https://messages-sandbox.nexmo.com/v1/messages");
+    expect(JSON.parse(String(request?.init?.body))).toEqual({ from: "14157386102", to: "919876543210", channel: "whatsapp", message_type: "text", text: "Schedula appointment confirmed.", client_ref: "delivery-whatsapp-1" });
+  });
+
+  it("skips WhatsApp when it is not configured", async () => {
+    process.env.WHATSAPP_PROVIDER = "vonage";
+    delete process.env.VONAGE_API_KEY;
+    delete process.env.VONAGE_API_SECRET;
+    delete process.env.VONAGE_WHATSAPP_FROM;
+    await expect(sendWhatsApp({ to: "+919876543210", text: "Test", idempotencyKey: "missing-whatsapp" })).resolves.toMatchObject({ status: "skipped", provider: "vonage", errorCode: "provider_not_configured" });
   });
 });

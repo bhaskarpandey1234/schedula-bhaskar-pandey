@@ -18,7 +18,7 @@ function appointmentTime(input: NotificationTemplateInput) {
   return `${date}–${end} (${input.timezone})`;
 }
 
-export function renderNotificationTemplate(input: NotificationTemplateInput, channel: "email" | "sms") {
+export function renderNotificationTemplate(input: NotificationTemplateInput, channel: "email" | "sms" | "whatsapp") {
   const time = appointmentTime(input);
   const forDoctor = input.recipientRole === "doctor";
   const reminder = input.template.startsWith("appointment_reminder");
@@ -46,5 +46,5 @@ export function renderNotificationTemplate(input: NotificationTemplateInput, cha
             : input.template === "payment_failed"
               ? `Payment for your Schedula appointment with ${input.doctorName} was not completed. Please try again if the appointment is still available.`
               : `Your appointment with ${input.doctorName} at ${input.clinicName} is confirmed for ${time}.`;
-  return channel === "sms" ? { subject, text: `Schedula: ${body}`.slice(0, 480) } : { subject, text: `Hello ${input.recipientName},\n\n${body}\n\nSchedula` };
+  return channel === "email" ? { subject, text: `Hello ${input.recipientName},\n\n${body}\n\nSchedula` } : { subject, text: `Schedula: ${body}`.slice(0, 480) };
 }
