@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PendingLink } from "@/components/pending-link";
-import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatSchedulingWindow } from "@/lib/scheduling/time";
 import { CancelDoctorAppointmentForm } from "@/components/cancel-doctor-appointment-form";
 
 export const instant = false;
@@ -154,10 +154,11 @@ export default async function DoctorAppointmentsPage({
                       <div className="flex items-center gap-1.5 font-bold text-foreground">
                         <Clock className="size-3.5 text-primary" />
                         <span>
-                          {formatLocalSlotRange(
+                          {formatSchedulingWindow(
                             appointment.slot_start_at,
                             appointment.slot_end_at,
-                            appointment.timezone
+                            appointment.timezone,
+                            appointment.scheduling_type,
                           )}
                         </span>
                       </div>

@@ -109,7 +109,7 @@ export default async function DoctorPage() {
                 {schedule.slots.length}
               </p>
               <p className="text-xs text-muted-foreground font-medium">
-                Published wave sessions
+                Published scheduling windows
               </p>
             </CardContent>
           </Card>
@@ -214,7 +214,7 @@ export default async function DoctorPage() {
                     </div>
 
                     <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs">
-                      <span className="text-[11px] text-muted-foreground">30m wave interval</span>
+                      <span className="text-[11px] text-muted-foreground">{slot.scheduling_type === "stream" ? "Stream arrival window" : "Wave appointment slot"}</span>
                       <Link
                         href={`/doctor/schedule?date=${today}&filter=specific`}
                         className="font-semibold text-primary hover:underline"
@@ -263,7 +263,7 @@ export default async function DoctorPage() {
                 </div>
                 <h3 className="text-base font-bold text-foreground">Manage Schedule</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Publish recurring weekly slots or customized dates with wave scheduling.
+                  Publish recurring weekly slots or customized dates with Wave or Stream scheduling.
                 </p>
               </div>
               <span className="mt-4 flex items-center gap-1 text-xs font-bold text-primary group-hover:underline">

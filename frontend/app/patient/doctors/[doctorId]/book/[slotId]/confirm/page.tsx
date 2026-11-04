@@ -12,7 +12,8 @@ import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { getBookableSlot } from "@/lib/booking/queries";
-import { formatSlotTime, isUuid } from "@/lib/discovery/directory";
+import { isUuid } from "@/lib/discovery/directory";
+import { formatSchedulingWindow } from "@/lib/scheduling/time";
 import { BookingConfirmForm } from "@/components/booking-confirm-form";
 import { PortalShell } from "@/components/portal-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,8 +120,7 @@ export default async function BookingConfirmPage({
               <div className="flex items-center gap-2 text-muted-foreground font-medium">
                 <Clock className="size-4 text-primary shrink-0" />
                 <span>
-                  {formatSlotTime(slot.slot_start_at, slot.timezone)} –{" "}
-                  {formatSlotTime(slot.slot_end_at, slot.timezone)} ({slot.timezone})
+                  {formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, slot.timezone, slot.scheduling_type)} ({slot.timezone})
                 </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground font-medium">

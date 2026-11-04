@@ -26,7 +26,7 @@ import {
   parseScheduleFilter,
   type ScheduleFilterSelection,
 } from "@/lib/scheduling/schedule-filters";
-import { formatLocalDate, formatLocalSlotRange, localDateKey } from "@/lib/scheduling/time";
+import { formatLocalDate, formatSchedulingWindow, localDateKey } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
 import { CancelSessionForm } from "@/components/cancel-session-form";
 
@@ -188,6 +188,7 @@ export default async function DoctorSchedulePage({
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-surface-muted/60 text-xs">
+                              <TableHead className="font-bold text-foreground">Schedule</TableHead>
                               <TableHead className="font-bold text-foreground">Time Window</TableHead>
                               <TableHead className="font-bold text-foreground">Booked Patients</TableHead>
                               <TableHead className="font-bold text-foreground">Capacity</TableHead>
@@ -203,11 +204,13 @@ export default async function DoctorSchedulePage({
 
                               return (
                                 <TableRow key={slot.id} className="text-xs hover:bg-surface-muted/30">
+                                  <TableCell><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge></TableCell>
                                   <TableCell className="font-semibold text-foreground whitespace-nowrap">
-                                    {formatLocalSlotRange(
+                                    {formatSchedulingWindow(
                                       slot.slot_start_at,
                                       slot.slot_end_at,
                                       doctor.timezone,
+                                      slot.scheduling_type,
                                     )}
                                   </TableCell>
 
