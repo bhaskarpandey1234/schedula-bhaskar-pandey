@@ -11,6 +11,7 @@ export type PatientAppointment = {
   timezone: string;
   slot_start_at: string;
   slot_end_at: string;
+  scheduling_type: "wave" | "stream";
   payment_status: "creating" | "pending" | "captured" | "failed" | "abandoned" | "expired" | "captured_unallocated" | null;
   payment_amount_minor: number | null;
   refund_status: "requested" | "pending" | "processed" | "failed" | null;
@@ -32,6 +33,7 @@ export type DoctorScheduleAppointment = {
   status: "confirmed" | "cancelled";
   slot_start_at: string;
   slot_end_at: string;
+  scheduling_type: "wave" | "stream";
 };
 
 export async function getDoctorScheduleAppointments(sessionDate: string) {
@@ -50,6 +52,7 @@ export type DoctorAppointment = {
   timezone: string;
   slot_start_at: string;
   slot_end_at: string;
+  scheduling_type: "wave" | "stream";
 };
 
 export async function getDoctorAppointments(tab: "upcoming" | "past" | "cancelled" = "upcoming") {

@@ -35,3 +35,8 @@ export function formatLocalSlotRange(start: string | Date, end: string | Date, t
   const dateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, month: "short", day: "numeric" });
   return `${dateFormatter.format(startDate)} ${startLabel} – ${dateFormatter.format(endDate)} ${endLabel}`;
 }
+
+export function formatSchedulingWindow(start: string | Date, end: string | Date, timezone: string, schedulingType?: "wave" | "stream") {
+  const range = formatLocalSlotRange(start, end, timezone);
+  return schedulingType === "stream" ? `Arrive ${range}` : range;
+}
