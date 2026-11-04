@@ -27,6 +27,18 @@ async function createSlot(doctor: TestUser, capacity = 1) {
   return slots![0];
 }
 
+async function createStream(doctor: TestUser, capacity = 2) {
+  const { data, error } = await doctor.client.rpc("create_availability_session_with_slots", {
+    p_session_date: futureDate(), p_start_time: "10:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: capacity, p_scheduling_type: "stream",
+  });
+  expect(error).toBeNull();
+  const { data: slots, error: slotsError } = await doctor.client.from("appointment_slots").select("id, slot_start_at, slot_end_at, capacity").eq("availability_session_id", data!).order("slot_start_at");
+  expect(slotsError).toBeNull();
+  expect(slots).toHaveLength(1);
+  expect(slots?.[0]?.slot_end_at).not.toBe(slots?.[0]?.slot_start_at);
+  return slots![0];
+}
+
 function futureWeekday(weekday: number, minimumDays = 7) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + minimumDays);
@@ -71,6 +83,30 @@ describe("local Supabase scheduling RPCs", () => {
     expect(ruleIds).toHaveLength(1);
     const { data: slots } = await doctor.client.from("appointment_slots").select("slot_start_at").eq("availability_session_id", ruleIds![0]);
     expect(slots?.length).toBeGreaterThan(2);
+  });
+
+  it("materializes a recurring Stream as one shared window per occurrence", async () => {
+    const doctor = await user("doctor", "weekly-stream-doctor");
+    const { data: ruleIds, error } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [1], p_start_time: "10:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(error).toBeNull();
+    const { data: slots } = await doctor.client.from("appointment_slots").select("slot_start_at, slot_end_at").eq("availability_session_id", ruleIds![0]);
+    expect(slots?.length).toBeGreaterThan(2);
+    expect(slots?.every((slot) => new Date(slot.slot_end_at).getTime() - new Date(slot.slot_start_at).getTime() === 2 * 60 * 60 * 1000)).toBe(true);
+  });
+
+  it("enforces Stream capacity across the full window", async () => {
+    const doctor = await user("doctor", "stream-capacity-doctor");
+    const firstPatient = await user("patient", "stream-capacity-patient-a");
+    const secondPatient = await user("patient", "stream-capacity-patient-b");
+    const slot = await createStream(doctor, 1);
+    const results = await Promise.all([
+      firstPatient.client.rpc("book_appointment", { p_slot_id: slot.id, p_reason: "Stream first" }),
+      secondPatient.client.rpc("book_appointment", { p_slot_id: slot.id, p_reason: "Stream second" }),
+    ]);
+    expect(results.filter((result) => result.data)).toHaveLength(1);
+    expect(results.filter((result) => result.error)).toHaveLength(1);
   });
 
   it("lets a custom session replace an unbooked recurring date", async () => {

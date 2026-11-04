@@ -15,7 +15,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { getAppointmentConfirmation } from "@/lib/booking/queries";
 import { getPatientPayments } from "@/lib/payments/queries";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
-import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatSchedulingWindow } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
 import { PortalShell } from "@/components/portal-shell";
 import { Button } from "@/components/ui/button";
@@ -112,7 +112,7 @@ export default async function AppointmentConfirmationPage({
               <div className="flex items-center gap-2 font-bold text-foreground">
                 <Clock className="size-4 text-primary shrink-0" />
                 <span>
-                  {formatLocalSlotRange(slot.slot_start_at, slot.slot_end_at, doctor.timezone)} ({doctor.timezone})
+                  {formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)} ({doctor.timezone})
                 </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground font-medium">

@@ -8,6 +8,7 @@ export type NotificationTemplateInput = {
   timezone: string;
   slotStartAt: string;
   slotEndAt: string;
+  schedulingType?: "wave" | "stream";
   amountMinor?: number | null;
   currency?: string | null;
 };
@@ -15,7 +16,7 @@ export type NotificationTemplateInput = {
 function appointmentTime(input: NotificationTemplateInput) {
   const date = new Intl.DateTimeFormat("en-US", { timeZone: input.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date(input.slotStartAt));
   const end = new Intl.DateTimeFormat("en-US", { timeZone: input.timezone, timeStyle: "short" }).format(new Date(input.slotEndAt));
-  return `${date}–${end} (${input.timezone})`;
+  return `${input.schedulingType === "stream" ? "Arrive " : ""}${date}–${end} (${input.timezone})`;
 }
 
 export function renderNotificationTemplate(input: NotificationTemplateInput, channel: "email" | "sms" | "whatsapp") {

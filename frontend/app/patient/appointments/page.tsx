@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PendingLink } from "@/components/pending-link";
+import { formatSchedulingWindow } from "@/lib/scheduling/time";
 
 export const instant = false;
 
@@ -33,13 +34,6 @@ function formatDate(value: string, timezone: string) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
-}
-
-function formatTime(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    timeStyle: "short",
   }).format(new Date(value));
 }
 
@@ -174,8 +168,7 @@ export default async function AppointmentsPage({
                       <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
                         <Clock className="size-3.5 text-primary" />
                         <span>
-                          {formatTime(appointment.slot_start_at, appointment.timezone)} –{" "}
-                          {formatTime(appointment.slot_end_at, appointment.timezone)} ({appointment.timezone})
+                          {formatSchedulingWindow(appointment.slot_start_at, appointment.slot_end_at, appointment.timezone, appointment.scheduling_type)} ({appointment.timezone})
                         </span>
                       </div>
                     </div>
