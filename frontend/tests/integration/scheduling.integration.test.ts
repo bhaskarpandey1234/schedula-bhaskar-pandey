@@ -150,8 +150,10 @@ describe("local Supabase scheduling RPCs", () => {
     const unrelatedDoctor = await user("doctor", "unrelated-notification-doctor");
     const patient = await user("patient", "paid-notification-patient");
     const slot = await createSlot(doctor);
-    const { error: preferenceError } = await patient.client.from("notification_preferences").upsert({ recipient_id: patient.id, operational_email: true, operational_sms: true, reminder_email: true, reminder_sms: true });
+    const { error: preferenceError } = await patient.client.from("notification_preferences").upsert({ recipient_id: patient.id, operational_email: true, operational_sms: true, operational_whatsapp: true, reminder_email: true, reminder_sms: true });
     expect(preferenceError).toBeNull();
+    const { error: doctorPreferenceError } = await doctor.client.from("notification_preferences").upsert({ recipient_id: doctor.id, operational_whatsapp: true });
+    expect(doctorPreferenceError).toBeNull();
     const { data: reservationRows, error: reserveError } = await patient.client.rpc("reserve_paid_appointment", {
       p_slot_id: slot.id,
       p_reason: "Paid notification test",
@@ -196,10 +198,10 @@ describe("local Supabase scheduling RPCs", () => {
     const { data: patientReplayCount } = await patient.client.rpc("mark_all_notifications_read");
     expect(patientReplayCount).toBe(0);
     const { data: deliveries } = await patient.client.from("notification_deliveries").select("channel, status").eq("appointment_id", reservation.appointment_id).order("channel");
-    expect(deliveries?.map((delivery) => delivery.channel)).toEqual(["email", "sms"]);
+    expect(deliveries?.map((delivery) => delivery.channel)).toEqual(["email", "sms", "whatsapp"]);
     expect(deliveries?.every((delivery) => delivery.status === "pending")).toBe(true);
     const { data: doctorDeliveries } = await doctor.client.from("notification_deliveries").select("channel").eq("appointment_id", reservation.appointment_id);
-    expect(doctorDeliveries).toEqual([]);
+    expect(doctorDeliveries?.map((delivery) => delivery.channel)).toEqual(["whatsapp"]);
     const { data: doctorDetail, error: doctorDetailError } = await doctor.client.rpc("doctor_appointment_detail", { p_appointment_id: reservation.appointment_id });
     expect(doctorDetailError).toBeNull();
     expect(doctorDetail).toHaveLength(1);
