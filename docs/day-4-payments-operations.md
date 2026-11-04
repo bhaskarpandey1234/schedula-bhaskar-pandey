@@ -131,6 +131,18 @@ phone and Vonage logs. Do not send a test message from the dashboard during deve
 Vonage's Indian sender-ID, delivery-hours, trial-credit, and account restrictions still
 apply.
 
+## Vonage WhatsApp Sandbox appointment demo
+
+WhatsApp is configured independently from SMS. Set `WHATSAPP_PROVIDER=vonage`,
+`VONAGE_WHATSAPP_ENDPOINT=https://messages-sandbox.nexmo.com/v1/messages`, and
+`VONAGE_WHATSAPP_FROM` to the sender shown in the Vonage Messages Sandbox. Keep the
+existing Vonage API key and secret only in Vercel/server-side variables. Each demo
+recipient must first message the sandbox account and appear as an allow-listed number.
+The sandbox is free for initial exploration with fair-use and rate limits; WhatsApp
+conversation-window rules still apply. This is a sandbox demonstration, not production
+WhatsApp delivery. WhatsApp is separately opt-in on each profile's Notifications page,
+and automated tests never call Vonage.
+
 Doctor leave is a one-date occurrence cancellation. It cancels affected appointments,
 cancels reminders, and creates idempotent full-refund requests for captured payments.
 

@@ -230,12 +230,16 @@ export const notificationPreferences = pgTable("notification_preferences", {
   recipientId: uuid("recipient_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
   operationalEmail: boolean("operational_email").notNull().default(false),
   operationalSms: boolean("operational_sms").notNull().default(false),
+  operationalWhatsapp: boolean("operational_whatsapp").notNull().default(false),
   reminderEmail: boolean("reminder_email").notNull().default(false),
   reminderSms: boolean("reminder_sms").notNull().default(false),
+  reminderWhatsapp: boolean("reminder_whatsapp").notNull().default(false),
   emailConsentedAt: timestamp("email_consented_at", { withTimezone: true }),
   smsConsentedAt: timestamp("sms_consented_at", { withTimezone: true }),
   emailRevokedAt: timestamp("email_revoked_at", { withTimezone: true }),
   smsRevokedAt: timestamp("sms_revoked_at", { withTimezone: true }),
+  whatsappConsentedAt: timestamp("whatsapp_consented_at", { withTimezone: true }),
+  whatsappRevokedAt: timestamp("whatsapp_revoked_at", { withTimezone: true }),
   ...auditColumns(),
 });
 

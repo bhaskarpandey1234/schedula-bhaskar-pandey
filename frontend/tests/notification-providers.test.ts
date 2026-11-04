@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { sendBrevoEmail, sendEmail, sendSms, sendVonageSms } from "../lib/notifications/providers";
+import { sendBrevoEmail, sendEmail, sendSms, sendVonageSms, sendWhatsApp } from "../lib/notifications/providers";
 
-const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, brevoKey: process.env.BREVO_API_KEY, brevoFrom: process.env.BREVO_FROM_EMAIL, brevoName: process.env.BREVO_FROM_NAME, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID, smsProvider: process.env.SMS_PROVIDER, vonageKey: process.env.VONAGE_API_KEY, vonageSecret: process.env.VONAGE_API_SECRET, vonageFrom: process.env.VONAGE_FROM };
+const original = { key: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL, brevoKey: process.env.BREVO_API_KEY, brevoFrom: process.env.BREVO_FROM_EMAIL, brevoName: process.env.BREVO_FROM_NAME, sid: process.env.TWILIO_ACCOUNT_SID, token: process.env.TWILIO_AUTH_TOKEN, service: process.env.TWILIO_MESSAGING_SERVICE_SID, smsProvider: process.env.SMS_PROVIDER, whatsappProvider: process.env.WHATSAPP_PROVIDER, vonageKey: process.env.VONAGE_API_KEY, vonageSecret: process.env.VONAGE_API_SECRET, vonageFrom: process.env.VONAGE_FROM, whatsappFrom: process.env.VONAGE_WHATSAPP_FROM, whatsappEndpoint: process.env.VONAGE_WHATSAPP_ENDPOINT };
 
 afterEach(() => {
-  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, BREVO_API_KEY: original.brevoKey, BREVO_FROM_EMAIL: original.brevoFrom, BREVO_FROM_NAME: original.brevoName, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service, SMS_PROVIDER: original.smsProvider, VONAGE_API_KEY: original.vonageKey, VONAGE_API_SECRET: original.vonageSecret, VONAGE_FROM: original.vonageFrom })) {
+  for (const [name, value] of Object.entries({ RESEND_API_KEY: original.key, RESEND_FROM_EMAIL: original.from, BREVO_API_KEY: original.brevoKey, BREVO_FROM_EMAIL: original.brevoFrom, BREVO_FROM_NAME: original.brevoName, TWILIO_ACCOUNT_SID: original.sid, TWILIO_AUTH_TOKEN: original.token, TWILIO_MESSAGING_SERVICE_SID: original.service, SMS_PROVIDER: original.smsProvider, WHATSAPP_PROVIDER: original.whatsappProvider, VONAGE_API_KEY: original.vonageKey, VONAGE_API_SECRET: original.vonageSecret, VONAGE_FROM: original.vonageFrom, VONAGE_WHATSAPP_FROM: original.whatsappFrom, VONAGE_WHATSAPP_ENDPOINT: original.whatsappEndpoint })) {
     if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
@@ -131,5 +131,28 @@ describe("notification provider adapters", () => {
     delete process.env.VONAGE_API_SECRET;
     delete process.env.VONAGE_FROM;
     await expect(sendSms({ to: "+919876543210", text: "Test", idempotencyKey: "missing" })).resolves.toMatchObject({ status: "skipped", provider: "vonage", errorCode: "provider_not_configured" });
+  });
+
+  it("builds a Vonage WhatsApp sandbox request without calling the live provider", async () => {
+    process.env.WHATSAPP_PROVIDER = "vonage";
+    process.env.VONAGE_API_KEY = "vonage-key";
+    process.env.VONAGE_API_SECRET = "vonage-secret";
+    process.env.VONAGE_WHATSAPP_FROM = "14157386102";
+    let request: { url: string; init?: RequestInit } | undefined;
+    const fetchImpl = async (url: RequestInfo | URL, init?: RequestInit) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({ message_uuid: "whatsapp-message-1" }), { status: 202 });
+    };
+    await expect(sendWhatsApp({ to: "+919876543210", text: "Schedula appointment confirmed.", idempotencyKey: "delivery-whatsapp-1" }, fetchImpl)).resolves.toEqual({ status: "sent", provider: "vonage", providerMessageId: "whatsapp-message-1" });
+    expect(request?.url).toBe("https://messages-sandbox.nexmo.com/v1/messages");
+    expect(JSON.parse(String(request?.init?.body))).toEqual({ from: "14157386102", to: "919876543210", channel: "whatsapp", message_type: "text", text: "Schedula appointment confirmed.", client_ref: "delivery-whatsapp-1" });
+  });
+
+  it("skips WhatsApp when it is not configured", async () => {
+    process.env.WHATSAPP_PROVIDER = "vonage";
+    delete process.env.VONAGE_API_KEY;
+    delete process.env.VONAGE_API_SECRET;
+    delete process.env.VONAGE_WHATSAPP_FROM;
+    await expect(sendWhatsApp({ to: "+919876543210", text: "Test", idempotencyKey: "missing-whatsapp" })).resolves.toMatchObject({ status: "skipped", provider: "vonage", errorCode: "provider_not_configured" });
   });
 });
