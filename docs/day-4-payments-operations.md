@@ -16,7 +16,8 @@ manager. Never commit them or place them in browser code:
 - `RESEND_WEBHOOK_SECRET` when Resend delivery-status callbacks are enabled
 - `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` when Brevo email delivery is enabled
 - `BREVO_WEBHOOK_SECRET` when Brevo delivery-status callbacks are enabled
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` when SMS is enabled
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` when Twilio SMS is enabled
+- `SMS_PROVIDER=vonage` plus `VONAGE_API_KEY`, `VONAGE_API_SECRET`, and `VONAGE_FROM` when Vonage SMS is enabled
 - `APPOINTMENT_REMINDER_INTERVALS_MINUTES` for comma-separated reminder lead times (default `1440,120`)
 
 ## Email verification
@@ -105,6 +106,30 @@ Twilio trial accounts are limited to test recipients and expire; India
 production SMS also requires the applicable sender-registration/DLT process and is
 usage-priced. A Twilio network timeout is marked ambiguous rather than blindly retried
 to reduce duplicate SMS risk; inspect the provider message log before requeueing it.
+
+## Vonage SMS appointment demo
+
+Vonage is selected with `SMS_PROVIDER=vonage`. Configure `VONAGE_API_KEY`,
+`VONAGE_API_SECRET`, and `VONAGE_FROM` only in Vercel/server-side secrets. Never commit
+the API secret or personal phone numbers. This integration uses Vonage Messages API v1
+with Basic Authentication and records the returned `message_uuid` on each delivery.
+
+This is real trial SMS delivery, not a simulated SMS sandbox. Vonage trial credit is
+reserved for the manual demo only. Automated tests, builds, local development, and
+agent validation use mocked provider responses and must not invoke the live dispatcher.
+
+For the demo, use the same already-verified personal E.164 number in both the patient
+and doctor profiles. Enable **Operational SMS** for both accounts. A confirmed booking
+creates two independent SMS deliveries—even though both target the same number—and each
+delivery retains its own Schedula delivery ID and Vonage message UUID. Appointment
+confirmations are the SMS event; payment-confirmed notifications remain available
+in-app and by email without creating a second patient SMS.
+
+The only live test is performed manually through the deployed Vercel UI: book a confirmed
+appointment, allow the existing dispatcher schedule to process the outbox, then check the
+phone and Vonage logs. Do not send a test message from the dashboard during development.
+Vonage's Indian sender-ID, delivery-hours, trial-credit, and account restrictions still
+apply.
 
 Doctor leave is a one-date occurrence cancellation. It cancels affected appointments,
 cancels reminders, and creates idempotent full-refund requests for captured payments.

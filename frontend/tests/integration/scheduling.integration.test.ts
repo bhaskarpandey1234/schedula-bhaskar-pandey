@@ -171,6 +171,7 @@ describe("local Supabase scheduling RPCs", () => {
     expect(appointment?.status).toBe("confirmed");
     const { data: patientNotifications } = await patient.client.from("notifications").select("type").eq("appointment_id", reservation.appointment_id);
     expect(patientNotifications?.filter((notification) => notification.type === "payment_confirmed")).toHaveLength(1);
+    expect(patientNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
     const { data: doctorNotifications } = await doctor.client.from("notifications").select("id, type, read_at").eq("appointment_id", reservation.appointment_id);
     expect(doctorNotifications?.filter((notification) => notification.type === "appointment_booked")).toHaveLength(1);
     const doctorNotification = doctorNotifications?.find((notification) => notification.type === "appointment_booked");

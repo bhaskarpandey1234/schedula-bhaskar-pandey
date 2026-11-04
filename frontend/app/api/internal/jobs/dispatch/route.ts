@@ -246,7 +246,7 @@ export async function POST(request: Request) {
       }
       const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at }, delivery.channel === "sms" ? "sms" : "email");
       const result = delivery.channel === "sms"
-        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: "twilio", errorCode: "phone_missing" })
+        ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.SMS_PROVIDER?.trim().toLowerCase() === "vonage" ? "vonage" : "twilio", errorCode: "phone_missing" })
         : (row.email ? await sendEmail({ to: row.email, subject: content.subject, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.BREVO_API_KEY ? "brevo" : "resend", errorCode: "email_missing" });
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, ${result.provider}, ${result.status}, ${result.providerMessageId ?? null}, ${result.errorCode ?? null})`);
       if (result.status === "sent") {
