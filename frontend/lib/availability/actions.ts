@@ -8,6 +8,7 @@ import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
 import { getDoctorScheduleAppointments } from "@/lib/appointments/queries";
 import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
+import { deriveRecurrenceEndDate } from "@/lib/scheduling/recurrence";
 
 export type AvailabilityActionState = FormActionState;
 type DoctorScheduleSlot = { id: string; availability_session_id: string; slot_start_at: string; slot_end_at: string; capacity: number; allocated_count: number; status: string; scheduling_type: "wave" | "stream" };
@@ -64,12 +65,15 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   try { await requireCompleteProfile("doctor"); } catch (error) { if (error instanceof Error && error.message === "PROFILE_INCOMPLETE") return { error: "Complete your doctor profile before creating availability.", values: submittedValues }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
+  const recurrenceEndDate = parsed.data.sessionType === "recurring" && parsed.data.recurrenceStartDate && parsed.data.recurrenceDuration
+    ? deriveRecurrenceEndDate(parsed.data.recurrenceStartDate, parsed.data.recurrenceDuration as Parameters<typeof deriveRecurrenceEndDate>[1])
+    : undefined;
   const rpcName = mode === "weekly" ? "create_weekly_availability_with_slots" : mode === "monthly_days" ? "create_monthly_availability_with_days" : "create_specific_date_availability_with_slots";
   const scheduleArgs = { p_scheduling_type: parsed.data.schedulingType, p_interval_minutes: parsed.data.intervalMinutes ?? null, p_capacity: parsed.data.capacity };
   const rpcArgs = mode === "weekly"
-    ? { p_consulting_days: parsed.data.consultingDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+    ? { p_consulting_days: parsed.data.consultingDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
     : mode === "monthly_days"
-      ? { p_monthly_days: parsed.data.monthlyDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+      ? { p_monthly_days: parsed.data.monthlyDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
       : { p_session_dates: parsed.data.sessionDates, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
   if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
