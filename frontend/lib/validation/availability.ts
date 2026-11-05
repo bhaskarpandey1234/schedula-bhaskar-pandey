@@ -11,7 +11,8 @@ function isFutureLocal(date: string, time: string, zone: string) {
 }
 
 export const availabilitySessionSchema = z.object({
-  mode: z.enum(["weekly", "monthly", "custom"]).default("custom"),
+  sessionType: z.enum(["recurring", "specific_date"]).default("specific_date"),
+  recurrenceMethod: z.enum(["day", "date"]).optional(),
   schedulingType: z.enum(["wave", "stream"]).default("wave"),
   sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional(),
   recurrenceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid start date.").optional(),
@@ -27,25 +28,28 @@ export const availabilitySessionSchema = z.object({
   if (value.endTime <= value.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time." });
   if (value.schedulingType === "wave" && value.intervalMinutes == null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Choose an appointment duration for Wave scheduling." });
   if (value.schedulingType === "stream" && value.intervalMinutes != null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Stream scheduling uses the full time window." });
-  if (value.mode === "weekly" && (!value.consultingDays?.length || value.sessionDate || !value.recurrenceStartDate || !value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
-    ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one consulting day." });
+  if (value.sessionType === "recurring" && !value.recurrenceMethod) {
+    ctx.addIssue({ code: "custom", path: ["recurrenceMethod"], message: "Choose whether this schedule repeats by day or by date." });
   }
-  if (value.mode === "monthly" && (!value.recurrenceStartDate || !value.recurrenceEndDate || value.consultingDays?.length || value.sessionDate || value.monthlyRangeEndDay == null)) {
-    ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Choose a monthly date range and end date." });
+  if (value.sessionType === "recurring" && value.recurrenceMethod === "day" && (!value.consultingDays?.length || value.sessionDate || !value.recurrenceStartDate || !value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
+    ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one consulting day and a finite date range." });
   }
-  if (value.mode === "custom" && (!value.sessionDate || value.consultingDays?.length || value.recurrenceStartDate || value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
-    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Choose a custom session date." });
+  if (value.sessionType === "recurring" && value.recurrenceMethod === "date" && (!value.recurrenceStartDate || !value.recurrenceEndDate || value.consultingDays?.length || value.sessionDate || value.monthlyRangeEndDay == null)) {
+    ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Choose a monthly date range and repeat-through date." });
   }
-  const startDate = value.mode === "custom" ? value.sessionDate : value.recurrenceStartDate;
+  if (value.sessionType === "specific_date" && (!value.sessionDate || value.recurrenceMethod || value.consultingDays?.length || value.recurrenceStartDate || value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
+    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Choose a specific session date without recurrence fields." });
+  }
+  const startDate = value.sessionType === "specific_date" ? value.sessionDate : value.recurrenceStartDate;
   if (startDate && !isFutureLocal(startDate, value.startTime, value.timezone)) {
     ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Availability must start in the future." });
   }
-  if (value.mode !== "custom" && value.recurrenceStartDate && value.recurrenceEndDate) {
+  if (value.sessionType === "recurring" && value.recurrenceStartDate && value.recurrenceEndDate) {
     const start = new Date(`${value.recurrenceStartDate}T00:00:00Z`);
     const end = new Date(`${value.recurrenceEndDate}T00:00:00Z`);
     const days = Math.round((end.getTime() - start.getTime()) / 86400000);
     if (days < 0 || days > 366) ctx.addIssue({ code: "custom", path: ["recurrenceEndDate"], message: "Recurrence must end within 12 months of its start date." });
-    if (value.mode === "monthly" && value.monthlyRangeEndDay != null && value.monthlyRangeEndDay < Number(value.recurrenceStartDate.slice(8, 10))) {
+    if (value.recurrenceMethod === "date" && value.monthlyRangeEndDay != null && value.monthlyRangeEndDay < Number(value.recurrenceStartDate.slice(8, 10))) {
       ctx.addIssue({ code: "custom", path: ["monthlyRangeEndDay"], message: "Monthly range end day must be on or after the first date day." });
     }
   }
