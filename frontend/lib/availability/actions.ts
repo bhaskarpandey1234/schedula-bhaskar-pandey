@@ -76,7 +76,19 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
       ? { p_monthly_days: parsed.data.monthlyDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
       : { p_session_dates: parsed.data.sessionDates, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
-  if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
+  if (error) {
+    const message = error.message.toLowerCase();
+    const userMessage = message.includes("does not exist") || message.includes("function")
+      ? "Availability scheduling is temporarily unavailable while the scheduling database is being updated."
+      : message.includes("existing bookings") || message.includes("payment hold")
+        ? "This date has protected recurring bookings or payment holds and cannot be replaced."
+        : message.includes("overlaps")
+          ? "This window overlaps an existing session."
+          : message.includes("future")
+            ? "Availability must start in the future."
+            : "We could not create this availability. Please review the fields and try again.";
+    return { error: userMessage, values: submittedValues };
+  }
   if (!data) return { error: "We could not create this availability.", values: submittedValues };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");

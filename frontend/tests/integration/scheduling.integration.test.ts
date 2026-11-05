@@ -149,6 +149,25 @@ describe("local Supabase scheduling RPCs", () => {
     expect(customSessions?.[0]?.kind).toBe("custom");
   });
 
+  it("lets the specific-date RPC replace an unbooked recurring date with a different window", async () => {
+    const doctor = await user("doctor", "specific-date-override-doctor");
+    const date = futureWeekday(1);
+    const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [1], p_recurrence_start_date: date, p_recurrence_end_date: recurrenceEnd(date), p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 30, p_capacity: 3,
+    });
+    expect(weeklyError).toBeNull();
+    const { data: overrideIds, error: overrideError } = await doctor.client.rpc("create_specific_date_availability_with_slots", {
+      p_session_dates: [date], p_start_time: "09:30", p_end_time: "10:30", p_timezone: "Asia/Kolkata", p_interval_minutes: 30, p_capacity: 3,
+    });
+    expect(overrideError).toBeNull();
+    expect(overrideIds).toHaveLength(1);
+    const { data: recurringSlots } = await doctor.client.from("appointment_slots").select("status").eq("availability_session_id", rules![0]);
+    expect(recurringSlots?.every((slot) => slot.status === "cancelled")).toBe(true);
+    const { data: overrideSlots } = await doctor.client.from("appointment_slots").select("slot_start_at, slot_end_at, capacity").eq("availability_session_id", overrideIds![0]).order("slot_start_at");
+    expect(overrideSlots).toHaveLength(2);
+    expect(overrideSlots?.every((slot) => slot.capacity === 3)).toBe(true);
+  });
+
   it("protects booked recurring slots from a custom replacement", async () => {
     const doctor = await user("doctor", "booked-override-doctor");
     const patient = await user("patient", "booked-override-patient");
