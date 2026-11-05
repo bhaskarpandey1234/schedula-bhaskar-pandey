@@ -5,17 +5,22 @@ import { doctorProfileSchema } from "../lib/validation/doctor-profile";
 import { createAvailabilityAction } from "../lib/availability/actions";
 
 describe("Phase 4 validation", () => {
-  it("accepts weekly consulting days without a session date", () => {
-    expect(availabilitySessionSchema.safeParse({ mode: "weekly", consultingDays: [1, 3, 5], recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2100-04-19", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+  it("accepts recurring schedules by day without a session date", () => {
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "day", consultingDays: [1, 3, 5], recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2100-04-19", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
   });
-  it("accepts a future custom date and rejects a weekly date", () => {
-    expect(availabilitySessionSchema.safeParse({ mode: "custom", sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
-    expect(availabilitySessionSchema.safeParse({ mode: "weekly", sessionDate: "2099-04-20", consultingDays: [1], recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2100-04-19", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+  it("accepts a future specific date and rejects recurrence fields", () => {
+    expect(availabilitySessionSchema.safeParse({ sessionType: "specific_date", sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "specific_date", recurrenceMethod: "day", sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
   });
   it("accepts monthly date ranges and enforces the monthly end day", () => {
-    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
-    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 10, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
-    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2101-04-10", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "date", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "date", recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 10, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "date", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2101-04-10", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+  });
+  it("requires one recurrence method and keeps day/date fields exclusive", () => {
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "day", consultingDays: [1], recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ sessionType: "recurring", recurrenceMethod: "date", consultingDays: [1], recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
   });
   it("accepts supported intervals and capacity defaults", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
@@ -32,7 +37,7 @@ describe("Phase 4 validation", () => {
   });
   it("preserves custom mode values after a validation error", async () => {
     const form = new FormData();
-    form.set("mode", "custom");
+    form.set("sessionType", "specific_date");
     form.set("sessionDate", "2099-04-20");
     form.set("startTime", "11:00");
     form.set("endTime", "09:00");
@@ -42,11 +47,12 @@ describe("Phase 4 validation", () => {
     const result = await createAvailabilityAction({}, form);
     expect(result.error).toBe("End time must be after start time.");
     expect(result.fieldErrors?.endTime).toBe("End time must be after start time.");
-    expect(result.values).toMatchObject({ mode: "custom", sessionDate: "2099-04-20", startTime: "11:00", endTime: "09:00", intervalMinutes: "30", capacity: "3" });
+    expect(result.values).toMatchObject({ sessionType: "specific_date", sessionDate: "2099-04-20", startTime: "11:00", endTime: "09:00", intervalMinutes: "30", capacity: "3" });
   });
   it("preserves all selected weekly days after a validation error", async () => {
     const form = new FormData();
-    form.set("mode", "weekly");
+    form.set("sessionType", "recurring");
+    form.set("recurrenceMethod", "day");
     form.append("consultingDays", "1");
     form.append("consultingDays", "4");
     form.set("recurrenceStartDate", "2099-04-20");
@@ -57,7 +63,8 @@ describe("Phase 4 validation", () => {
     form.set("intervalMinutes", "30");
     form.set("capacity", "3");
     const result = await createAvailabilityAction({}, form);
-    expect(result.values?.mode).toBe("weekly");
+    expect(result.values?.sessionType).toBe("recurring");
+    expect(result.values?.recurrenceMethod).toBe("day");
     expect(result.values?.consultingDays).toBe("1,4");
   });
 });

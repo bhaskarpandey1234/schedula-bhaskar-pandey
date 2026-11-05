@@ -49,7 +49,9 @@ export async function updateDoctorProfileAction(_: AvailabilityActionState, form
 export async function createAvailabilityAction(_: AvailabilityActionState, formData: FormData): Promise<AvailabilityActionState> {
   const submittedValues = availabilityValues(formData);
   const raw = submittedValues;
-  const mode = String(raw.mode ?? "");
+  const sessionType = String(raw.sessionType ?? "");
+  const recurrenceMethod = String(raw.recurrenceMethod ?? "");
+  const mode = sessionType === "recurring" && recurrenceMethod === "day" ? "weekly" : sessionType === "recurring" && recurrenceMethod === "date" ? "monthly" : "custom";
   const parsed = availabilitySessionSchema.safeParse({
     ...raw,
     consultingDays: mode === "weekly" ? formData.getAll("consultingDays") : undefined,
@@ -58,11 +60,11 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   try { await requireCompleteProfile("doctor"); } catch (error) { if (error instanceof Error && error.message === "PROFILE_INCOMPLETE") return { error: "Complete your doctor profile before creating availability.", values: submittedValues }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
-  const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : parsed.data.mode === "monthly" ? "create_monthly_availability_with_slots" : "create_custom_availability_with_slots";
+  const rpcName = mode === "weekly" ? "create_weekly_availability_with_slots" : mode === "monthly" ? "create_monthly_availability_with_slots" : "create_custom_availability_with_slots";
   const scheduleArgs = { p_scheduling_type: parsed.data.schedulingType, p_interval_minutes: parsed.data.intervalMinutes ?? null, p_capacity: parsed.data.capacity };
-  const rpcArgs = parsed.data.mode === "weekly"
+  const rpcArgs = mode === "weekly"
     ? { p_consulting_days: parsed.data.consultingDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
-    : parsed.data.mode === "monthly"
+    : mode === "monthly"
       ? { p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_monthly_range_end_day: parsed.data.monthlyRangeEndDay, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
       : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
@@ -71,7 +73,7 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   const redirectDate = parsed.data.sessionDate ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
-  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${parsed.data.mode}&created=1#schedule`);
+  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${mode}&created=1#schedule`);
 }
 
 function nextConsultingDate(days: number[], timezone: string) {
