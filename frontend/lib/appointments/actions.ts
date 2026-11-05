@@ -16,7 +16,9 @@ export async function cancelDoctorSlotAction(_: CancellationActionState, formDat
   const { error } = await supabase.rpc("cancel_doctor_slot", { p_slot_id: slotId });
   if (error) {
     const message = error.message.toLowerCase();
-    if (message.includes("booking") || message.includes("payment hold")) return { error: "This slot has a booking or payment hold and cannot be cancelled individually." };
+    if (message.includes("booking") || message.includes("payment hold") || message.includes("reservation") || message.includes("allocation")) return { error: "This slot has a booking, payment hold, or active reservation and cannot be cancelled individually." };
+    if (message.includes("already cancelled") || message.includes("cancelled")) return { error: "This slot is already cancelled." };
+    if (message.includes("not found") || message.includes("not yours") || message.includes("ownership")) return { error: "This slot is no longer available for your account." };
     if (message.includes("future")) return { error: "Only future slots can be cancelled." };
     return { error: "We could not cancel this slot. Please try again." };
   }
