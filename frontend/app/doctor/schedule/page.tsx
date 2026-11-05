@@ -116,7 +116,7 @@ export default async function DoctorSchedulePage({
               </p>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-[#1D2153] sm:text-3xl">
-              Clinic Slots & Wave Schedule
+              Clinic Availability Schedule
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Define your consulting hours, configure patient capacity per slot, and monitor live bookings.
