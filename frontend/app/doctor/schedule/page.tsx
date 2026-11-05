@@ -29,6 +29,7 @@ import {
 import { formatLocalDate, formatSchedulingWindow, localDateKey } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
 import { CancelSessionForm } from "@/components/cancel-session-form";
+import { CancelSlotForm } from "@/components/cancel-slot-form";
 
 export const instant = false;
 
@@ -204,7 +205,7 @@ export default async function DoctorSchedulePage({
 
                               return (
                                 <TableRow key={slot.id} className="text-xs hover:bg-surface-muted/30">
-                                  <TableCell><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge></TableCell>
+                                  <TableCell><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge>{new Date(slot.slot_start_at).getTime() > Date.now() && <CancelSlotForm slotId={slot.id} label={formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)} />}</div></TableCell>
                                   <TableCell className="font-semibold text-foreground whitespace-nowrap">
                                     {formatSchedulingWindow(
                                       slot.slot_start_at,

@@ -44,6 +44,11 @@ describe("doctor schedule filters", () => {
     expect(filterScheduleSlots(slots, { filter: "all" }, "UTC", now)).toEqual(slots);
   });
 
+  it("filters upcoming slots by weekday without changing the date selection", () => {
+    expect(parseScheduleFilter({ filter: "upcoming", weekday: "1" })).toEqual({ filter: "upcoming", weekday: 1 });
+    expect(filterScheduleSlots(slots, { filter: "all", weekday: 5 }, "UTC", new Date("2026-10-30T00:00:00.000Z")).map((slot) => slot.id)).toEqual(["boundary"]);
+  });
+
   it("matches a specific date in the doctor's timezone", () => {
     expect(
       filterScheduleSlots(slots, { filter: "specific", date: "2026-10-31" }, "Asia/Kolkata")

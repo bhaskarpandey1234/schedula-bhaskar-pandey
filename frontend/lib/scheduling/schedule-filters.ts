@@ -8,9 +8,9 @@ export const scheduleFilterOptions = [
 ] as const;
 
 export type ScheduleFilter = (typeof scheduleFilterOptions)[number]["value"];
-export type ScheduleFilterSelection = { filter: ScheduleFilter; date?: string };
+export type ScheduleFilterSelection = { filter: ScheduleFilter; date?: string; weekday?: number };
 
-type ScheduleSearchParams = { filter?: string; date?: string };
+type ScheduleSearchParams = { filter?: string; date?: string; weekday?: string };
 type ScheduleSlot = { slot_start_at: string; slot_end_at: string };
 
 export function isValidDateKey(value?: string): value is string {
@@ -21,16 +21,16 @@ export function isValidDateKey(value?: string): value is string {
 
 export function parseScheduleFilter(params: ScheduleSearchParams): ScheduleFilterSelection {
   if (params.filter === "all" || params.filter === "upcoming" || params.filter === "past") {
-    return { filter: params.filter };
+    return { filter: params.filter, weekday: params.weekday ? Number(params.weekday) : undefined };
   }
   if (params.filter === "specific" && isValidDateKey(params.date)) {
-    return { filter: "specific", date: params.date };
+    return { filter: "specific", date: params.date, weekday: undefined };
   }
 
   // Compatibility for links created before the named filters were introduced.
   if (!params.filter && params.date === "all") return { filter: "all" };
   if (!params.filter && isValidDateKey(params.date)) {
-    return { filter: "specific", date: params.date };
+    return { filter: "specific", date: params.date, weekday: undefined };
   }
 
   return { filter: "upcoming" };
@@ -42,7 +42,9 @@ export function filterScheduleSlots<T extends ScheduleSlot>(
   timezone: string,
   now = new Date(),
 ) {
-  if (selection.filter === "all") return slots;
+  if (selection.filter === "all") {
+    return selection.weekday ? slots.filter((slot) => new Date(slot.slot_start_at).getDay() === selection.weekday! % 7) : slots;
+  }
   if (selection.filter === "specific") {
     return slots.filter(
       (slot) => localDateKey(slot.slot_start_at, timezone) === selection.date,
@@ -51,6 +53,7 @@ export function filterScheduleSlots<T extends ScheduleSlot>(
 
   const currentTime = now.getTime();
   return slots.filter((slot) => {
+    if (selection.weekday && new Date(slot.slot_start_at).getDay() !== selection.weekday % 7) return false;
     const endTime = new Date(slot.slot_end_at).getTime();
     return selection.filter === "upcoming" ? endTime >= currentTime : endTime < currentTime;
   });

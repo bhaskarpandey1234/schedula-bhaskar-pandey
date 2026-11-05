@@ -93,7 +93,7 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   const redirectDate = parsed.data.sessionDates?.[0] ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
-  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${mode}&created=1#schedule`);
+  redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${mode}&created=1`);
 }
 
 function nextConsultingDate(days: number[], timezone: string) {
