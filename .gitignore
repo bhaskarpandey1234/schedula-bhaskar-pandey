@@ -11,6 +11,7 @@ node_modules/
 plan.txt
 frontend/AGENTS.md
 .agents/
+docs/context/
 
 # Next.js
 .next/

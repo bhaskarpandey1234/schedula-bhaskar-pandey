@@ -90,6 +90,16 @@ This file contains the engineering standards and project context for agents and 
 - Treat Hoppscotch setup as API-testing preparation only until API implementation is explicitly requested.
 - Do not record secrets, API keys, personal data, or generated artifacts in documentation or the repository.
 
+## Local Context Workflow
+
+- When `docs/context/README.md` exists locally, read it at the start of work; it contains local-only operational context for the project.
+- The `docs/context/` directory is intentionally ignored by Git and may be absent in a fresh clone. If it is absent, use tracked repository documentation and inspect the environment directly.
+- Never treat local context as proof of current hosted state. Verify migrations, deployment status, and platform configuration directly before acting.
+- For migration-dependent deployments, verify the hosted schema and apply pending migrations before deploying application code.
+- Before pushing a deployment branch, run `pnpm release:check`, review the staged file list and whitespace check, and exclude secrets, environment files, generated output, and personal data.
+- Report Docker, Supabase, Vercel, or browser-automation blockers explicitly instead of claiming validation or deployment success.
+- Update the local context files when platform configuration or operational procedures change, without staging or committing them.
+
 ## Task 1 Scope and Validation
 
 - Task 1 covers the project foundation, the five-module ERD, README setup, Hoppscotch preparation, build/start validation, Loom walkthrough, and pull-request workflow.

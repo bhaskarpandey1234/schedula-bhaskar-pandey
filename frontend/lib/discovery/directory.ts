@@ -13,6 +13,10 @@ import {
 export { parseDirectoryFilters, type DirectoryFilters } from "@/lib/discovery/filters";
 export { formatDateLabel } from "@/lib/discovery/format";
 export type { DoctorDirectoryRecord, DoctorDetailRecord, DoctorSlot } from "@/lib/discovery/types";
+export type PublicDoctorSearchResult = {
+  doctors: DoctorDirectoryRecord[];
+  error?: string;
+};
 export {
   DUMMY_SPECIALTIES,
   getDummyDoctors,
@@ -57,13 +61,21 @@ export async function getPublicDoctorSpecialties() {
   return Array.from(new Set([...dbSpecialties, ...DUMMY_SPECIALTIES])).sort();
 }
 
-export async function searchPublicDoctors(filters: DirectoryFilters) {
-  const dbDoctors = await publicRpc<DoctorDirectoryRecord[]>("public_doctor_directory", {
-    p_search: filters.search || null,
-    p_specialty: filters.specialty || null,
-  }).catch(() => []);
-
-  return mergeWithDummyDoctors(dbDoctors, filters);
+export async function searchPublicDoctors(filters: DirectoryFilters): Promise<PublicDoctorSearchResult> {
+  try {
+    const dbDoctors = await publicRpc<DoctorDirectoryRecord[]>("public_doctor_directory", {
+      p_search: filters.search || null,
+      p_specialty: filters.specialty || null,
+    });
+    return { doctors: mergeWithDummyDoctors(dbDoctors, filters) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown doctor directory error";
+    console.error("Public doctor directory RPC failed", { function: "public_doctor_directory", message });
+    return {
+      doctors: [],
+      error: "The doctor directory is temporarily unavailable. Please try again shortly.",
+    };
+  }
 }
 
 export async function getPublicDoctorDetail(doctorId: string) {
