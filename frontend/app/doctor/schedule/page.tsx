@@ -129,9 +129,9 @@ export default async function DoctorSchedulePage({
         {params?.created === "1" && <ScheduleCreatedNotice date={selectedDate} />}
 
         {/* 2-Column Responsive Workspace */}
-        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
           {/* Left Column: Form Card */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <AvailabilityForm
               key={initialMode}
               timezone={doctor.timezone}
@@ -151,11 +151,11 @@ export default async function DoctorSchedulePage({
           </div>
 
           {/* Right Column: Grouped Slot Roster */}
-          <Card id="schedule" className="rounded-3xl border-border bg-card shadow-xs overflow-hidden">
+          <Card id="schedule" className="min-w-0 overflow-hidden rounded-3xl border-border bg-card shadow-xs">
             <CardHeader className="border-b border-border/60 bg-surface-muted/30 p-5">
-              <CardTitle className="text-base font-bold text-[#1D2153] flex items-center justify-between">
+              <CardTitle className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-base font-bold text-[#1D2153]">
                 <span>{copy.title}</span>
-                <span className="text-xs font-normal text-muted-foreground">
+                <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
                   Showing {visibleSlots.length} {visibleSlots.length === 1 ? "slot" : "slots"}
                 </span>
               </CardTitle>
