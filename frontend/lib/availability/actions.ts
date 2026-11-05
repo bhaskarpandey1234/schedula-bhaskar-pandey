@@ -16,6 +16,8 @@ function values(formData: FormData) { return formValues(formData); }
 function availabilityValues(formData: FormData) {
   const submitted = values(formData);
   submitted.consultingDays = formData.getAll("consultingDays").map(String).join(",");
+  submitted.monthlyDays = formData.getAll("monthlyDays").map(String).join(",");
+  submitted.sessionDates = formData.getAll("sessionDates").map(String).join(",");
   return submitted;
 }
 function firstIssue(error: unknown) {
@@ -51,28 +53,30 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   const raw = submittedValues;
   const sessionType = String(raw.sessionType ?? "");
   const recurrenceMethod = String(raw.recurrenceMethod ?? "");
-  const mode = sessionType === "recurring" && recurrenceMethod === "day" ? "weekly" : sessionType === "recurring" && recurrenceMethod === "date" ? "monthly" : "custom";
+  const mode = sessionType === "recurring" && recurrenceMethod === "day" ? "weekly" : sessionType === "recurring" && recurrenceMethod === "date" ? "monthly_days" : "specific_dates";
   const parsed = availabilitySessionSchema.safeParse({
     ...raw,
     consultingDays: mode === "weekly" ? formData.getAll("consultingDays") : undefined,
+    monthlyDays: mode === "monthly_days" ? formData.getAll("monthlyDays") : undefined,
+    sessionDates: mode === "specific_dates" ? formData.getAll("sessionDates") : undefined,
   });
   if (!parsed.success) return { error: firstIssue(parsed.error) ?? "Check the availability details and try again.", fieldErrors: zodFieldErrors(parsed.error), values: submittedValues };
   try { await requireCompleteProfile("doctor"); } catch (error) { if (error instanceof Error && error.message === "PROFILE_INCOMPLETE") return { error: "Complete your doctor profile before creating availability.", values: submittedValues }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
-  const rpcName = mode === "weekly" ? "create_weekly_availability_with_slots" : mode === "monthly" ? "create_monthly_availability_with_slots" : "create_custom_availability_with_slots";
+  const rpcName = mode === "weekly" ? "create_weekly_availability_with_slots" : mode === "monthly_days" ? "create_monthly_availability_with_days" : "create_specific_date_availability_with_slots";
   const scheduleArgs = { p_scheduling_type: parsed.data.schedulingType, p_interval_minutes: parsed.data.intervalMinutes ?? null, p_capacity: parsed.data.capacity };
   const rpcArgs = mode === "weekly"
     ? { p_consulting_days: parsed.data.consultingDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
-    : mode === "monthly"
-      ? { p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_monthly_range_end_day: parsed.data.monthlyRangeEndDay, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
-      : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
+    : mode === "monthly_days"
+      ? { p_monthly_days: parsed.data.monthlyDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+      : { p_session_dates: parsed.data.sessionDates, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
   if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
   if (!data) return { error: "We could not create this availability.", values: submittedValues };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
-  const redirectDate = parsed.data.sessionDate ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
+  const redirectDate = parsed.data.sessionDates?.[0] ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
   redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${mode}&created=1#schedule`);
 }
 

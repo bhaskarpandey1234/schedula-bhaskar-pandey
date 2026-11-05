@@ -1,58 +1,38 @@
 import { z } from "zod";
 
-const timezone = z.string().trim().refine((value) => {
-  try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); return true; } catch { return false; }
-}, "Use a valid IANA timezone.");
-
-function isFutureLocal(date: string, time: string, zone: string) {
+const timezone = z.string().trim().refine((value) => { try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); return true; } catch { return false; } }, "Use a valid IANA timezone.");
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.");
+function isFutureLocal(value: string, time: string, zone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
   const current = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
-  return `${date}T${time}` > `${current.year}-${current.month}-${current.day}T${current.hour}:${current.minute}`;
+  return `${value}T${time}` > `${current.year}-${current.month}-${current.day}T${current.hour}:${current.minute}`;
 }
 
 export const availabilitySessionSchema = z.object({
-  sessionType: z.enum(["recurring", "specific_date"]).default("specific_date"),
-  recurrenceMethod: z.enum(["day", "date"]).optional(),
-  schedulingType: z.enum(["wave", "stream"]).default("wave"),
-  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional(),
-  recurrenceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid start date.").optional(),
-  recurrenceEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid end date.").optional(),
-  monthlyRangeEndDay: z.coerce.number().int().min(1).max(31).optional(),
-  consultingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Choose at least one consulting day.").optional(),
-  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid start time."),
-  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid end time."),
-  timezone,
-  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value), "Choose a 15, 30, or 60 minute interval.").optional(),
-  capacity: z.coerce.number().int().min(1).max(10),
+  sessionType: z.enum(["recurring", "specific_date"]), recurrenceMethod: z.enum(["day", "date"]).optional(), schedulingType: z.enum(["wave", "stream"]),
+  sessionDates: z.array(date).optional(), recurrenceStartDate: date.optional(), recurrenceEndDate: date.optional(), monthlyDays: z.array(z.coerce.number().int().min(1).max(31)).optional(), consultingDays: z.array(z.coerce.number().int().min(1).max(7)).optional(),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), timezone,
+  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value)).optional(), capacity: z.coerce.number().int().min(1).max(10),
 }).superRefine((value, ctx) => {
   if (value.endTime <= value.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time." });
   if (value.schedulingType === "wave" && value.intervalMinutes == null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Choose an appointment duration for Wave scheduling." });
   if (value.schedulingType === "stream" && value.intervalMinutes != null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Stream scheduling uses the full time window." });
-  if (value.sessionType === "recurring" && !value.recurrenceMethod) {
-    ctx.addIssue({ code: "custom", path: ["recurrenceMethod"], message: "Choose whether this schedule repeats by day or by date." });
-  }
-  if (value.sessionType === "recurring" && value.recurrenceMethod === "day" && (!value.consultingDays?.length || value.sessionDate || !value.recurrenceStartDate || !value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
-    ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one consulting day and a finite date range." });
-  }
-  if (value.sessionType === "recurring" && value.recurrenceMethod === "date" && (!value.recurrenceStartDate || !value.recurrenceEndDate || value.consultingDays?.length || value.sessionDate || value.monthlyRangeEndDay == null)) {
-    ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Choose a monthly date range and repeat-through date." });
-  }
-  if (value.sessionType === "specific_date" && (!value.sessionDate || value.recurrenceMethod || value.consultingDays?.length || value.recurrenceStartDate || value.recurrenceEndDate || value.monthlyRangeEndDay != null)) {
-    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Choose a specific session date without recurrence fields." });
-  }
-  const startDate = value.sessionType === "specific_date" ? value.sessionDate : value.recurrenceStartDate;
-  if (startDate && !isFutureLocal(startDate, value.startTime, value.timezone)) {
-    ctx.addIssue({ code: "custom", path: ["sessionDate"], message: "Availability must start in the future." });
-  }
+  if (value.sessionType === "recurring" && !value.recurrenceMethod) ctx.addIssue({ code: "custom", path: ["recurrenceMethod"], message: "Choose By Day (Weekly) or By Date (Monthly)." });
+  if (value.sessionType === "recurring" && (!value.recurrenceStartDate || !value.recurrenceEndDate)) ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Choose recurrence start and end dates." });
+  if (value.sessionType === "recurring" && value.recurrenceMethod === "day" && (!value.consultingDays?.length || value.monthlyDays?.length || value.sessionDates?.length)) ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one weekday." });
+  if (value.sessionType === "recurring" && value.recurrenceMethod === "date" && (!value.monthlyDays?.length || value.consultingDays?.length || value.sessionDates?.length)) ctx.addIssue({ code: "custom", path: ["monthlyDays"], message: "Choose at least one monthly day." });
+  if (value.sessionType === "specific_date" && (!value.sessionDates?.length || value.recurrenceMethod || value.consultingDays?.length || value.recurrenceStartDate || value.recurrenceEndDate || value.monthlyDays?.length)) ctx.addIssue({ code: "custom", path: ["sessionDates"], message: "Choose one or more specific future dates only." });
   if (value.sessionType === "recurring" && value.recurrenceStartDate && value.recurrenceEndDate) {
-    const start = new Date(`${value.recurrenceStartDate}T00:00:00Z`);
-    const end = new Date(`${value.recurrenceEndDate}T00:00:00Z`);
-    const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+    const days = Math.round((new Date(`${value.recurrenceEndDate}T00:00:00Z`).getTime() - new Date(`${value.recurrenceStartDate}T00:00:00Z`).getTime()) / 86400000);
     if (days < 0 || days > 366) ctx.addIssue({ code: "custom", path: ["recurrenceEndDate"], message: "Recurrence must end within 12 months of its start date." });
-    if (value.recurrenceMethod === "date" && value.monthlyRangeEndDay != null && value.monthlyRangeEndDay < Number(value.recurrenceStartDate.slice(8, 10))) {
-      ctx.addIssue({ code: "custom", path: ["monthlyRangeEndDay"], message: "Monthly range end day must be on or after the first date day." });
-    }
+    if (!isFutureLocal(value.recurrenceStartDate, value.startTime, value.timezone)) ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Availability must start in the future." });
+  }
+  if (value.sessionType === "specific_date" && value.sessionDates?.length) {
+    const dates = [...new Set(value.sessionDates)].sort();
+    if (dates.length !== value.sessionDates.length) ctx.addIssue({ code: "custom", path: ["sessionDates"], message: "Specific dates must be unique." });
+    if (!dates.every((item) => isFutureLocal(item, value.startTime, value.timezone))) ctx.addIssue({ code: "custom", path: ["sessionDates"], message: "Specific dates must be in the future." });
+    const span = Math.round((new Date(`${dates.at(-1)}T00:00:00Z`).getTime() - new Date(`${dates[0]}T00:00:00Z`).getTime()) / 86400000);
+    if (span > 366) ctx.addIssue({ code: "custom", path: ["sessionDates"], message: "Specific dates must be within 12 months." });
   }
 });
-
 export type AvailabilitySessionInput = z.infer<typeof availabilitySessionSchema>;
