@@ -68,6 +68,7 @@ export const doctors = pgTable("doctors", {
 
 export const availabilitySessionStatus = pgEnum("availability_session_status", ["active", "cancelled"]);
 export const availabilitySessionKind = pgEnum("availability_session_kind", ["weekly", "custom"]);
+export const availabilitySchedulingType = pgEnum("availability_scheduling_type", ["wave", "stream"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["payment_pending", "confirmed", "cancelled", "expired"]);
 export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled", "payment_confirmed", "payment_failed", "refund_pending", "refund_processed", "refund_failed", "appointment_rescheduled", "appointment_reminder"]);
@@ -94,12 +95,13 @@ export const availabilitySessions = pgTable("availability_sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
   doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
   kind: availabilitySessionKind("kind").notNull().default("custom"),
+  schedulingType: availabilitySchedulingType("scheduling_type").notNull().default("wave"),
   sessionDate: date("session_date"),
   dayOfWeek: integer("day_of_week"),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
   timezone: text("timezone").notNull(),
-  intervalMinutes: integer("interval_minutes").notNull().default(30),
+  intervalMinutes: integer("interval_minutes"),
   capacity: integer("capacity").notNull().default(3),
   status: availabilitySessionStatus("status").notNull().default("active"),
   sessionStartAt: timestamp("session_start_at", { withTimezone: true }),

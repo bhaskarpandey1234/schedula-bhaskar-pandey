@@ -10,6 +10,7 @@ import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/ac
 import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
 
 export type AvailabilityActionState = FormActionState;
+type DoctorScheduleSlot = { id: string; availability_session_id: string; slot_start_at: string; slot_end_at: string; capacity: number; allocated_count: number; status: string; scheduling_type: "wave" | "stream" };
 
 function values(formData: FormData) { return formValues(formData); }
 function availabilityValues(formData: FormData) {
@@ -58,9 +59,10 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
   const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : "create_custom_availability_with_slots";
+  const scheduleArgs = { p_scheduling_type: parsed.data.schedulingType, p_interval_minutes: parsed.data.intervalMinutes ?? null, p_capacity: parsed.data.capacity };
   const rpcArgs = parsed.data.mode === "weekly"
-    ? { p_consulting_days: parsed.data.consultingDays, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, p_interval_minutes: parsed.data.intervalMinutes, p_capacity: parsed.data.capacity }
-    : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, p_interval_minutes: parsed.data.intervalMinutes, p_capacity: parsed.data.capacity };
+    ? { p_consulting_days: parsed.data.consultingDays, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+    : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
   if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
   if (!data) return { error: "We could not create this availability.", values: submittedValues };
@@ -87,9 +89,10 @@ export async function getDoctorSchedule(sessionDate: string | "all") {
   const { supabase, user } = await currentDoctor();
   if (!user) redirect("/auth/login");
   await supabase.rpc("materialize_recurring_availability_slots", { p_doctor_id: user.id });
-  const { data: slots } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status").eq("doctor_id", user.id).order("slot_start_at");
+  const { data: slots } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status, availability_sessions!inner(scheduling_type)").eq("doctor_id", user.id).order("slot_start_at");
   const { data: doctor } = await supabase.from("doctors").select("timezone").eq("id", user.id).single();
-  const selectedSlots = (slots ?? []).filter((slot) => doctor && (sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate));
+  const rawSlots = (slots ?? []) as Array<Record<string, unknown> & { slot_start_at: string }>;
+  const selectedSlots = rawSlots.map((slot) => ({ ...slot, scheduling_type: ((Array.isArray(slot.availability_sessions) ? (slot.availability_sessions[0] as { scheduling_type?: string } | undefined)?.scheduling_type : (slot.availability_sessions as { scheduling_type?: string } | undefined)?.scheduling_type) ?? "wave") as "wave" | "stream" }) as unknown as DoctorScheduleSlot).filter((slot) => doctor && (sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate));
   const sessions: Array<never> = [];
   if (!selectedSlots.length) return { sessions, slots: [], appointments: [] };
   const appointments = await getDoctorScheduleAppointments(sessionDate);

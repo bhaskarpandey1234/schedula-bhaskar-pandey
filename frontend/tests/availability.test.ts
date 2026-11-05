@@ -15,6 +15,10 @@ describe("Phase 4 validation", () => {
   it("accepts supported intervals and capacity defaults", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
   });
+  it("accepts Stream windows without a duration and rejects a Stream duration", () => {
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionDate: "2099-04-20", startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionDate: "2099-04-20", startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+  });
   it("rejects invalid intervals, capacity, dates, and time order", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2000-04-20", startTime: "11:00", endTime: "09:00", timezone: "Asia/Kolkata", intervalMinutes: 20, capacity: 11 }).success).toBe(false);
   });

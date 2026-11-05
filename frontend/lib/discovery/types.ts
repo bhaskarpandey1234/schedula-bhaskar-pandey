@@ -22,6 +22,7 @@ export type DoctorSlot = {
   timezone: string;
   capacity: number;
   remaining_capacity: number;
+  scheduling_type?: "wave" | "stream";
   consultation_fee_minor?: number | null;
   consultation_currency?: string | null;
 };

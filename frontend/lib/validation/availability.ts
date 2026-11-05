@@ -12,15 +12,18 @@ function isFutureLocal(date: string, time: string, zone: string) {
 
 export const availabilitySessionSchema = z.object({
   mode: z.enum(["weekly", "custom"]).default("custom"),
+  schedulingType: z.enum(["wave", "stream"]).default("wave"),
   sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional(),
   consultingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Choose at least one consulting day.").optional(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid start time."),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid end time."),
   timezone,
-  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value), "Choose a 15, 30, or 60 minute interval."),
+  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value), "Choose a 15, 30, or 60 minute interval.").optional(),
   capacity: z.coerce.number().int().min(1).max(10),
 }).superRefine((value, ctx) => {
   if (value.endTime <= value.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time." });
+  if (value.schedulingType === "wave" && value.intervalMinutes == null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Choose an appointment duration for Wave scheduling." });
+  if (value.schedulingType === "stream" && value.intervalMinutes != null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Stream scheduling uses the full time window." });
   if (value.mode === "weekly" && (!value.consultingDays?.length || value.sessionDate)) {
     ctx.addIssue({ code: "custom", path: ["consultingDays"], message: "Choose at least one consulting day." });
   }
