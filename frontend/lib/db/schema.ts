@@ -100,6 +100,7 @@ export const availabilitySessions = pgTable("availability_sessions", {
   recurrenceStartDate: date("recurrence_start_date"),
   recurrenceEndDate: date("recurrence_end_date"),
   monthlyRangeEndDay: integer("monthly_range_end_day"),
+  monthlyDays: integer("monthly_days").array(),
   dayOfWeek: integer("day_of_week"),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
