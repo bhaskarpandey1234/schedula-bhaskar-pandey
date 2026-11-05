@@ -58,17 +58,19 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
   try { await requireCompleteProfile("doctor"); } catch (error) { if (error instanceof Error && error.message === "PROFILE_INCOMPLETE") return { error: "Complete your doctor profile before creating availability.", values: submittedValues }; throw error; }
   const { supabase, user } = await currentDoctor();
   if (!user) return { error: "Your doctor session is no longer valid.", values: submittedValues };
-  const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : "create_custom_availability_with_slots";
+  const rpcName = parsed.data.mode === "weekly" ? "create_weekly_availability_with_slots" : parsed.data.mode === "monthly" ? "create_monthly_availability_with_slots" : "create_custom_availability_with_slots";
   const scheduleArgs = { p_scheduling_type: parsed.data.schedulingType, p_interval_minutes: parsed.data.intervalMinutes ?? null, p_capacity: parsed.data.capacity };
   const rpcArgs = parsed.data.mode === "weekly"
-    ? { p_consulting_days: parsed.data.consultingDays, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
-    : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
+    ? { p_consulting_days: parsed.data.consultingDays, p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+    : parsed.data.mode === "monthly"
+      ? { p_recurrence_start_date: parsed.data.recurrenceStartDate, p_recurrence_end_date: parsed.data.recurrenceEndDate, p_monthly_range_end_day: parsed.data.monthlyRangeEndDay, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs }
+      : { p_session_date: parsed.data.sessionDate, p_start_time: parsed.data.startTime, p_end_time: parsed.data.endTime, p_timezone: parsed.data.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, rpcArgs);
   if (error) return { error: error.message.includes("overlaps") ? "This window overlaps an existing session." : error.message.includes("future") ? "Availability must start in the future." : "We could not create this availability. Please review the fields and try again.", values: submittedValues };
   if (!data) return { error: "We could not create this availability.", values: submittedValues };
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
-  const redirectDate = parsed.data.sessionDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
+  const redirectDate = parsed.data.sessionDate ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
   redirect(`/doctor/schedule?date=${encodeURIComponent(redirectDate)}&mode=${parsed.data.mode}&created=1#schedule`);
 }
 

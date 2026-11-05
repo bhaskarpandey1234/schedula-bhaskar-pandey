@@ -67,7 +67,7 @@ export const doctors = pgTable("doctors", {
 });
 
 export const availabilitySessionStatus = pgEnum("availability_session_status", ["active", "cancelled"]);
-export const availabilitySessionKind = pgEnum("availability_session_kind", ["weekly", "custom"]);
+export const availabilitySessionKind = pgEnum("availability_session_kind", ["weekly", "monthly", "custom"]);
 export const availabilitySchedulingType = pgEnum("availability_scheduling_type", ["wave", "stream"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["payment_pending", "confirmed", "cancelled", "expired"]);
@@ -97,6 +97,9 @@ export const availabilitySessions = pgTable("availability_sessions", {
   kind: availabilitySessionKind("kind").notNull().default("custom"),
   schedulingType: availabilitySchedulingType("scheduling_type").notNull().default("wave"),
   sessionDate: date("session_date"),
+  recurrenceStartDate: date("recurrence_start_date"),
+  recurrenceEndDate: date("recurrence_end_date"),
+  monthlyRangeEndDay: integer("monthly_range_end_day"),
   dayOfWeek: integer("day_of_week"),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
