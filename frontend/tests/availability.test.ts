@@ -6,11 +6,16 @@ import { createAvailabilityAction } from "../lib/availability/actions";
 
 describe("Phase 4 validation", () => {
   it("accepts weekly consulting days without a session date", () => {
-    expect(availabilitySessionSchema.safeParse({ mode: "weekly", consultingDays: [1, 3, 5], startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ mode: "weekly", consultingDays: [1, 3, 5], recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2100-04-19", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
   });
   it("accepts a future custom date and rejects a weekly date", () => {
     expect(availabilitySessionSchema.safeParse({ mode: "custom", sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
-    expect(availabilitySessionSchema.safeParse({ mode: "weekly", sessionDate: "2099-04-20", consultingDays: [1], startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ mode: "weekly", sessionDate: "2099-04-20", consultingDays: [1], recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2100-04-19", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+  });
+  it("accepts monthly date ranges and enforces the monthly end day", () => {
+    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-20", recurrenceEndDate: "2099-12-31", monthlyRangeEndDay: 10, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ mode: "monthly", recurrenceStartDate: "2099-04-10", recurrenceEndDate: "2101-04-10", monthlyRangeEndDay: 20, startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
   });
   it("accepts supported intervals and capacity defaults", () => {
     expect(availabilitySessionSchema.safeParse({ sessionDate: "2099-04-20", startTime: "09:00", endTime: "11:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(true);
@@ -44,6 +49,8 @@ describe("Phase 4 validation", () => {
     form.set("mode", "weekly");
     form.append("consultingDays", "1");
     form.append("consultingDays", "4");
+    form.set("recurrenceStartDate", "2099-04-20");
+    form.set("recurrenceEndDate", "2099-12-31");
     form.set("startTime", "11:00");
     form.set("endTime", "09:00");
     form.set("timezone", "Asia/Kolkata");

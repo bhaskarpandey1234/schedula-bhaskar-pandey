@@ -46,6 +46,12 @@ function futureWeekday(weekday: number, minimumDays = 7) {
   return date.toISOString().slice(0, 10);
 }
 
+function recurrenceEnd(start: string) {
+  const date = new Date(`${start}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 30);
+  return date.toISOString().slice(0, 10);
+}
+
 afterEach(async () => {
   await deleteTestUsers(users.splice(0));
 });
@@ -73,11 +79,12 @@ describe("local Supabase scheduling RPCs", () => {
     expect(error?.message).toContain("overlaps");
   });
 
-  it("materializes weekly consulting days across the rolling booking window", async () => {
+  it("materializes weekly consulting days through the finite end date", async () => {
     const doctor = await user("doctor", "weekly-doctor");
     const weekday = 1;
+    const start = futureWeekday(weekday);
     const { data: ruleIds, error } = await doctor.client.rpc("create_weekly_availability_with_slots", {
-      p_consulting_days: [weekday], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+      p_consulting_days: [weekday], p_recurrence_start_date: start, p_recurrence_end_date: recurrenceEnd(start), p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
     });
     expect(error).toBeNull();
     expect(ruleIds).toHaveLength(1);
@@ -85,10 +92,23 @@ describe("local Supabase scheduling RPCs", () => {
     expect(slots?.length).toBeGreaterThan(2);
   });
 
+  it("materializes a monthly date range for Stream", async () => {
+    const doctor = await user("doctor", "monthly-stream-doctor");
+    const { data: sessionId, error } = await doctor.client.rpc("create_monthly_availability_with_slots", {
+      p_recurrence_start_date: "2099-11-10", p_recurrence_end_date: "2099-12-20", p_monthly_range_end_day: 12,
+      p_start_time: "10:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(error).toBeNull();
+    const { data: slots } = await doctor.client.from("appointment_slots").select("slot_start_at, slot_end_at, capacity").eq("availability_session_id", sessionId!).order("slot_start_at");
+    expect(slots).toHaveLength(6);
+    expect(slots?.every((slot) => slot.capacity === 2 && new Date(slot.slot_end_at).getTime() - new Date(slot.slot_start_at).getTime() === 2 * 60 * 60 * 1000)).toBe(true);
+  });
+
   it("materializes a recurring Stream as one shared window per occurrence", async () => {
     const doctor = await user("doctor", "weekly-stream-doctor");
+    const start = futureWeekday(1);
     const { data: ruleIds, error } = await doctor.client.rpc("create_weekly_availability_with_slots", {
-      p_consulting_days: [1], p_start_time: "10:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+      p_consulting_days: [1], p_recurrence_start_date: start, p_recurrence_end_date: recurrenceEnd(start), p_start_time: "10:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
     });
     expect(error).toBeNull();
     const { data: slots } = await doctor.client.from("appointment_slots").select("slot_start_at, slot_end_at").eq("availability_session_id", ruleIds![0]);
@@ -112,8 +132,9 @@ describe("local Supabase scheduling RPCs", () => {
   it("lets a custom session replace an unbooked recurring date", async () => {
     const doctor = await user("doctor", "override-doctor");
     const date = futureWeekday(2);
+    const recurrenceEndDate = recurrenceEnd(date);
     const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
-      p_consulting_days: [2], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+      p_consulting_days: [2], p_recurrence_start_date: date, p_recurrence_end_date: recurrenceEndDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
     });
     expect(weeklyError).toBeNull();
     const { error: customError } = await doctor.client.rpc("create_custom_availability_with_slots", {
@@ -132,8 +153,9 @@ describe("local Supabase scheduling RPCs", () => {
     const doctor = await user("doctor", "booked-override-doctor");
     const patient = await user("patient", "booked-override-patient");
     const date = futureWeekday(3);
+    const recurrenceEndDate = recurrenceEnd(date);
     const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
-      p_consulting_days: [3], p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
+      p_consulting_days: [3], p_recurrence_start_date: date, p_recurrence_end_date: recurrenceEndDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1,
     });
     expect(weeklyError).toBeNull();
     const { data: weeklySlots } = await doctor.client.from("appointment_slots").select("id, slot_start_at").eq("availability_session_id", rules![0]);
