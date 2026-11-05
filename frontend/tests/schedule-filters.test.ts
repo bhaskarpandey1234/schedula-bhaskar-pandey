@@ -1,11 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ScheduleFilterForm } from "../components/schedule-filter-form";
+import { Calendar } from "../components/ui/calendar";
 import {
   filterScheduleSlots,
   parseScheduleFilter,
 } from "../lib/scheduling/schedule-filters";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/doctor/schedule",
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 const slots = [
   { id: "past", slot_start_at: "2026-10-29T08:00:00.000Z", slot_end_at: "2026-10-29T08:30:00.000Z" },
@@ -44,6 +51,11 @@ describe("doctor schedule filters", () => {
     expect(filterScheduleSlots(slots, { filter: "all" }, "UTC", now)).toEqual(slots);
   });
 
+  it("filters upcoming slots by weekday without changing the date selection", () => {
+    expect(parseScheduleFilter({ filter: "upcoming", weekday: "1" })).toEqual({ filter: "upcoming", weekday: 1 });
+    expect(filterScheduleSlots(slots, { filter: "all", weekday: 5 }, "UTC", new Date("2026-10-30T00:00:00.000Z")).map((slot) => slot.id)).toEqual(["boundary"]);
+  });
+
   it("matches a specific date in the doctor's timezone", () => {
     expect(
       filterScheduleSlots(slots, { filter: "specific", date: "2026-10-31" }, "Asia/Kolkata")
@@ -67,5 +79,17 @@ describe("doctor schedule filters", () => {
     expect(specific).toContain('type="date"');
     expect(specific).toContain('value="2026-10-30"');
     expect(upcoming).not.toContain('type="date"');
+  });
+
+  it("keeps disabled calendar dates visible instead of hiding them", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(Calendar, {
+        value: "2026-11-16",
+        minDate: "2026-11-15",
+      }),
+    );
+    expect(markup).toContain('aria-label="2026-11-15"');
+    expect(markup).toContain("text-muted-foreground/35");
+    expect(markup).not.toMatch(/aria-label="2026-11-15"[^>]*invisible/);
   });
 });

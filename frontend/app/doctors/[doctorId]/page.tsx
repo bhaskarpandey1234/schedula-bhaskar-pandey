@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 import { PortalShell } from "@/components/portal-shell";
 import { DoctorAvatar } from "@/components/doctor-avatar";
-import { SlotBookingDialog } from "@/components/slot-booking-dialog";
+import { PatientAvailabilityCalendar } from "@/components/patient-availability-calendar";
 import { getCurrentAccount } from "@/lib/auth/guards";
 import {
   getPublicDoctorDetail,
@@ -170,23 +170,7 @@ export default async function PublicDoctorDetailPage({
             </h2>
           </div>
 
-          {groups.length ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {groups.map((group) => (
-                <Card key={group.date} className="rounded-2xl border-slate-200 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
-                      <span>{group.label}</span>
-                      <span className="text-xs font-normal text-slate-500">
-                        {group.slots.length} {group.slots.length === 1 ? "slot" : "slots"}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent><SlotBookingDialog doctor={doctor} slots={group.slots} role={role} /></CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
+          {groups.length ? <PatientAvailabilityCalendar doctor={doctor} groups={groups} role={role} /> : (
             <EmptyState
               title="No upcoming availability"
               description="This doctor does not currently have open appointment slots."

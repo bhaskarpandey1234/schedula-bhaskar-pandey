@@ -8,6 +8,25 @@ import { requireVerifiedUser } from "@/lib/auth/guards";
 
 export type CancellationActionState = FormActionState;
 
+export async function cancelDoctorSlotAction(_: CancellationActionState, formData: FormData): Promise<CancellationActionState> {
+  const slotId = String(formData.get("slotId") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(slotId)) return { error: "Choose a valid slot." };
+  try { await requireVerifiedUser(); } catch (error) { if (error instanceof Error && error.message === "EMAIL_NOT_VERIFIED") return { error: "Verify your email before managing availability." }; throw error; }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cancel_doctor_slot", { p_slot_id: slotId });
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("booking") || message.includes("payment hold") || message.includes("reservation") || message.includes("allocation")) return { error: "This slot has a booking, payment hold, or active reservation and cannot be cancelled individually." };
+    if (message.includes("already cancelled") || message.includes("cancelled")) return { error: "This slot is already cancelled." };
+    if (message.includes("not found") || message.includes("not yours") || message.includes("ownership")) return { error: "This slot is no longer available for your account." };
+    if (message.includes("future")) return { error: "Only future slots can be cancelled." };
+    return { error: "We could not cancel this slot. Please try again." };
+  }
+  revalidatePath("/doctor/schedule", "page");
+  revalidatePath("/doctor/appointments", "page");
+  return { success: true };
+}
+
 export async function cancelDoctorAppointmentAction(_: CancellationActionState, formData: FormData): Promise<CancellationActionState> {
   const parsed = appointmentIdSchema.safeParse({ appointmentId: formData.get("appointmentId") });
   if (!parsed.success) return { error: firstZodError(parsed.error) ?? "Check the appointment and try again.", fieldErrors: zodFieldErrors(parsed.error), values: formValues(formData) };

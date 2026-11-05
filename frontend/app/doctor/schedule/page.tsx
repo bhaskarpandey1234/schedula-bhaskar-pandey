@@ -29,6 +29,7 @@ import {
 import { formatLocalDate, formatSchedulingWindow, localDateKey } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
 import { CancelSessionForm } from "@/components/cancel-session-form";
+import { CancelSlotForm } from "@/components/cancel-slot-form";
 
 export const instant = false;
 
@@ -58,7 +59,7 @@ function scheduleCopy(selection: ScheduleFilterSelection, timezone: string) {
 export default async function DoctorSchedulePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ filter?: string; date?: string; created?: string; mode?: string }>;
+  searchParams?: Promise<{ filter?: string; date?: string; weekday?: string; created?: string; mode?: string }>;
 }) {
   await connection();
   const account = await requireRole("doctor");
@@ -115,43 +116,45 @@ export default async function DoctorSchedulePage({
               </p>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-[#1D2153] sm:text-3xl">
-              Clinic Slots & Wave Schedule
+              Clinic Availability Schedule
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Define your consulting hours, configure patient capacity per slot, and monitor live bookings.
             </p>
           </div>
 
-          <ScheduleFilterForm initialFilter={selection.filter} initialDate={selectedDate} />
         </div>
+
+        <section className="rounded-2xl border border-border/80 bg-card p-4 shadow-xs sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">Schedule controls</p>
+              <p className="text-sm text-muted-foreground">Create availability or narrow the roster without losing your draft.</p>
+            </div>
+            <div className="flex flex-wrap items-start gap-3">
+              <AvailabilityForm
+                timezone={doctor.timezone}
+                defaultDate={selectedDate}
+                initialMode={initialMode}
+              />
+              <ScheduleFilterForm initialFilter={selection.filter} initialDate={selectedDate} initialWeekday={selection.weekday} />
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-border/70 bg-surface-muted/50 p-4 text-xs">
+            <div className="flex items-center gap-1.5 font-bold text-foreground">
+              <Info className="size-4 text-primary" />
+              <span>Wave and Stream overview</span>
+            </div>
+            <p className="mt-1 text-muted-foreground leading-relaxed">
+              Wave creates duration-based appointment slots. Stream creates one shared arrival window with capacity across the full window.
+            </p>
+          </div>
+        </section>
 
         {/* Notice of Creation */}
         {params?.created === "1" && <ScheduleCreatedNotice date={selectedDate} />}
 
-        {/* 2-Column Responsive Workspace */}
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-          {/* Left Column: Form Card */}
-          <div className="min-w-0 space-y-4">
-            <AvailabilityForm
-              key={initialMode}
-              timezone={doctor.timezone}
-              defaultDate={selectedDate}
-              initialMode={initialMode}
-            />
-
-            <div className="rounded-2xl border border-border/80 bg-surface-muted/50 p-4 text-xs space-y-2">
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <Info className="size-4 text-primary" />
-                <span>Wave Scheduling Overview</span>
-              </div>
-              <p className="text-muted-foreground leading-relaxed">
-                Slots default to 30-minute intervals with a capacity of 3 patients. This wave model smooths intake while preventing overbooking.
-              </p>
-            </div>
-          </div>
-
-          {/* Right Column: Grouped Slot Roster */}
-          <Card id="schedule" className="min-w-0 overflow-hidden rounded-3xl border-border bg-card shadow-xs">
+        <Card id="schedule" className="min-w-0 overflow-hidden rounded-3xl border-border bg-card shadow-xs">
             <CardHeader className="border-b border-border/60 bg-surface-muted/30 p-5">
               <CardTitle className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-base font-bold text-[#1D2153]">
                 <span>{copy.title}</span>
@@ -167,7 +170,7 @@ export default async function DoctorSchedulePage({
                   <CalendarDays className="size-8 mx-auto text-muted-foreground/60" />
                   <p className="text-sm font-semibold text-foreground">{copy.empty}</p>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                    Use the creation form on the left to publish bookable appointment slots.
+                    Use the Create availability action above to publish bookable appointment slots.
                   </p>
                 </div>
               ) : (
@@ -204,7 +207,7 @@ export default async function DoctorSchedulePage({
 
                               return (
                                 <TableRow key={slot.id} className="text-xs hover:bg-surface-muted/30">
-                                  <TableCell><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge></TableCell>
+                                  <TableCell><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge>{slot.status === "available" && new Date(slot.slot_start_at).getTime() > Date.now() && <CancelSlotForm slotId={slot.id} label={formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)} />}</div></TableCell>
                                   <TableCell className="font-semibold text-foreground whitespace-nowrap">
                                     {formatSchedulingWindow(
                                       slot.slot_start_at,
@@ -276,8 +279,7 @@ export default async function DoctorSchedulePage({
                 </div>
               )}
             </CardContent>
-          </Card>
-        </div>
+        </Card>
       </div>
     </PortalShell>
   );
