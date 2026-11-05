@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:integration": "node scripts/with-local-supabase.mjs --dir frontend exec vitest run tests/integration",
     "test:e2e": "node scripts/with-local-supabase.mjs --dir frontend exec playwright test",
+    "verify:rpcs": "node scripts/verify-critical-rpcs.mjs",
     "test:quality": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e && pnpm build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"

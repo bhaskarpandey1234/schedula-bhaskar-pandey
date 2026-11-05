@@ -23,11 +23,12 @@ export default async function DoctorsPage({
 }) {
   await connection();
   const filters = parseDirectoryFilters((await searchParams) ?? {});
-  const [account, doctors, specialties] = await Promise.all([
+  const [account, directory, specialties] = await Promise.all([
     getCurrentAccount(),
     searchPublicDoctors(filters),
     getPublicDoctorSpecialties(),
   ]);
+  const doctors = directory.doctors;
   const role =
     account?.onboardingComplete && account.profile?.full_name
       ? account.profile.role
@@ -135,7 +136,9 @@ export default async function DoctorsPage({
         </div>
 
         {/* 2-Column Clinical Split-Card Directory Grid */}
-        {doctors.length ? (
+        {directory.error ? (
+          <EmptyState title="Doctor directory unavailable" description={directory.error} />
+        ) : doctors.length ? (
           <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
             {doctors.map((doctor) => (
               <DoctorDirectoryCard key={doctor.doctor_id} doctor={doctor} />

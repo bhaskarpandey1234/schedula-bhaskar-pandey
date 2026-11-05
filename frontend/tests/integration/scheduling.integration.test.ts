@@ -57,6 +57,20 @@ afterEach(async () => {
 });
 
 describe("local Supabase scheduling RPCs", () => {
+  it("returns public doctors without an empty-array type error", async () => {
+    const doctor = await user("doctor", "public-directory");
+    await createSlot(doctor);
+    const doctorWithoutSlots = await user("doctor", "public-directory-empty");
+    const { data, error } = await publicClient().rpc("public_doctor_directory", { p_search: null, p_specialty: null });
+    expect(error).toBeNull();
+    expect(data?.some((row: { doctor_id: string }) => row.doctor_id === doctor.id)).toBe(true);
+    expect(data?.some((row: { doctor_id: string }) => row.doctor_id === doctorWithoutSlots.id)).toBe(true);
+
+    const { data: filtered, error: filteredError } = await publicClient().rpc("public_doctor_directory", { p_search: "Phase 8", p_specialty: "Cardiology" });
+    expect(filteredError).toBeNull();
+    expect(filtered?.some((row: { doctor_id: string }) => row.doctor_id === doctor.id)).toBe(true);
+  });
+
   it("exposes completed doctors through anonymous-safe discovery fields only", async () => {
     const doctor = await user("doctor", "public-discovery");
     const { data, error } = await publicClient().rpc("public_doctor_detail", { p_doctor_id: doctor.id });

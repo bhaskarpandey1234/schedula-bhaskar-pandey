@@ -33,11 +33,12 @@ const fallbackSpecialties = [
 
 export default async function Home() {
   await connection();
-  const [account, specialties, doctors] = await Promise.all([
+  const [account, specialties, directory] = await Promise.all([
     getCurrentAccount(),
     getPublicDoctorSpecialties(),
     searchPublicDoctors({ search: "", specialty: "" }),
   ]);
+  const doctors = directory.doctors;
   const role =
     account?.onboardingComplete && account.profile?.full_name
       ? account.profile.role
@@ -158,7 +159,13 @@ export default async function Home() {
               </Button>
             </div>
 
-            <DoctorCarousel doctors={doctors} showDemo={doctors.length === 0} />
+            {directory.error ? (
+              <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {directory.error}
+              </p>
+            ) : (
+              <DoctorCarousel doctors={doctors} showDemo={doctors.length === 0} />
+            )}
           </PageContainer>
         </section>
 
