@@ -44,7 +44,7 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 | UX-021 | Medium | Profile onboarding | Doctors and patients must type values that could be selected from guided options. | Forms provide curated selects, date controls, phone country codes, and useful examples. | Specialty, experience, timezone, phone code, and other suitable profile fields have accessible options with an “Other” fallback where needed. | Implemented locally; deployed verification pending |
 | UX-022 | Medium | Doctor profile | Doctors must write biographies from scratch. | Doctors can generate an editable bio from their entered profile details. | A local deterministic bio generator fills the bio field without sending personal data externally. | Implemented locally; deployed verification pending |
 | UX-023 | High | Doctor availability editing | `Edit window` opened time fields without asking whether the doctor intended an expansion or shrink. | The dialog explicitly asks the doctor to choose `Expand availability` or `Shrink availability` before editing. | The selected mode is accessible, mode-specific validation runs before preview, stale previews are cleared when changing mode, and the browser flow is covered by acceptance tests. | Resolved in code; browser verification pending |
-| UX-024 | High | Elastic availability preview | Clicking `Preview change` could surface production React error #441 when the preview server action/RPC failed. | Preview failures return safe inline feedback and do not crash the Server Components render. | Missing migration/RPC, active holds, stale data, overlap, future-window, and wave-alignment errors are shown inline; successful previews remain unchanged. | Resolved in code; hosted migration/browser verification pending |
+| UX-024 | High | Elastic availability preview | Clicking `Preview change` could surface production React error #441 when the preview server action/RPC failed. | Preview failures return safe inline feedback and do not crash the Server Components render. | Missing migration/RPC, active holds, stale data, overlap, future-window, and wave-alignment errors are shown inline; successful previews remain unchanged. | Migration applied and RPCs verified; browser verification blocked by Chrome extension UI |
 
 ### Research references
 
@@ -62,6 +62,13 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 - Signup profile details remain in patient/doctor onboarding; account creation is intentionally minimal.
 - The default light surface is white, with blue patient and teal doctor portal accents. Dark mode remains supported.
 - Shared password visibility, Radix Select, feedback, and reduced-motion primitives are now used across active forms.
+
+### 2026-11-09 elastic preview incident
+
+- Root cause: Supabase returned a structured PostgREST error (`PGRST202`) for the missing preview RPC, while the frontend mapper only inspected `Error.message`, so the dialog collapsed the actionable migration failure into generic copy.
+- The hosted preview schema was missing migration `0036-elastic-scheduling.sql`. The migration also contained an unmatched parenthesis in its recurring materialization query; that source defect was corrected before applying it.
+- The corrected migration was applied through Supabase SQL Editor without reset or seed writes. Both elastic RPCs, all three adjustment tables, authenticated execute privileges, and the PostgREST schema reload were verified read-only afterward.
+- Browser acceptance remains pending because Chrome automation is currently blocked by an extension UI on the authenticated schedule tab.
 
 ### 2026-10-28 remediation update
 

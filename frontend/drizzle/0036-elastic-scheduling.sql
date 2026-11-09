@@ -98,8 +98,16 @@ BEGIN
     v_today := (now() AT TIME ZONE v_rule.doctor_timezone)::date;
     FOR v_date IN SELECT series_date::date FROM generate_series(v_rule.recurrence_start_date, v_rule.recurrence_end_date, interval '1 day') dates(series_date)
       WHERE series_date::date >= v_today
-        AND ((v_rule.kind = 'weekly' AND extract(isodow FROM series_date) = v_rule.day_of_week)
-          OR (v_rule.kind = 'monthly' AND ((v_rule.monthly_days IS NOT NULL AND extract(day FROM series_date)::integer = ANY(v_rule.monthly_days)) OR (v_rule.monthly_days IS NULL AND extract(day FROM series_date) BETWEEN extract(day FROM v_rule.recurrence_start_date) AND v_rule.monthly_range_end_day)))
+        AND (
+          (v_rule.kind = 'weekly' AND extract(isodow FROM series_date) = v_rule.day_of_week)
+          OR (
+            v_rule.kind = 'monthly'
+            AND (
+              (v_rule.monthly_days IS NOT NULL AND extract(day FROM series_date)::integer = ANY(v_rule.monthly_days))
+              OR (v_rule.monthly_days IS NULL AND extract(day FROM series_date) BETWEEN extract(day FROM v_rule.recurrence_start_date) AND v_rule.monthly_range_end_day)
+            )
+          )
+        )
         AND NOT EXISTS (SELECT 1 FROM availability_sessions custom WHERE custom.doctor_id = p_doctor_id AND custom.kind = 'custom' AND custom.status = 'active' AND custom.session_date = series_date::date)
         AND NOT EXISTS (SELECT 1 FROM availability_occurrence_overrides occurrence_override WHERE occurrence_override.availability_session_id = v_rule.id AND occurrence_override.occurrence_date = series_date::date) LOOP
       v_override_start := NULL; v_override_end := NULL;

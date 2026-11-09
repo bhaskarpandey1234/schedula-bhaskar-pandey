@@ -23,9 +23,19 @@ export type ElasticAssignment = {
 
 export type ElasticEditMode = "expansion" | "shrink";
 
+function availabilityErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message.toLowerCase();
+  if (!error || typeof error !== "object") return "";
+  const candidate = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+  return [candidate.message, candidate.code, candidate.details, candidate.hint]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+}
+
 export function userFacingAvailabilityError(error: unknown) {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (message.includes("does not exist") || message.includes("schema cache") || message.includes("function public.preview_doctor_occurrence_adjustment")) return "Elastic scheduling is not enabled in this environment yet. Ask an administrator to apply migration 0036, then refresh the schedule.";
+  const message = availabilityErrorMessage(error);
+  if (message.includes("pgrst202") || message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find the function") || message.includes("function public.preview_doctor_occurrence_adjustment")) return "Elastic scheduling is not enabled in this environment yet. Ask an administrator to apply migration 0036, then refresh the schedule.";
   if (message.includes("active payment hold")) return "An active payment hold is using this occurrence. Wait for checkout to finish or expire, then preview again.";
   if (message.includes("stale") || message.includes("no longer available")) return "Availability changed while you were reviewing it. Refresh the schedule and preview again.";
   if (message.includes("overlap")) return "The new window overlaps another availability session.";
