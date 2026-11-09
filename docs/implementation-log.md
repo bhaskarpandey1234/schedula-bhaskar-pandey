@@ -44,7 +44,7 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 | UX-021 | Medium | Profile onboarding | Doctors and patients must type values that could be selected from guided options. | Forms provide curated selects, date controls, phone country codes, and useful examples. | Specialty, experience, timezone, phone code, and other suitable profile fields have accessible options with an “Other” fallback where needed. | Implemented locally; deployed verification pending |
 | UX-022 | Medium | Doctor profile | Doctors must write biographies from scratch. | Doctors can generate an editable bio from their entered profile details. | A local deterministic bio generator fills the bio field without sending personal data externally. | Implemented locally; deployed verification pending |
 | UX-023 | High | Doctor availability editing | `Edit window` opened time fields without asking whether the doctor intended an expansion or shrink. | The dialog explicitly asks the doctor to choose `Expand availability` or `Shrink availability` before editing. | The selected mode is accessible, mode-specific validation runs before preview, stale previews are cleared when changing mode, and the browser flow is covered by acceptance tests. | Resolved in code; browser verification pending |
-| UX-024 | High | Elastic availability preview | Clicking `Preview change` could surface production React error #441 when the preview server action/RPC failed. | Preview failures return safe inline feedback and do not crash the Server Components render. | Missing migration/RPC, active holds, stale data, overlap, future-window, and wave-alignment errors are shown inline; successful previews remain unchanged. | Migration 0036 and 0037 applied; RPCs verified; browser verification blocked by Chrome extension UI |
+| UX-024 | High | Elastic availability preview | Clicking `Preview change` could surface production React error #441 when the preview server action/RPC failed. | Preview failures return safe inline feedback and do not crash the Server Components render. | Missing migration/RPC, active holds, stale data, overlap, future-window, and wave-alignment errors are shown inline; successful previews remain unchanged. | Migrations 0036–0038 applied; RPCs verified; preview deployment pushed |
 
 ### Research references
 
@@ -75,6 +75,12 @@ Reported against the deployed application on 2026-10-28. Status tracks the remed
 - Aman’s December 8 data showed a cancelled recurring `09:00–10:00` Stream slot alongside an active custom `09:30–10:30` Stream slot booked by Raj.
 - The elastic overlap predicate checked active sessions but not slot status, so the cancelled recurring slot incorrectly blocked expansion to `09:00–10:30`.
 - Migration `0037-elastic-overlap-ignore-cancelled-slots.sql` now updates both elastic RPCs to treat only `available` competing slots as conflicts. Hosted function-definition verification returned `true` for both RPCs.
+
+### 2026-11-10 Same-day elastic edit buffer
+
+- The original date-only guard rejected every occurrence scheduled for the current calendar date, even when the current window was still hours away.
+- Migration `0038-elastic-old-window-buffer.sql` now bases eligibility on the effective old window start and requires more than three hours of notice in the doctor’s timezone. The proposed new start remains subject to the existing future-time guard.
+- Hosted function-definition verification confirmed both RPCs contain the three-hour buffer and no longer contain the date-only lock; authenticated execute privileges remain true.
 
 ### 2026-10-28 remediation update
 
