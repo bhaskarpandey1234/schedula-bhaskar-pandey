@@ -30,6 +30,7 @@ import { formatLocalDate, formatSchedulingWindow, localDateKey } from "@/lib/sch
 import { createClient } from "@/lib/supabase/server";
 import { CancelSessionForm } from "@/components/cancel-session-form";
 import { CancelSlotForm } from "@/components/cancel-slot-form";
+import { ElasticAvailabilityForm } from "@/components/elastic-availability-form";
 
 export const instant = false;
 
@@ -40,6 +41,10 @@ function localDate(timezone: string) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function localTime(value: string, timezone: string) {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
 function scheduleCopy(selection: ScheduleFilterSelection, timezone: string) {
@@ -87,11 +92,11 @@ export default async function DoctorSchedulePage({
     ]);
   }
 
-  const groups = visibleSlots.reduce<Array<{ date: string; slots: typeof visibleSlots }>>(
+  const groups = visibleSlots.reduce<Array<{ date: string; sessionId: string; slots: typeof visibleSlots }>>(
     (result, slot) => {
       const date = localDateKey(slot.slot_start_at, doctor.timezone);
       const group = result.at(-1);
-      if (!group || group.date !== date) result.push({ date, slots: [slot] });
+      if (!group || group.date !== date || group.sessionId !== slot.availability_session_id) result.push({ date, sessionId: slot.availability_session_id, slots: [slot] });
       else group.slots.push(slot);
       return result;
     },
@@ -184,7 +189,7 @@ export default async function DoctorSchedulePage({
                           {formatLocalDate(`${group.date}T12:00:00Z`, doctor.timezone)}
                         </h2>
                         </div>
-                        {group.slots[0] && <CancelSessionForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} />}
+                        {group.slots[0] && <div className="flex flex-wrap items-center gap-2"><ElasticAvailabilityForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} startTime={localTime(group.slots[0].slot_start_at, doctor.timezone)} endTime={localTime(group.slots.at(-1)?.slot_end_at ?? group.slots[0].slot_end_at, doctor.timezone)} timezone={doctor.timezone} /><CancelSessionForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} /></div>}
                       </div>
 
                       <div className="overflow-x-auto rounded-2xl border border-border/80">

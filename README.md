@@ -28,6 +28,7 @@ Implemented:
 - Optional server-side Resend booking confirmation email delivery; missing configuration or delivery failure never invalidates a confirmed appointment.
 - Razorpay-ready payment architecture with INR fee snapshots, capacity-safe payment holds, webhook idempotency, refund tracking, and payment-aware appointment states.
 - Durable notification/outbox delivery for payment, cancellation, refund, and appointment reminders, with a provider-neutral rescheduling foundation.
+- Occurrence-level elastic scheduling for doctors: Wave expansion/shrink previews, capacity-aware booking moves, explicit full-refund fallback cancellations, and Stream arrival-window resizing with booking preservation.
 
 Phase 8 quality gates are complete. Phase 9 adds deployment-safe authentication redirects and the release handoff runbook. Day 4 extends the existing booking flow with payment and notification infrastructure. Hosted Supabase migration, Razorpay configuration, Supabase Cron, and Vercel deployment require provider dashboard access and are recorded in [`docs/day-4-payments-operations.md`](docs/day-4-payments-operations.md) and [`docs/phase-9-handoff.md`](docs/phase-9-handoff.md).
 

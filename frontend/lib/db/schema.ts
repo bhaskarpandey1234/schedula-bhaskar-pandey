@@ -11,6 +11,7 @@ import {
   time,
   uuid,
   boolean,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 const auth = pgSchema("auth");
@@ -112,6 +113,16 @@ export const availabilitySessions = pgTable("availability_sessions", {
   sessionEndAt: timestamp("session_end_at", { withTimezone: true }),
   ...auditColumns(),
 }, (table) => ({ doctorDateIdx: index("availability_sessions_doctor_date_idx").on(table.doctorId, table.sessionDate), doctorWeekdayIdx: index("availability_sessions_doctor_weekday_idx").on(table.doctorId, table.dayOfWeek) }));
+
+export const availabilityOccurrenceOverrides = pgTable("availability_occurrence_overrides", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  availabilitySessionId: uuid("availability_session_id").notNull().references(() => availabilitySessions.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  occurrenceDate: date("occurrence_date").notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  ...auditColumns(),
+}, (table) => ({ uniqueOccurrence: uniqueIndex("availability_occurrence_override_unique").on(table.availabilitySessionId, table.occurrenceDate) }));
 
 export const appointmentSlots = pgTable("appointment_slots", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -220,6 +231,34 @@ export const rescheduleRequests = pgTable("reschedule_requests", {
   ...auditColumns(),
 });
 
+export const availabilityAdjustments = pgTable("availability_adjustments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  availabilitySessionId: uuid("availability_session_id").notNull().references(() => availabilitySessions.id, { onDelete: "cascade" }),
+  occurrenceDate: date("occurrence_date").notNull(),
+  schedulingType: availabilitySchedulingType("scheduling_type").notNull(),
+  oldStartAt: timestamp("old_start_at", { withTimezone: true }).notNull(),
+  oldEndAt: timestamp("old_end_at", { withTimezone: true }).notNull(),
+  newStartAt: timestamp("new_start_at", { withTimezone: true }).notNull(),
+  newEndAt: timestamp("new_end_at", { withTimezone: true }).notNull(),
+  summary: jsonb("summary").notNull(),
+  ...auditColumns(),
+}, (table) => ({ doctorDateIdx: index("availability_adjustments_doctor_date_idx").on(table.doctorId, table.occurrenceDate) }));
+
+export const availabilityAdjustmentItems = pgTable("availability_adjustment_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  adjustmentId: uuid("adjustment_id").notNull().references(() => availabilityAdjustments.id, { onDelete: "cascade" }),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  sourceSlotId: uuid("source_slot_id").notNull().references(() => appointmentSlots.id, { onDelete: "cascade" }),
+  targetSlotId: uuid("target_slot_id").references(() => appointmentSlots.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  oldStartAt: timestamp("old_start_at", { withTimezone: true }).notNull(),
+  oldEndAt: timestamp("old_end_at", { withTimezone: true }).notNull(),
+  newStartAt: timestamp("new_start_at", { withTimezone: true }),
+  newEndAt: timestamp("new_end_at", { withTimezone: true }),
+  ...auditColumns(),
+}, (table) => ({ adjustmentIdx: index("availability_adjustment_items_adjustment_idx").on(table.adjustmentId) }));
+
 export const notifications = pgTable("notifications", {
   id: uuid("id").defaultRandom().primaryKey(),
   recipientId: uuid("recipient_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
@@ -228,6 +267,7 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   dedupeKey: text("dedupe_key"),
+  metadata: jsonb("metadata"),
   readAt: timestamp("read_at", { withTimezone: true }),
   ...auditColumns(),
 }, (table) => ({ recipientIdx: index("notifications_recipient_idx").on(table.recipientId, table.createdAt), dedupeUnique: uniqueIndex("notifications_dedupe_unique").on(table.dedupeKey) }));
