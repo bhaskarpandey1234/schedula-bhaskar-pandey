@@ -163,6 +163,65 @@ describe("local Supabase scheduling RPCs", () => {
     expect(customSessions?.[0]?.kind).toBe("custom");
   });
 
+  it("allows Stream elastic expansion over a cancelled recurring slot while preserving a booking", async () => {
+    const doctor = await user("doctor", "elastic-stream-doctor");
+    const patient = await user("patient", "elastic-stream-patient");
+    const date = futureWeekday(4);
+    const recurrenceEndDate = recurrenceEnd(date);
+    const { data: rules, error: weeklyError } = await doctor.client.rpc("create_weekly_availability_with_slots", {
+      p_consulting_days: [4], p_recurrence_start_date: date, p_recurrence_end_date: recurrenceEndDate,
+      p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(weeklyError).toBeNull();
+    const { data: customSessionId, error: customError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: date, p_start_time: "09:30", p_end_time: "10:30", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(customError).toBeNull();
+    const { data: recurringSlots } = await doctor.client.from("appointment_slots").select("status").eq("availability_session_id", rules![0]);
+    expect(recurringSlots?.every((slot) => slot.status === "cancelled")).toBe(true);
+    const { data: customSlots } = await doctor.client.from("appointment_slots").select("id, slot_start_at, slot_end_at, allocated_count").eq("availability_session_id", customSessionId!).single();
+    expect(customSlots).toBeTruthy();
+    const { data: appointmentId, error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: customSlots!.id, p_reason: "Elastic Stream regression" });
+    expect(bookingError).toBeNull();
+
+    const { data: preview, error: previewError } = await doctor.client.rpc("preview_doctor_occurrence_adjustment", {
+      p_session_id: customSessionId, p_occurrence_date: date, p_start_time: "09:00", p_end_time: "10:30",
+    });
+    expect(previewError).toBeNull();
+    expect(preview?.classification).toBe("expansion");
+    expect(preview?.appointments).toHaveLength(1);
+    expect(preview?.appointments[0]?.appointment_id).toBe(appointmentId);
+
+    const { error: applyError } = await doctor.client.rpc("apply_doctor_occurrence_adjustment", {
+      p_session_id: customSessionId, p_occurrence_date: date, p_start_time: "09:00", p_end_time: "10:30",
+      p_assignments: [{ appointment_id: appointmentId, source_slot_id: customSlots!.id, target_slot_id: customSlots!.id, action: "moved" }],
+    });
+    expect(applyError).toBeNull();
+    const { data: expandedSlot } = await doctor.client.from("appointment_slots").select("slot_start_at, slot_end_at, allocated_count").eq("id", customSlots!.id).single();
+    expect(new Date(expandedSlot!.slot_end_at).getTime() - new Date(expandedSlot!.slot_start_at).getTime()).toBe(90 * 60 * 1000);
+    expect(expandedSlot?.allocated_count).toBe(1);
+    const { data: appointment } = await doctor.client.from("appointments").select("slot_id, status").eq("id", appointmentId!).single();
+    expect(appointment).toEqual({ slot_id: customSlots!.id, status: "confirmed" });
+  });
+
+  it("still rejects Stream expansion into an active available overlap", async () => {
+    const doctor = await user("doctor", "elastic-stream-overlap-doctor");
+    const date = futureDate();
+    const { data: sourceId, error: sourceError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: date, p_start_time: "09:30", p_end_time: "10:30", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(sourceError).toBeNull();
+    const { data: overlapId, error: overlapError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: date, p_start_time: "09:00", p_end_time: "09:30", p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(overlapError).toBeNull();
+    const { error: previewError } = await doctor.client.rpc("preview_doctor_occurrence_adjustment", {
+      p_session_id: sourceId, p_occurrence_date: date, p_start_time: "09:00", p_end_time: "10:30",
+    });
+    expect(previewError?.message).toContain("overlaps");
+    expect(overlapId).toBeTruthy();
+  });
+
   it("lets the specific-date RPC replace an unbooked recurring date with a different window", async () => {
     const doctor = await user("doctor", "specific-date-override-doctor");
     const date = futureWeekday(1);
