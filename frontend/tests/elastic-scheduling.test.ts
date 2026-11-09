@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestElasticAssignments, type ElasticPreview } from "../lib/availability/elastic";
+import { suggestElasticAssignments, validateElasticWindow, type ElasticPreview } from "../lib/availability/elastic";
 
 const base: ElasticPreview = {
   session_id: "session",
@@ -19,6 +19,19 @@ const base: ElasticPreview = {
 };
 
 describe("elastic scheduling suggestions", () => {
+  it("validates a pure expansion", () => {
+    expect(validateElasticWindow({ mode: "expansion", oldStart: "10:00", oldEnd: "12:00", newStart: "09:00", newEnd: "12:00" })).toBeNull();
+  });
+
+  it("validates a pure shrink", () => {
+    expect(validateElasticWindow({ mode: "shrink", oldStart: "10:00", oldEnd: "12:00", newStart: "10:00", newEnd: "11:00" })).toBeNull();
+  });
+
+  it("rejects unchanged and mixed-direction windows", () => {
+    expect(validateElasticWindow({ mode: "expansion", oldStart: "10:00", oldEnd: "12:00", newStart: "10:00", newEnd: "12:00" })).toMatch(/at least one boundary/i);
+    expect(validateElasticWindow({ mode: "shrink", oldStart: "10:00", oldEnd: "12:00", newStart: "09:00", newEnd: "11:00" })).toMatch(/stay inside/i);
+  });
+
   it("packs appointments into the earliest compatible capacity", () => {
     const result = suggestElasticAssignments({
       ...base,

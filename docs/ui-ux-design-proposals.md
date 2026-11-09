@@ -1,5 +1,17 @@
 # Schedula Healthcare — UI/UX Design Proposals: Elevated Clinical Directory & Appointment Scheduling
 
+## Interaction completeness checklist
+
+Use this checklist for every consequential scheduling or booking workflow:
+
+- Present distinct operation types explicitly before asking for detailed input (for example, `Expand availability` versus `Shrink availability`).
+- Keep the current entity, date, timezone, and affected scope visible while editing.
+- Provide accessible selected, focus, disabled, loading, error, and keyboard states for every decision control.
+- Validate the selected operation before submitting a preview request; do not rely on inferred intent alone.
+- Preview booking, payment, refund, notification, and capacity consequences before confirmation.
+- Require an explicit confirmation for changes that can move, cancel, refund, or resize appointments.
+- Provide success, failure, retry, and stale-data recovery feedback after confirmation.
+
 ## Executive Summary & Design Vision
 
 Modern digital healthcare applications require an interface that immediately establishes **clinical trust, emotional calm, and operational clarity**. Patients navigating doctor directories are often experiencing anxiety, pain, or time sensitivity; they need rapid access to verified credentials, explicit operating hours, and transparent booking availability without cognitive overload or visual noise.

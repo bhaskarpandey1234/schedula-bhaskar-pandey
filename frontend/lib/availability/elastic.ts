@@ -21,6 +21,28 @@ export type ElasticAssignment = {
   action: "moved" | "cancelled";
 };
 
+export type ElasticEditMode = "expansion" | "shrink";
+
+/** Returns a user-facing validation message, or null when the requested mode is valid. */
+export function validateElasticWindow(input: {
+  mode: ElasticEditMode;
+  oldStart: string;
+  oldEnd: string;
+  newStart: string;
+  newEnd: string;
+}): string | null {
+  const { mode, oldStart, oldEnd, newStart, newEnd } = input;
+  if (!newStart || !newEnd || newEnd <= newStart) return "End time must be after the start time.";
+  if (newStart === oldStart && newEnd === oldEnd) return "Change at least one boundary before previewing.";
+  if (mode === "expansion" && (newStart > oldStart || newEnd < oldEnd)) {
+    return "Expansion must keep the current window and add time before or after it.";
+  }
+  if (mode === "shrink" && (newStart < oldStart || newEnd > oldEnd)) {
+    return "Shrinking must stay inside the current availability window.";
+  }
+  return null;
+}
+
 export type ElasticPreview = {
   session_id: string;
   occurrence_date: string;
