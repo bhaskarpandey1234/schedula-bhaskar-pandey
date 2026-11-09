@@ -23,6 +23,18 @@ export type ElasticAssignment = {
 
 export type ElasticEditMode = "expansion" | "shrink";
 
+export function userFacingAvailabilityError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("does not exist") || message.includes("schema cache") || message.includes("function public.preview_doctor_occurrence_adjustment")) return "Elastic scheduling is not enabled in this environment yet. Ask an administrator to apply migration 0036, then refresh the schedule.";
+  if (message.includes("active payment hold")) return "An active payment hold is using this occurrence. Wait for checkout to finish or expire, then preview again.";
+  if (message.includes("stale") || message.includes("no longer available")) return "Availability changed while you were reviewing it. Refresh the schedule and preview again.";
+  if (message.includes("overlap")) return "The new window overlaps another availability session.";
+  if (message.includes("future")) return "Only future availability can be edited.";
+  if (message.includes("align")) return "Wave boundaries must align with the appointment duration.";
+  if (message.includes("pure shrink")) return "Choose a pure shrink or pure expansion; shifting both edges is not supported.";
+  return "We could not update this availability. Please review the window and try again.";
+}
+
 /** Returns a user-facing validation message, or null when the requested mode is valid. */
 export function validateElasticWindow(input: {
   mode: ElasticEditMode;

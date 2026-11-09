@@ -33,6 +33,7 @@ This file contains the engineering standards and project context for agents and 
 - Do not silently infer an important user decision from entered values when the product has distinct operation types. Present the operation choice explicitly and make the selected state accessible.
 - Review the actual browser flow, including first-open, keyboard, loading, error, and confirmation states; backend behavior alone is not sufficient evidence that a feature is complete.
 - Add acceptance tests for every visible decision control and each major state transition before marking the workflow complete.
+- Exercise server-action failure states in the browser; a passing backend unit test is not sufficient when an RSC/server-action exception can surface as a production error page.
 
 ## Git and Collaboration Workflow
 
