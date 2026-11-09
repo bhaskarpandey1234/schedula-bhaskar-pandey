@@ -39,6 +39,7 @@ export function userFacingAvailabilityError(error: unknown) {
   if (message.includes("active payment hold")) return "An active payment hold is using this occurrence. Wait for checkout to finish or expire, then preview again.";
   if (message.includes("stale") || message.includes("no longer available")) return "Availability changed while you were reviewing it. Refresh the schedule and preview again.";
   if (message.includes("overlap")) return "The new window overlaps another availability session.";
+  if (message.includes("3 hours") || message.includes("three hours")) return "This availability can be changed only more than 3 hours before its current start time.";
   if (message.includes("future")) return "Only future availability can be edited.";
   if (message.includes("align")) return "Wave boundaries must align with the appointment duration.";
   if (message.includes("pure shrink")) return "Choose a pure shrink or pure expansion; shifting both edges is not supported.";

@@ -28,6 +28,10 @@ describe("elastic preview actions", () => {
     expect(result).toEqual({ error: expect.stringContaining("active payment hold") });
   });
 
+  it("maps the same-day safety buffer to actionable inline copy", () => {
+    expect(userFacingAvailabilityError({ code: "P0001", message: "Availability changes must be made at least 3 hours before the current window starts" })).toBe("This availability can be changed only more than 3 hours before its current start time.");
+  });
+
   it("maps unknown errors to safe copy", () => {
     expect(userFacingAvailabilityError(new Error("private database detail"))).toBe("We could not update this availability. Please review the window and try again.");
   });

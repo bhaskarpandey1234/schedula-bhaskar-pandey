@@ -52,6 +52,13 @@ function recurrenceEnd(start: string) {
   return date.toISOString().slice(0, 10);
 }
 
+function localFutureWindow(hoursFromNow: number) {
+  const date = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+  return { date: `${value("year")}-${value("month")}-${value("day")}`, time: `${value("hour")}:${value("minute")}` };
+}
+
 afterEach(async () => {
   await deleteTestUsers(users.splice(0));
 });
@@ -220,6 +227,36 @@ describe("local Supabase scheduling RPCs", () => {
     });
     expect(previewError?.message).toContain("overlaps");
     expect(overlapId).toBeTruthy();
+  });
+
+  it("allows same-day Stream preview when the old start clears the three-hour buffer", async () => {
+    const doctor = await user("doctor", "elastic-same-day-allowed-doctor");
+    const oldStart = localFutureWindow(4);
+    const oldEnd = localFutureWindow(5);
+    const proposedStart = localFutureWindow(2);
+    const { data: sessionId, error: createError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: oldStart.date, p_start_time: oldStart.time, p_end_time: oldEnd.time, p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(createError).toBeNull();
+    const { error: previewError } = await doctor.client.rpc("preview_doctor_occurrence_adjustment", {
+      p_session_id: sessionId, p_occurrence_date: oldStart.date, p_start_time: proposedStart.time, p_end_time: oldEnd.time,
+    });
+    expect(previewError).toBeNull();
+  });
+
+  it("rejects same-day Stream preview when the old start is inside the three-hour buffer", async () => {
+    const doctor = await user("doctor", "elastic-same-day-buffer-doctor");
+    const oldStart = localFutureWindow(2);
+    const oldEnd = localFutureWindow(3);
+    const proposedStart = localFutureWindow(1);
+    const { data: sessionId, error: createError } = await doctor.client.rpc("create_custom_availability_with_slots", {
+      p_session_date: oldStart.date, p_start_time: oldStart.time, p_end_time: oldEnd.time, p_timezone: "Asia/Kolkata", p_capacity: 2, p_scheduling_type: "stream",
+    });
+    expect(createError).toBeNull();
+    const { error: previewError } = await doctor.client.rpc("preview_doctor_occurrence_adjustment", {
+      p_session_id: sessionId, p_occurrence_date: oldStart.date, p_start_time: proposedStart.time, p_end_time: oldEnd.time,
+    });
+    expect(previewError?.message).toContain("3 hours");
   });
 
   it("lets the specific-date RPC replace an unbooked recurring date with a different window", async () => {
