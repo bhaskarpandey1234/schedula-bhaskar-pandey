@@ -6,7 +6,6 @@ import {
   UserCheck,
 } from "lucide-react";
 import { AvailabilityForm } from "@/components/availability-form";
-import { PortalShell } from "@/components/portal-shell";
 import { ScheduleCreatedNotice } from "@/components/schedule-created-notice";
 import { ScheduleFilterForm } from "@/components/schedule-filter-form";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +105,6 @@ export default async function DoctorSchedulePage({
   const selectedDate = selection.filter === "specific" ? selection.date ?? today : today;
 
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
       <div className="space-y-6 max-w-6xl">
         {/* Header Console */}
         <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-end md:justify-between">
@@ -286,6 +284,5 @@ export default async function DoctorSchedulePage({
             </CardContent>
         </Card>
       </div>
-    </PortalShell>
   );
 }

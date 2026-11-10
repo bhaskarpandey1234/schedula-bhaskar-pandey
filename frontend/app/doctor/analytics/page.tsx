@@ -1,7 +1,6 @@
 import { connection } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
-import { PortalShell } from "@/components/portal-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/empty-state";
 
@@ -28,7 +27,7 @@ function UtilizationBar({ percent }: { percent: number }) {
 
 export default async function DoctorAnalyticsPage() {
   await connection();
-  const account = await requireRole("doctor");
+  await requireRole("doctor");
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("doctor_slot_utilization");
   const rows: UtilizationRow[] = error ? [] : ((data ?? []) as UtilizationRow[]);
@@ -38,7 +37,6 @@ export default async function DoctorAnalyticsPage() {
   const overallUtilization = totalSlots > 0 ? Math.round((totalBooked / totalSlots) * 100) : 0;
 
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
       <div className="grid gap-6">
         <div>
           <p className="text-sm font-medium text-primary">Analytics</p>
@@ -92,6 +90,5 @@ export default async function DoctorAnalyticsPage() {
           </Card>
         )}
       </div>
-    </PortalShell>
   );
 }
