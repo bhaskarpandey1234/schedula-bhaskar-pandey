@@ -3,27 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
-import { suggestElasticAssignments, type ElasticAssignment, type ElasticPreview } from "@/lib/availability/elastic";
+import { suggestElasticAssignments, userFacingAvailabilityError, type ElasticAssignment, type ElasticPreview } from "@/lib/availability/elastic";
 
-function userFacingAvailabilityError(error: unknown) {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (message.includes("active payment hold")) return "An active payment hold is using this occurrence. Wait for checkout to finish or expire, then preview again.";
-  if (message.includes("stale") || message.includes("no longer available")) return "Availability changed while you were reviewing it. Refresh the schedule and preview again.";
-  if (message.includes("overlap")) return "The new window overlaps another availability session.";
-  if (message.includes("future")) return "Only future availability can be edited.";
-  if (message.includes("align")) return "Wave boundaries must align with the appointment duration.";
-  if (message.includes("pure shrink")) return "Choose a pure shrink or pure expansion; shifting both edges is not supported.";
-  return "We could not update this availability. Please review the window and try again.";
-}
+export type ElasticPreviewActionResult = { preview: ElasticPreview; assignments: ElasticAssignment[] } | { error: string };
 
-export async function previewElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string }): Promise<{ preview: ElasticPreview; assignments: ElasticAssignment[] }> {
+export async function previewElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string }): Promise<ElasticPreviewActionResult> {
   await requireCompleteProfile("doctor");
   await requireVerifiedUser();
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("preview_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime });
-  if (error) throw new Error(userFacingAvailabilityError(error));
-  const preview = data as ElasticPreview;
-  return { preview, assignments: suggestElasticAssignments(preview) };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("preview_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime });
+    if (error) return { error: userFacingAvailabilityError(error) };
+    if (!data || typeof data !== "object") return { error: "We could not read the availability preview. Refresh the schedule and try again." };
+    const preview = data as ElasticPreview;
+    return { preview, assignments: suggestElasticAssignments(preview) };
+  } catch (error) {
+    return { error: userFacingAvailabilityError(error) };
+  }
 }
 
 export async function applyElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string; assignments: ElasticAssignment[] }) {

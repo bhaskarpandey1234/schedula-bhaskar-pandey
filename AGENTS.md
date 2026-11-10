@@ -27,6 +27,14 @@ This file contains the engineering standards and project context for agents and 
 - Validate changes with appropriate tests, builds, linting, type checks, and documentation checks.
 - Report what changed, what was verified, and any remaining risks or assumptions.
 
+## UX Completeness Gate
+
+- Every interactive workflow that changes scheduling, bookings, payments, refunds, or other consequential state must define an initial choice/state, edit state, validation state, impact preview, explicit confirmation, success state, failure state, and stale-data recovery state.
+- Do not silently infer an important user decision from entered values when the product has distinct operation types. Present the operation choice explicitly and make the selected state accessible.
+- Review the actual browser flow, including first-open, keyboard, loading, error, and confirmation states; backend behavior alone is not sufficient evidence that a feature is complete.
+- Add acceptance tests for every visible decision control and each major state transition before marking the workflow complete.
+- Exercise server-action failure states in the browser; a passing backend unit test is not sufficient when an RSC/server-action exception can surface as a production error page.
+
 ## Git and Collaboration Workflow
 
 - Do not commit directly to the default branch.
