@@ -137,14 +137,16 @@ test("doctor can register and create availability with keyboard-select controls"
 test("doctor can guide an affected Wave booking to another available date and slot", async ({ page }) => {
   const doctor = await createTestUser("doctor", "elastic-browser-doctor");
   const patient = await createTestUser("patient", "elastic-browser-patient");
-  createdUsers.push(doctor, patient);
+  const secondPatient = await createTestUser("patient", "elastic-browser-patient-two");
+  createdUsers.push(doctor, patient, secondPatient);
   await onboardTestUser(doctor);
   await onboardTestUser(patient);
+  await onboardTestUser(secondPatient);
   const sourceDate = futureDate();
   const firstAlternativeDate = futureDate(22);
   const secondAlternativeDate = futureDate(23);
   const unavailableDate = futureDate(24);
-  const source = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "11:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
+  const source = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "11:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 2 });
   const firstAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: firstAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
   const secondAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: secondAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
   if (source.error || firstAlternative.error || secondAlternative.error || !source.data) throw new Error(source.error?.message ?? firstAlternative.error?.message ?? secondAlternative.error?.message ?? "Could not create elastic scheduling test availability.");
@@ -152,6 +154,8 @@ test("doctor can guide an affected Wave booking to another available date and sl
   if (sourceSlotsError || !sourceSlots?.[1]) throw new Error(sourceSlotsError?.message ?? "Could not find the affected Wave slot.");
   const { error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: sourceSlots[1].id, p_reason: "Elastic browser test" });
   if (bookingError) throw new Error(bookingError.message);
+  const { error: secondBookingError } = await secondPatient.client.rpc("book_appointment", { p_slot_id: sourceSlots[1].id, p_reason: "Elastic browser test two" });
+  if (secondBookingError) throw new Error(secondBookingError.message);
 
   await signInAs(page, doctor);
   await page.goto(`/doctor/schedule?date=${sourceDate}`);
@@ -162,13 +166,23 @@ test("doctor can guide an affected Wave booking to another available date and sl
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Choose an outcome for each booking")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /Move booking/ })).toContainText("Recommended");
-  await dialog.getByRole("button", { name: "Cancel + full refund" }).click();
+  await expect(dialog.getByRole("button", { name: /Move booking/ })).toHaveCount(2);
   await expect(dialog.getByText("Choose a new date")).toHaveCount(0);
-  await dialog.getByRole("button", { name: /Move booking/ }).click();
+  await expect(dialog.getByRole("button", { name: /Move booking/ }).first()).toContainText("Recommended");
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog.getByRole("button", { name: /Move booking/ }).first().click();
+  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
+  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
   await expect(dialog.getByRole("button", { name: unavailableDate, exact: true })).toBeDisabled();
   await dialog.getByRole("button", { name: secondAlternativeDate, exact: true }).click();
   await expect(dialog.getByText(`Available slots on ${new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "Asia/Kolkata" }).format(new Date(`${secondAlternativeDate}T12:00:00.000Z`))}`)).toBeVisible();
-  await dialog.getByRole("button", { name: /9:00 AM.*10:00 AM.*place available/ }).click();
+  await dialog.getByRole("button", { name: /9:00 AM.*10:00 AM.*place available/ }).first().click();
+  await expect(dialog.getByText("Choose a new date")).toHaveCount(0);
+  await expect(dialog.getByText(/Moved to:/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel + full refund" }).last().click();
+  await expect(dialog.getByText("Cancel + full refund selected")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Confirm change" })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Change selection" }).first().click();
+  await dialog.getByRole("button", { name: /Move booking/ }).first().click();
+  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
 });
