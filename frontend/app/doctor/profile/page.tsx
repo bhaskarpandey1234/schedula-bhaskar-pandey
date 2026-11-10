@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { DoctorProfileForm } from "@/components/doctor-profile-form";
 import { AccountProfileSummary } from "@/components/account-profile-summary";
-import { PortalShell } from "@/components/portal-shell";
 import { requireRole } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +31,7 @@ export default async function DoctorProfilePage() {
 
   if (error) {
     return (
-      <PortalShell role="doctor" name={account.profile.full_name}>
+      <>
         <Card className="rounded-2xl border-destructive/20 p-6 text-center space-y-3">
           <CardTitle>Profile temporarily unavailable</CardTitle>
           <CardContent className="text-sm text-muted-foreground">
@@ -42,13 +41,13 @@ export default async function DoctorProfilePage() {
             </Button>
           </CardContent>
         </Card>
-      </PortalShell>
+      </>
     );
   }
 
   if (!doctor) {
     return (
-      <PortalShell role="doctor" name={account.profile.full_name}>
+      <>
         <Card className="rounded-2xl border-amber-300 bg-amber-50/50 p-6 text-center space-y-3">
           <CardTitle>Complete your professional profile</CardTitle>
           <CardContent className="text-sm text-muted-foreground">
@@ -58,7 +57,7 @@ export default async function DoctorProfilePage() {
             </Button>
           </CardContent>
         </Card>
-      </PortalShell>
+      </>
     );
   }
 
@@ -84,7 +83,7 @@ export default async function DoctorProfilePage() {
       .toUpperCase() || "DR";
 
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
+    <>
       <div className="space-y-6 max-w-4xl">
         {/* Header Console */}
         <div className="border-b border-border/60 pb-5">
@@ -234,6 +233,6 @@ export default async function DoctorProfilePage() {
           </CardContent>
         </Card>
       </div>
-    </PortalShell>
+    </>
   );
 }

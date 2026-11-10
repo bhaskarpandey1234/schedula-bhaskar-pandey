@@ -12,7 +12,6 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { PortalShell } from "@/components/portal-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +54,7 @@ export default async function DoctorPage() {
   const totalCapacity = schedule.slots.reduce((total, slot) => total + slot.capacity, 0);
 
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
+    <>
       <div className="space-y-8 max-w-6xl">
         {/* Practice Header Banner */}
         <div className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-r from-teal-50/70 via-sky-50/40 to-white p-6 sm:p-8 shadow-xs">
@@ -312,6 +311,6 @@ export default async function DoctorPage() {
           </div>
         </section>
       </div>
-    </PortalShell>
+    </>
   );
 }

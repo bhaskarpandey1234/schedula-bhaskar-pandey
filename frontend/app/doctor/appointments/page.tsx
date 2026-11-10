@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/guards";
 import { getDoctorAppointments } from "@/lib/appointments/queries";
-import { PortalShell } from "@/components/portal-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -32,14 +31,13 @@ export default async function DoctorAppointmentsPage({
   searchParams?: Promise<{ tab?: string }>;
 }) {
   await connection();
-  const account = await requireRole("doctor");
+  await requireRole("doctor");
   const requested = (await searchParams)?.tab;
   const tab: Tab =
     requested === "past" || requested === "cancelled" ? requested : "upcoming";
   const appointments = await getDoctorAppointments(tab);
 
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
       <div className="space-y-6 max-w-6xl">
         {/* Page Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
@@ -201,6 +199,5 @@ export default async function DoctorAppointmentsPage({
           </div>
         )}
       </div>
-    </PortalShell>
   );
 }

@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
 import { getDoctorAppointmentDetail } from "@/lib/appointments/queries";
 import { CancelDoctorAppointmentForm } from "@/components/cancel-doctor-appointment-form";
-import { PortalShell } from "@/components/portal-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,13 +15,12 @@ export const instant = false;
 
 export default async function DoctorAppointmentDetailPage({ params }: { params: Promise<{ appointmentId: string }> }) {
   await connection();
-  const account = await requireRole("doctor");
+  await requireRole("doctor");
   const { appointmentId } = await params;
   if (!isUuid(appointmentId)) notFound();
   const appointment = await getDoctorAppointmentDetail(appointmentId);
   if (!appointment) notFound();
   return (
-    <PortalShell role="doctor" name={account.profile.full_name}>
       <div className="mx-auto grid max-w-3xl gap-6">
         <Link href="/doctor/appointments" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> Back to appointments
@@ -51,6 +49,5 @@ export default async function DoctorAppointmentDetailPage({ params }: { params: 
         </Card>
         <Button asChild variant="outline" className="justify-self-start"><Link href="/doctor/appointments">View all appointments</Link></Button>
       </div>
-    </PortalShell>
   );
 }
