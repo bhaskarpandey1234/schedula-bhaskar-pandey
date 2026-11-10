@@ -14,7 +14,7 @@ export const instant = false;
 
 export default async function PatientPaymentDetailPage({ params }: { params: Promise<{ paymentId: string }> }) {
   await connection();
-  const account = await requireRole("patient");
+  await requireRole("patient");
   const { paymentId } = await params;
   if (!isUuid(paymentId)) notFound();
   const payment = (await getPatientPayments(paymentId))[0];

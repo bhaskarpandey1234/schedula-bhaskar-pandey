@@ -25,7 +25,7 @@ export default async function BookingConfirmPage({
   params: Promise<{ doctorId: string; slotId: string }>;
 }) {
   await connection();
-  const account = await requireRole("patient");
+  await requireRole("patient");
   const { doctorId, slotId } = await params;
   if (!isUuid(doctorId) || !isUuid(slotId)) notFound();
   const slot = await getBookableSlot(slotId);

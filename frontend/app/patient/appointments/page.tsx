@@ -42,7 +42,7 @@ export default async function AppointmentsPage({
   searchParams?: Promise<{ tab?: string }>;
 }) {
   await connection();
-  const account = await requireRole("patient");
+  await requireRole("patient");
   const requestedTab = (await searchParams)?.tab;
   const tab: AppointmentTab =
     requestedTab === "past" || requestedTab === "cancelled"
