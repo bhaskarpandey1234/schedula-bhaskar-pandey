@@ -61,6 +61,14 @@ async function seedDoctorWithAvailability(label: string) {
   return doctor;
 }
 
+async function signInAs(page: Page, user: TestUser) {
+  await page.goto("/auth/login");
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/doctor$/, { timeout: 15000 });
+}
+
 test.afterEach(async () => { await deleteTestUsers(createdUsers.splice(0)); });
 
 test("patient can register, onboard, book, and cancel", async ({ page }) => {
@@ -124,4 +132,43 @@ test("doctor can register and create availability with keyboard-select controls"
   await expect(page).toHaveURL(/\/doctor\/appointments/);
   await expect(page.locator("header")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Dashboard navigation" })).toBeVisible();
+});
+
+test("doctor can guide an affected Wave booking to another available date and slot", async ({ page }) => {
+  const doctor = await createTestUser("doctor", "elastic-browser-doctor");
+  const patient = await createTestUser("patient", "elastic-browser-patient");
+  createdUsers.push(doctor, patient);
+  await onboardTestUser(doctor);
+  await onboardTestUser(patient);
+  const sourceDate = futureDate();
+  const firstAlternativeDate = futureDate(22);
+  const secondAlternativeDate = futureDate(23);
+  const unavailableDate = futureDate(24);
+  const source = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "11:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
+  const firstAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: firstAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
+  const secondAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: secondAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
+  if (source.error || firstAlternative.error || secondAlternative.error || !source.data) throw new Error(source.error?.message ?? firstAlternative.error?.message ?? secondAlternative.error?.message ?? "Could not create elastic scheduling test availability.");
+  const { data: sourceSlots, error: sourceSlotsError } = await doctor.client.from("appointment_slots").select("id, slot_start_at").eq("availability_session_id", source.data).order("slot_start_at");
+  if (sourceSlotsError || !sourceSlots?.[1]) throw new Error(sourceSlotsError?.message ?? "Could not find the affected Wave slot.");
+  const { error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: sourceSlots[1].id, p_reason: "Elastic browser test" });
+  if (bookingError) throw new Error(bookingError.message);
+
+  await signInAs(page, doctor);
+  await page.goto(`/doctor/schedule?date=${sourceDate}`);
+  await page.getByRole("button", { name: "Edit window" }).first().click();
+  await page.getByRole("button", { name: "Shrink availability" }).click();
+  await page.getByLabel("New availability end time").fill("10:00");
+  await page.getByRole("button", { name: "Preview change" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Choose an outcome for each booking")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Move booking/ })).toContainText("Recommended");
+  await dialog.getByRole("button", { name: "Cancel + full refund" }).click();
+  await expect(dialog.getByText("Choose a new date")).toHaveCount(0);
+  await dialog.getByRole("button", { name: /Move booking/ }).click();
+  await expect(dialog.getByRole("button", { name: unavailableDate, exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: secondAlternativeDate, exact: true }).click();
+  await expect(dialog.getByText(`Available slots on ${new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "Asia/Kolkata" }).format(new Date(`${secondAlternativeDate}T12:00:00.000Z`))}`)).toBeVisible();
+  await dialog.getByRole("button", { name: /9:00 AM.*10:00 AM.*place available/ }).click();
+  await expect(dialog.getByRole("button", { name: "Confirm change" })).toBeEnabled();
 });

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatLocalDate, formatLocalSlotRange } from "../lib/scheduling/time";
+import { formatDateKey, formatLocalDate, formatLocalSlotRange } from "../lib/scheduling/time";
 
 describe("slot range formatting", () => {
   it("renders the appointment day in the appointment timezone", () => {
     expect(formatLocalDate("2099-04-20T03:30:00.000Z", "Asia/Kolkata")).toBe("Monday, April 20, 2099");
+  });
+
+  it("formats a doctor-local date key without browser-timezone leakage", () => {
+    expect(formatDateKey("2099-04-20")).toBe("Monday, April 20, 2099");
   });
 
   it("renders both times on the same local date", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestElasticAssignments, validateElasticWindow, type ElasticPreview } from "../lib/availability/elastic";
+import { availableElasticCandidateDates, availableElasticCandidates, elasticCandidatesForDate, suggestElasticAssignments, validateElasticWindow, type ElasticPreview } from "../lib/availability/elastic";
 
 const base: ElasticPreview = {
   session_id: "session",
@@ -49,6 +49,30 @@ describe("elastic scheduling suggestions", () => {
   it("marks appointments without capacity for explicit cancellation", () => {
     const result = suggestElasticAssignments({ ...base, appointments: [{ appointment_id: "a", source_slot_id: "old", patient_id: "p", start_at: "2099-05-01T06:00:00.000Z", end_at: "2099-05-01T06:30:00.000Z" }] });
     expect(result).toEqual([{ appointment_id: "a", source_slot_id: "old", target_slot_id: null, action: "cancelled" }]);
+  });
+
+  it("removes capacity already chosen by another affected booking", () => {
+    const preview = {
+      ...base,
+      candidates: [
+        { slot_id: "limited", start_at: "2099-05-02T06:00:00.000Z", end_at: "2099-05-02T06:30:00.000Z", remaining_capacity: 1 },
+        { slot_id: "later", start_at: "2099-05-03T06:00:00.000Z", end_at: "2099-05-03T06:30:00.000Z", remaining_capacity: 1 },
+      ],
+    };
+    const candidates = availableElasticCandidates(preview, [
+      { appointment_id: "first", source_slot_id: "source-a", target_slot_id: "limited", action: "moved" },
+      { appointment_id: "second", source_slot_id: "source-b", target_slot_id: null, action: "cancelled" },
+    ], "second");
+    expect(candidates.map((candidate) => candidate.slot_id)).toEqual(["later"]);
+  });
+
+  it("groups eligible candidates by their doctor-local calendar date", () => {
+    const candidates = [
+      { slot_id: "night", start_at: "2099-05-01T18:30:00.000Z", end_at: "2099-05-01T19:00:00.000Z", remaining_capacity: 1 },
+      { slot_id: "morning", start_at: "2099-05-02T04:30:00.000Z", end_at: "2099-05-02T05:00:00.000Z", remaining_capacity: 1 },
+    ];
+    expect(availableElasticCandidateDates(candidates, "Asia/Kolkata")).toEqual(["2099-05-02"]);
+    expect(elasticCandidatesForDate(candidates, "2099-05-02", "Asia/Kolkata").map((candidate) => candidate.slot_id)).toEqual(["night", "morning"]);
   });
 
   it("keeps every Stream allocation on the resized shared window", () => {
