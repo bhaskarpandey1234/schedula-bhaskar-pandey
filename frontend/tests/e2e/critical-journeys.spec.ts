@@ -108,6 +108,13 @@ test("doctor can register and create availability with keyboard-select controls"
   await page.getByLabel("Patients per slot").fill("1");
   await page.getByRole("button", { name: "Create availability" }).click();
   await expect(page.getByText("Availability created.", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Edit window" }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("Current window");
+  await expect(page.getByRole("button", { name: "Close dialog" })).toBeVisible();
+  await page.getByRole("button", { name: "Shrink availability" }).click();
+  await expect(page.getByLabel("New availability start time")).toBeVisible();
+  await expect(page.getByLabel("New availability end time")).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.getByRole("columnheader", { name: "Booked Patients" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Schedule type" })).toBeVisible();
   await choose(page, "Schedule type", "Wave");
