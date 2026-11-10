@@ -17,7 +17,6 @@ import { getPatientPayments } from "@/lib/payments/queries";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
 import { formatLocalDate, formatSchedulingWindow } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
-import { PortalShell } from "@/components/portal-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -55,7 +54,7 @@ export default async function AppointmentConfirmationPage({
   const StatusIcon = statusPresentation.icon;
 
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="mx-auto grid max-w-2xl gap-8">
         {/* Success Header */}
         <div className="text-center space-y-3">
@@ -182,6 +181,6 @@ export default async function AppointmentConfirmationPage({
           </Button>
         </div>
       </div>
-    </PortalShell>
+    </>
   );
 }

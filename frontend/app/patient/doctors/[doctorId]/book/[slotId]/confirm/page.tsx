@@ -15,7 +15,6 @@ import { getBookableSlot } from "@/lib/booking/queries";
 import { isUuid } from "@/lib/discovery/directory";
 import { formatSchedulingWindow } from "@/lib/scheduling/time";
 import { BookingConfirmForm } from "@/components/booking-confirm-form";
-import { PortalShell } from "@/components/portal-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const instant = false;
@@ -50,7 +49,7 @@ export default async function BookingConfirmPage({
       .toUpperCase() || "DR";
 
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="mx-auto grid max-w-2xl gap-6">
         <Link
           href={`/patient/doctors/${doctorId}/book/${slotId}`}
@@ -152,6 +151,6 @@ export default async function BookingConfirmPage({
           </CardContent>
         </Card>
       </div>
-    </PortalShell>
+    </>
   );
 }

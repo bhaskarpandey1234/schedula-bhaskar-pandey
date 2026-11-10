@@ -7,7 +7,6 @@ import { getBookableSlot } from "@/lib/booking/queries";
 import { isUuid } from "@/lib/discovery/directory";
 import { formatSchedulingWindow } from "@/lib/scheduling/time";
 import { BookingReasonForm } from "@/components/booking-reason-form";
-import { PortalShell } from "@/components/portal-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,7 +43,7 @@ export default async function BookingPage({
       .toUpperCase() || "DR";
 
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="mx-auto grid max-w-2xl gap-6">
         <Link
           href={`/doctors/${doctorId}#availability`}
@@ -132,6 +131,6 @@ export default async function BookingPage({
           </Button>
         </div>
       </div>
-    </PortalShell>
+    </>
   );
 }
