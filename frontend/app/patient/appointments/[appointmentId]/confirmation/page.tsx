@@ -28,7 +28,7 @@ export default async function AppointmentConfirmationPage({
   params: Promise<{ appointmentId: string }>;
 }) {
   await connection();
-  const account = await requireRole("patient");
+  await requireRole("patient");
   const { appointmentId } = await params;
   if (!isUuid(appointmentId)) notFound();
   const [confirmation, payments] = await Promise.all([

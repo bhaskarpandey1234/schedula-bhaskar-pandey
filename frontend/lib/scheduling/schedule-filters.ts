@@ -7,11 +7,32 @@ export const scheduleFilterOptions = [
   { value: "specific", label: "Specific date" },
 ] as const;
 
-export type ScheduleFilter = (typeof scheduleFilterOptions)[number]["value"];
-export type ScheduleFilterSelection = { filter: ScheduleFilter; date?: string; weekday?: number };
+export const scheduleTypeFilterOptions = [
+  { value: "all", label: "All schedule types" },
+  { value: "wave", label: "Wave" },
+  { value: "stream", label: "Stream" },
+] as const;
 
-type ScheduleSearchParams = { filter?: string; date?: string; weekday?: string };
-type ScheduleSlot = { slot_start_at: string; slot_end_at: string };
+export type ScheduleFilter = (typeof scheduleFilterOptions)[number]["value"];
+export type ScheduleTypeFilter = (typeof scheduleTypeFilterOptions)[number]["value"];
+export type ScheduleFilterSelection = { filter: ScheduleFilter; date?: string; weekday?: number; scheduleType?: ScheduleTypeFilter };
+
+type ScheduleSearchParams = { filter?: string; date?: string; weekday?: string; scheduleType?: string };
+type ScheduleSlot = { slot_start_at: string; slot_end_at: string; scheduling_type?: "wave" | "stream" };
+
+function parseScheduleType(value?: string): Exclude<ScheduleTypeFilter, "all"> | undefined {
+  return value === "wave" || value === "stream" ? value : undefined;
+}
+
+function parseWeekday(value?: string) {
+  const weekday = Number(value);
+  return Number.isInteger(weekday) && weekday >= 1 && weekday <= 7 ? weekday : undefined;
+}
+
+function localWeekday(value: string, timezone: string) {
+  const label = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(new Date(value));
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(label);
+}
 
 export function isValidDateKey(value?: string): value is string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -21,19 +42,19 @@ export function isValidDateKey(value?: string): value is string {
 
 export function parseScheduleFilter(params: ScheduleSearchParams): ScheduleFilterSelection {
   if (params.filter === "all" || params.filter === "upcoming" || params.filter === "past") {
-    return { filter: params.filter, weekday: params.weekday ? Number(params.weekday) : undefined };
+    return { filter: params.filter, weekday: parseWeekday(params.weekday), scheduleType: parseScheduleType(params.scheduleType) };
   }
   if (params.filter === "specific" && isValidDateKey(params.date)) {
-    return { filter: "specific", date: params.date, weekday: undefined };
+    return { filter: "specific", date: params.date, weekday: undefined, scheduleType: parseScheduleType(params.scheduleType) };
   }
 
   // Compatibility for links created before the named filters were introduced.
-  if (!params.filter && params.date === "all") return { filter: "all" };
+  if (!params.filter && params.date === "all") return { filter: "all", scheduleType: parseScheduleType(params.scheduleType) };
   if (!params.filter && isValidDateKey(params.date)) {
-    return { filter: "specific", date: params.date, weekday: undefined };
+    return { filter: "specific", date: params.date, weekday: undefined, scheduleType: parseScheduleType(params.scheduleType) };
   }
 
-  return { filter: "upcoming" };
+  return { filter: "upcoming", scheduleType: parseScheduleType(params.scheduleType) };
 }
 
 export function filterScheduleSlots<T extends ScheduleSlot>(
@@ -43,17 +64,24 @@ export function filterScheduleSlots<T extends ScheduleSlot>(
   now = new Date(),
 ) {
   if (selection.filter === "all") {
-    return selection.weekday ? slots.filter((slot) => new Date(slot.slot_start_at).getDay() === selection.weekday! % 7) : slots;
+    return slots.filter((slot) => {
+      if (selection.scheduleType && slot.scheduling_type !== selection.scheduleType) return false;
+      if (selection.weekday) {
+        if (localWeekday(slot.slot_start_at, timezone) !== selection.weekday % 7) return false;
+      }
+      return true;
+    });
   }
   if (selection.filter === "specific") {
     return slots.filter(
-      (slot) => localDateKey(slot.slot_start_at, timezone) === selection.date,
+      (slot) => (!selection.scheduleType || slot.scheduling_type === selection.scheduleType) && localDateKey(slot.slot_start_at, timezone) === selection.date,
     );
   }
 
   const currentTime = now.getTime();
   return slots.filter((slot) => {
-    if (selection.weekday && new Date(slot.slot_start_at).getDay() !== selection.weekday % 7) return false;
+    if (selection.weekday && localWeekday(slot.slot_start_at, timezone) !== selection.weekday % 7) return false;
+    if (selection.scheduleType && slot.scheduling_type !== selection.scheduleType) return false;
     const endTime = new Date(slot.slot_end_at).getTime();
     return selection.filter === "upcoming" ? endTime >= currentTime : endTime < currentTime;
   });

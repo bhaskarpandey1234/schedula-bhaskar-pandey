@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { availabilitySessionSchema } from "@/lib/validation/availability";
 import { doctorProfileSchema } from "@/lib/validation/doctor-profile";
-import { getDoctorScheduleAppointments } from "@/lib/appointments/queries";
 import { formValues, type FormActionState, zodFieldErrors } from "@/lib/forms/action-state";
 import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
 import { deriveRecurrenceEndDate } from "@/lib/scheduling/recurrence";
@@ -119,6 +118,5 @@ export async function getDoctorSchedule(sessionDate: string | "all") {
   const selectedSlots = rawSlots.map((slot) => ({ ...slot, scheduling_type: ((Array.isArray(slot.availability_sessions) ? (slot.availability_sessions[0] as { scheduling_type?: string } | undefined)?.scheduling_type : (slot.availability_sessions as { scheduling_type?: string } | undefined)?.scheduling_type) ?? "wave") as "wave" | "stream" }) as unknown as DoctorScheduleSlot).filter((slot) => doctor && (sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate));
   const sessions: Array<never> = [];
   if (!selectedSlots.length) return { sessions, slots: [], appointments: [] };
-  const appointments = await getDoctorScheduleAppointments(sessionDate);
-  return { sessions, slots: selectedSlots, appointments };
+  return { sessions, slots: selectedSlots };
 }

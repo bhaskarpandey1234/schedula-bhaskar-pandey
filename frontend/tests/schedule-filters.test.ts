@@ -53,7 +53,7 @@ describe("doctor schedule filters", () => {
 
   it("filters upcoming slots by weekday without changing the date selection", () => {
     expect(parseScheduleFilter({ filter: "upcoming", weekday: "1" })).toEqual({ filter: "upcoming", weekday: 1 });
-    expect(filterScheduleSlots(slots, { filter: "all", weekday: 5 }, "UTC", new Date("2026-10-30T00:00:00.000Z")).map((slot) => slot.id)).toEqual(["boundary"]);
+    expect(filterScheduleSlots(slots, { filter: "all", weekday: 5 }, "UTC", new Date("2026-10-30T00:00:00.000Z")).map((slot) => slot.id)).toEqual(["boundary", "future"]);
   });
 
   it("matches a specific date in the doctor's timezone", () => {
@@ -61,6 +61,16 @@ describe("doctor schedule filters", () => {
       filterScheduleSlots(slots, { filter: "specific", date: "2026-10-31" }, "Asia/Kolkata")
         .map((slot) => slot.id),
     ).toEqual(["future"]);
+  });
+
+  it("filters Wave and Stream slots without relying on the host timezone", () => {
+    const typedSlots = [
+      { id: "wave", slot_start_at: "2026-10-30T23:30:00.000Z", slot_end_at: "2026-10-31T00:00:00.000Z", scheduling_type: "wave" as const },
+      { id: "stream", slot_start_at: "2026-10-31T00:30:00.000Z", slot_end_at: "2026-10-31T01:00:00.000Z", scheduling_type: "stream" as const },
+    ];
+    expect(parseScheduleFilter({ filter: "specific", date: "2026-10-31", scheduleType: "wave" })).toEqual({ filter: "specific", date: "2026-10-31", scheduleType: "wave" });
+    expect(parseScheduleFilter({ filter: "upcoming", scheduleType: "invalid" })).toEqual({ filter: "upcoming" });
+    expect(filterScheduleSlots(typedSlots, { filter: "specific", date: "2026-10-31", scheduleType: "wave" }, "Asia/Kolkata").map((slot) => slot.id)).toEqual(["wave"]);
   });
 
   it("shows the date field only for the specific-date filter", () => {

@@ -1,9 +1,9 @@
 import { connection } from "next/server";
+import { Fragment } from "react";
 import {
   CalendarCheck2,
   CalendarDays,
   Info,
-  UserCheck,
 } from "lucide-react";
 import { AvailabilityForm } from "@/components/availability-form";
 import { ScheduleCreatedNotice } from "@/components/schedule-created-notice";
@@ -25,7 +25,7 @@ import {
   parseScheduleFilter,
   type ScheduleFilterSelection,
 } from "@/lib/scheduling/schedule-filters";
-import { formatLocalDate, formatSchedulingWindow, localDateKey } from "@/lib/scheduling/time";
+import { formatSchedulingWindow, localDateKey } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
 import { CancelSessionForm } from "@/components/cancel-session-form";
 import { CancelSlotForm } from "@/components/cancel-slot-form";
@@ -46,7 +46,11 @@ function localTime(value: string, timezone: string) {
   return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
-function scheduleCopy(selection: ScheduleFilterSelection, timezone: string) {
+function formatDateKey(value: string) {
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
+}
+
+function scheduleCopy(selection: ScheduleFilterSelection) {
   if (selection.filter === "all") {
     return { title: "All Published Slots", empty: "No availability has been created yet." };
   }
@@ -54,7 +58,7 @@ function scheduleCopy(selection: ScheduleFilterSelection, timezone: string) {
     return { title: "Past Slots Archive", empty: "No past availability was found in this period." };
   }
   if (selection.filter === "specific" && selection.date) {
-    const date = formatLocalDate(`${selection.date}T12:00:00Z`, timezone);
+    const date = formatDateKey(selection.date);
     return { title: `Slots for ${date}`, empty: `No slots created for ${date}. Create a session using the form.` };
   }
   return { title: "Upcoming Slots", empty: "No upcoming availability has been created yet." };
@@ -63,7 +67,7 @@ function scheduleCopy(selection: ScheduleFilterSelection, timezone: string) {
 export default async function DoctorSchedulePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ filter?: string; date?: string; weekday?: string; created?: string; mode?: string }>;
+    searchParams?: Promise<{ filter?: string; date?: string; weekday?: string; scheduleType?: string; created?: string; mode?: string }>;
 }) {
   await connection();
   const account = await requireRole("doctor");
@@ -81,22 +85,22 @@ export default async function DoctorSchedulePage({
   const selection = parseScheduleFilter(params ?? {});
   const schedule = await getDoctorSchedule("all");
   const visibleSlots = filterScheduleSlots(schedule.slots, selection, doctor.timezone);
-  const copy = scheduleCopy(selection, doctor.timezone);
+  const copy = scheduleCopy(selection);
 
-  const appointmentsBySlot = new Map<string, typeof schedule.appointments>();
-  for (const appointment of schedule.appointments ?? []) {
-    appointmentsBySlot.set(appointment.slot_id, [
-      ...(appointmentsBySlot.get(appointment.slot_id) ?? []),
-      appointment,
-    ]);
-  }
-
-  const groups = visibleSlots.reduce<Array<{ date: string; sessionId: string; slots: typeof visibleSlots }>>(
+  const groups = visibleSlots.reduce<Array<{ date: string; sessions: Array<{ sessionId: string; slots: typeof visibleSlots }> }>>(
     (result, slot) => {
       const date = localDateKey(slot.slot_start_at, doctor.timezone);
-      const group = result.at(-1);
-      if (!group || group.date !== date || group.sessionId !== slot.availability_session_id) result.push({ date, sessionId: slot.availability_session_id, slots: [slot] });
-      else group.slots.push(slot);
+      let dateGroup = result.find((group) => group.date === date);
+      if (!dateGroup) {
+        dateGroup = { date, sessions: [] };
+        result.push(dateGroup);
+      }
+      let session = dateGroup.sessions.find((item) => item.sessionId === slot.availability_session_id);
+      if (!session) {
+        session = { sessionId: slot.availability_session_id, slots: [] };
+        dateGroup.sessions.push(session);
+      }
+      session.slots.push(slot);
       return result;
     },
     [],
@@ -140,7 +144,7 @@ export default async function DoctorSchedulePage({
                 defaultDate={selectedDate}
                 initialMode={initialMode}
               />
-              <ScheduleFilterForm initialFilter={selection.filter} initialDate={selectedDate} initialWeekday={selection.weekday} />
+              <ScheduleFilterForm initialFilter={selection.filter} initialDate={selectedDate} initialWeekday={selection.weekday} initialScheduleType={selection.scheduleType} />
             </div>
           </div>
           <div className="mt-4 rounded-xl border border-border/70 bg-surface-muted/50 p-4 text-xs">
@@ -180,98 +184,43 @@ export default async function DoctorSchedulePage({
                 <div className="space-y-6">
                   {groups.map((group) => (
                     <section key={group.date} className="space-y-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <CalendarCheck2 className="size-4 text-primary" />
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                          {formatLocalDate(`${group.date}T12:00:00Z`, doctor.timezone)}
-                        </h2>
-                        </div>
-                        {group.slots[0] && <div className="flex flex-wrap items-center gap-2"><ElasticAvailabilityForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} startTime={localTime(group.slots[0].slot_start_at, doctor.timezone)} endTime={localTime(group.slots.at(-1)?.slot_end_at ?? group.slots[0].slot_end_at, doctor.timezone)} timezone={doctor.timezone} /><CancelSessionForm sessionId={group.slots[0].availability_session_id} occurrenceDate={group.date} /></div>}
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">{formatDateKey(group.date)}</h2>
                       </div>
-
                       <div className="overflow-x-auto rounded-2xl border border-border/80">
                         <Table>
-                          <TableHeader>
-                            <TableRow className="bg-surface-muted/60 text-xs">
-                              <TableHead className="font-bold text-foreground">Schedule</TableHead>
-                              <TableHead className="font-bold text-foreground">Time Window</TableHead>
-                              <TableHead className="font-bold text-foreground">Booked Patients</TableHead>
-                              <TableHead className="font-bold text-foreground">Capacity</TableHead>
-                              <TableHead className="font-bold text-foreground">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
+                          <TableHeader><TableRow className="bg-surface-muted/60 text-xs"><TableHead className="font-bold text-foreground">Schedule</TableHead><TableHead className="font-bold text-foreground">Time Window</TableHead><TableHead className="font-bold text-foreground">Capacity</TableHead><TableHead className="font-bold text-foreground">Status</TableHead></TableRow></TableHeader>
                           <TableBody>
-                            {group.slots.map((slot) => {
-                              const appointments = appointmentsBySlot.get(slot.id) ?? [];
-                              const remaining = slot.capacity - slot.allocated_count;
-                              const isFull = remaining <= 0;
-                              const hasBookings = slot.allocated_count > 0;
-
+                            {group.sessions.map((session) => {
+                              const activeSlots = session.slots.filter((slot) => slot.status === "available");
+                              const fullyBooked = activeSlots.length > 0 && activeSlots.every((slot) => slot.allocated_count >= slot.capacity);
+                              const first = session.slots[0];
+                              const last = session.slots.at(-1) ?? first;
                               return (
-                                <TableRow key={slot.id} className="text-xs hover:bg-surface-muted/30">
-                                  <TableCell><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge>{slot.status === "available" && new Date(slot.slot_start_at).getTime() > Date.now() && <CancelSlotForm slotId={slot.id} label={formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)} />}</div></TableCell>
-                                  <TableCell className="font-semibold text-foreground whitespace-nowrap">
-                                    {formatSchedulingWindow(
-                                      slot.slot_start_at,
-                                      slot.slot_end_at,
-                                      doctor.timezone,
-                                      slot.scheduling_type,
-                                    )}
-                                  </TableCell>
-
-                                  <TableCell>
-                                    {appointments.length ? (
-                                      <div className="space-y-1">
-                                        {appointments.map((appointment) => (
-                                          <div
-                                            key={appointment.appointment_id}
-                                            className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary mr-1"
-                                          >
-                                            <UserCheck className="size-3" />
-                                            <span>{appointment.patient_name}</span>
-                                          </div>
-                                        ))}
+                                <Fragment key={session.sessionId}>
+                                  <TableRow className="bg-surface-muted/30">
+                                    <TableCell colSpan={4}>
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-semibold">{first.scheduling_type === "stream" ? "Stream session" : "Wave session"}</span>
+                                        <div className="flex flex-wrap items-center gap-2"><ElasticAvailabilityForm sessionId={session.sessionId} occurrenceDate={group.date} startTime={localTime(first.slot_start_at, doctor.timezone)} endTime={localTime(last.slot_end_at, doctor.timezone)} timezone={doctor.timezone} /><CancelSessionForm sessionId={session.sessionId} occurrenceDate={group.date} /></div>
                                       </div>
-                                    ) : (
-                                      <span className="text-muted-foreground/60 italic">No bookings yet</span>
-                                    )}
-                                  </TableCell>
-
-                                  <TableCell className="whitespace-nowrap">
-                                    <div className="flex items-center gap-1.5 font-medium">
-                                      <span
-                                        className={
-                                          isFull
-                                            ? "text-destructive font-bold"
-                                            : hasBookings
-                                            ? "text-primary font-bold"
-                                            : "text-muted-foreground"
-                                        }
-                                      >
-                                        {slot.allocated_count} / {slot.capacity}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground">
-                                        ({remaining} left)
-                                      </span>
-                                    </div>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Badge
-                                      variant={
-                                        isFull
-                                          ? "destructive"
-                                          : slot.status === "available"
-                                          ? "secondary"
-                                          : "outline"
-                                      }
-                                      className="capitalize text-[10px]"
-                                    >
-                                      {isFull ? "Booked Out" : slot.status}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
+                                      {fullyBooked && <p role="status" className="mt-2 text-xs font-semibold text-destructive">All appointments are booked in this session.</p>}
+                                    </TableCell>
+                                  </TableRow>
+                                  {session.slots.map((slot) => {
+                                    const remaining = slot.capacity - slot.allocated_count;
+                                    const isFull = remaining <= 0;
+                                    const hasBookings = slot.allocated_count > 0;
+                                    const isCancelled = slot.status !== "available";
+                                    return <TableRow key={slot.id} className="text-xs hover:bg-surface-muted/30">
+                                      <TableCell><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="capitalize text-[10px]">{slot.scheduling_type}</Badge>{slot.status === "available" && new Date(slot.slot_start_at).getTime() > Date.now() && <CancelSlotForm slotId={slot.id} label={formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)} />}</div></TableCell>
+                                      <TableCell className="font-semibold text-foreground whitespace-nowrap">{formatSchedulingWindow(slot.slot_start_at, slot.slot_end_at, doctor.timezone, slot.scheduling_type)}</TableCell>
+                                      <TableCell className="whitespace-nowrap"><div className="flex items-center gap-1.5 font-medium"><span className={isCancelled ? "text-muted-foreground" : isFull ? "text-destructive font-bold" : hasBookings ? "text-primary font-bold" : "text-muted-foreground"}>{slot.allocated_count} / {slot.capacity}</span><span className="text-[10px] text-muted-foreground">({remaining} left)</span></div></TableCell>
+                                      <TableCell><Badge variant={isCancelled ? "outline" : isFull ? "destructive" : "secondary"} className="capitalize text-[10px]">{isCancelled ? "Cancelled" : isFull ? "Booked Out" : "Available"}</Badge></TableCell>
+                                    </TableRow>;
+                                  })}
+                                </Fragment>
                               );
                             })}
                           </TableBody>
