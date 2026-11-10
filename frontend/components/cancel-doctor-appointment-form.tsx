@@ -17,7 +17,7 @@ export function CancelDoctorAppointmentForm({ appointmentId }: { appointmentId: 
         <DialogTrigger>
           <Button type="button" variant="outline" size="sm">Cancel appointment</Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cancel this appointment?</DialogTitle>
             <DialogDescription>
