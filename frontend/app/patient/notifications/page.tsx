@@ -2,7 +2,6 @@ import { connection } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { getNotifications } from "@/lib/notifications/queries";
 import { NotificationList } from "@/components/notification-list";
-import { PortalShell } from "@/components/portal-shell";
 import { NotificationPreferencesForm } from "@/components/notification-preferences-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,7 +15,7 @@ export default async function PatientNotificationsPage() {
   const { data: preferences } = await supabase.from("notification_preferences").select("operational_email, operational_sms, operational_whatsapp, reminder_email, reminder_sms, reminder_whatsapp").eq("recipient_id", account.user.id).maybeSingle();
   const { data: patient } = await supabase.from("patients").select("phone").eq("id", account.user.id).maybeSingle();
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="grid gap-6">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
@@ -25,6 +24,6 @@ export default async function PatientNotificationsPage() {
         <NotificationList {...notificationFeed} />
         <NotificationPreferencesForm role="patient" preferences={{ ...(preferences ?? { operational_email: false, operational_sms: false, operational_whatsapp: false, reminder_email: false, reminder_sms: false, reminder_whatsapp: false }), phone: patient?.phone }} />
       </div>
-    </PortalShell>
+    </>
   );
 }

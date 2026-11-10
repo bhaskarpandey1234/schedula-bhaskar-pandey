@@ -2,7 +2,6 @@ import { connection } from "next/server";
 import { Calendar, Lock, Pencil, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { requireRole } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
-import { PortalShell } from "@/components/portal-shell";
 import { PatientProfileForm } from "@/components/patient-profile-form";
 import { AccountProfileSummary } from "@/components/account-profile-summary";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -31,7 +30,7 @@ export default async function PatientProfilePage() {
       .toUpperCase() || "PT";
 
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="space-y-6 max-w-4xl">
         {/* Header */}
         <div className="border-b border-border/60 pb-5">
@@ -153,6 +152,6 @@ export default async function PatientProfilePage() {
           </p>
         </Card>
       </div>
-    </PortalShell>
+    </>
   );
 }

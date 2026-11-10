@@ -11,7 +11,6 @@ import { getPatientAppointments } from "@/lib/appointments/queries";
 import type { AppointmentTab } from "@/lib/validation/appointments";
 import { CancelAppointmentForm } from "@/components/cancel-appointment-form";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
-import { PortalShell } from "@/components/portal-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -52,7 +51,7 @@ export default async function AppointmentsPage({
   const appointments = await getPatientAppointments(tab);
 
   return (
-    <PortalShell role="patient" name={account.profile.full_name}>
+    <>
       <div className="space-y-6 max-w-6xl">
         {/* Page Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
@@ -223,6 +222,6 @@ export default async function AppointmentsPage({
           </div>
         )}
       </div>
-    </PortalShell>
+    </>
   );
 }
