@@ -1,3 +1,5 @@
+import { localDateKey } from "@/lib/scheduling/time";
+
 export type ElasticAppointment = {
   appointment_id: string;
   source_slot_id: string;
@@ -82,6 +84,30 @@ export type ElasticPreview = {
   appointments: ElasticAppointment[];
   candidates: ElasticCandidate[];
 };
+
+/**
+ * Candidate capacity after accounting for the other choices in this preview.
+ * The active booking is deliberately excluded so its current recommendation
+ * remains visible while the doctor is deciding whether to change it.
+ */
+export function availableElasticCandidates(preview: ElasticPreview, assignments: ElasticAssignment[], appointmentId: string) {
+  const reserved = new Map<string, number>();
+  for (const assignment of assignments) {
+    if (assignment.appointment_id === appointmentId || assignment.action !== "moved" || !assignment.target_slot_id) continue;
+    reserved.set(assignment.target_slot_id, (reserved.get(assignment.target_slot_id) ?? 0) + 1);
+  }
+  return [...preview.candidates]
+    .filter((candidate) => candidate.remaining_capacity - (reserved.get(candidate.slot_id) ?? 0) > 0)
+    .sort((left, right) => Date.parse(left.start_at) - Date.parse(right.start_at) || left.slot_id.localeCompare(right.slot_id));
+}
+
+export function availableElasticCandidateDates(candidates: ElasticCandidate[], timezone: string) {
+  return [...new Set(candidates.map((candidate) => localDateKey(candidate.start_at, timezone)))];
+}
+
+export function elasticCandidatesForDate(candidates: ElasticCandidate[], date: string, timezone: string) {
+  return candidates.filter((candidate) => localDateKey(candidate.start_at, timezone) === date);
+}
 
 /** Deterministic capacity-aware assignment used by the preview UI. */
 export function suggestElasticAssignments(preview: ElasticPreview): ElasticAssignment[] {
