@@ -75,6 +75,8 @@ export async function cancelDoctorSessionOccurrenceAction(_: CancellationActionS
   const supabase = await createClient();
   const { error } = await supabase.rpc("cancel_doctor_session_occurrence", { p_session_id: sessionId, p_occurrence_date: occurrenceDate });
   if (error) return { error: error.message.includes("future") ? "Leave must be scheduled for a future date." : "We could not cancel this session. Please try again." };
+  const { error: leaveRecordError } = await supabase.rpc("record_doctor_leave", { p_session_id: sessionId, p_occurrence_date: occurrenceDate });
+  if (leaveRecordError) console.error("Doctor leave audit record failed", { code: leaveRecordError.code ?? null });
   revalidatePath("/doctor/schedule", "page");
   revalidatePath("/doctor/appointments", "page");
   revalidatePath("/doctor/notifications", "page");
