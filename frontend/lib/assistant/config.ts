@@ -26,5 +26,8 @@ export function assistantErrorStatus(error: unknown) {
   if (code === "ASSISTANT_PILOT_ACCESS_REQUIRED") return 403;
   if (code === "AUTHENTICATION_REQUIRED" || code === "ROLE_NOT_ALLOWED") return 401;
   if (code === "ASSISTANT_UNAVAILABLE") return 503;
+  if (code === "ASSISTANT_QUOTA_EXHAUSTED") return 429;
+  if (code === "ASSISTANT_TIMEOUT") return 504;
+  if (code === "GEMINI_REQUEST_FAILED") return 502;
   return 400;
 }

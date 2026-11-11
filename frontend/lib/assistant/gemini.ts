@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ChatMessage = { role: "user" | "model"; text: string };
 type GeminiContent = { role: string; parts: Array<Record<string, unknown>> };
+export const GEMINI_REQUEST_TIMEOUT_MS = 20_000;
 
 const systemInstruction = (role: AssistantRole, language?: string) => [
   `You are Schedula's operational assistant for a ${role}.`,
@@ -18,17 +19,29 @@ export async function runGeminiAssistant(input: { role: AssistantRole; userId: s
   if (!assistantConfig.geminiApiKey) throw new Error("ASSISTANT_UNAVAILABLE");
   const contents: GeminiContent[] = input.messages.map((message) => ({ role: message.role, parts: [{ text: message.text }] }));
   for (let iteration = 0; iteration < 4; iteration += 1) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${assistantConfig.textModel}:generateContent?key=${encodeURIComponent(assistantConfig.geminiApiKey)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction(input.role, input.language) }] },
-        contents,
-        tools: [{ functionDeclarations: assistantFunctionDeclarations }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 700 },
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${assistantConfig.textModel}:generateContent?key=${encodeURIComponent(assistantConfig.geminiApiKey)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction(input.role, input.language) }] },
+          contents,
+          tools: [{ functionDeclarations: assistantFunctionDeclarations }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 700 },
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw new Error("ASSISTANT_TIMEOUT");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
     if (response.status === 429) throw new Error("ASSISTANT_QUOTA_EXHAUSTED");
+    if (response.status === 503) throw new Error("ASSISTANT_UNAVAILABLE");
     if (!response.ok) throw new Error("GEMINI_REQUEST_FAILED");
     const payload = await response.json() as { candidates?: Array<{ content?: { role?: string; parts?: Array<{ text?: string; functionCall?: { name: string; args?: Record<string, unknown> } }> } }> };
     const parts = payload.candidates?.[0]?.content?.parts ?? [];
