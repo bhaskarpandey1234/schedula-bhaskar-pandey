@@ -71,7 +71,7 @@ export const availabilitySessionStatus = pgEnum("availability_session_status", [
 export const availabilitySessionKind = pgEnum("availability_session_kind", ["weekly", "monthly", "custom"]);
 export const availabilitySchedulingType = pgEnum("availability_scheduling_type", ["wave", "stream"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
-export const appointmentStatus = pgEnum("appointment_status", ["payment_pending", "confirmed", "reschedule_pending", "cancelled", "expired"]);
+export const appointmentStatus = pgEnum("appointment_status", ["payment_pending", "confirmed", "reschedule_pending", "cancelled", "expired", "completed"]);
 export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled", "payment_confirmed", "payment_failed", "refund_pending", "refund_processed", "refund_failed", "appointment_rescheduled", "elastic_reschedule_proposed", "appointment_reminder"]);
 export const reservationStatus = pgEnum("reservation_status", ["active", "converted", "released", "expired"]);
 export const reservationPurpose = pgEnum("reservation_purpose", ["booking", "reschedule"]);
@@ -145,6 +145,7 @@ export const appointments = pgTable("appointments", {
   doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
   slotId: uuid("slot_id").notNull().references(() => appointmentSlots.id, { onDelete: "cascade" }),
   status: appointmentStatus("status").notNull().default("confirmed"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   reason: text("reason"),
   refundPolicySnapshot: text("refund_policy_snapshot"),
   ...auditColumns(),
@@ -232,6 +233,77 @@ export const rescheduleRequests = pgTable("reschedule_requests", {
   status: rescheduleStatus("status").notNull().default("pending"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   ...auditColumns(),
+});
+
+export const prescriptionStatus = pgEnum("prescription_status", ["draft", "published"]);
+export const assistantActionStatus = pgEnum("assistant_action_status", ["pending", "confirmed", "executing", "succeeded", "failed", "expired", "declined"]);
+
+export const doctorLeaveOccurrences = pgTable("doctor_leave_occurrences", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  availabilitySessionId: uuid("availability_session_id").notNull().references(() => availabilitySessions.id, { onDelete: "cascade" }),
+  occurrenceDate: date("occurrence_date").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ uniqueOccurrence: uniqueIndex("doctor_leave_occurrence_unique").on(table.availabilitySessionId, table.occurrenceDate) }));
+
+export const prescriptions = pgTable("prescriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  status: prescriptionStatus("status").notNull().default("draft"),
+  notes: text("notes"),
+  supersedesPrescriptionId: uuid("supersedes_prescription_id"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  ...auditColumns(),
+});
+
+export const prescriptionItems = pgTable("prescription_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  prescriptionId: uuid("prescription_id").notNull().references(() => prescriptions.id, { onDelete: "cascade" }),
+  medicationName: text("medication_name").notNull(),
+  dosage: text("dosage").notNull(),
+  frequency: text("frequency").notNull(),
+  duration: text("duration").notNull(),
+  instructions: text("instructions"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const assistantPilotAccess = pgTable("assistant_pilot_access", {
+  userId: uuid("user_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  label: text("label").notNull().default("synthetic"),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const assistantActionIntents = pgTable("assistant_action_intents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  role: userRole("role").notNull(),
+  actionType: text("action_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  preview: jsonb("preview").notNull(),
+  status: assistantActionStatus("status").notNull().default("pending"),
+  fingerprint: text("fingerprint").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  executedAt: timestamp("executed_at", { withTimezone: true }),
+  ...auditColumns(),
+}, (table) => ({ idempotencyUnique: uniqueIndex("assistant_action_idempotency_unique").on(table.idempotencyKey) }));
+
+export const assistantAuditEvents = pgTable("assistant_audit_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => profiles.id, { onDelete: "set null" }),
+  role: userRole("role"),
+  actionType: text("action_type"),
+  eventType: text("event_type").notNull(),
+  outcome: text("outcome"),
+  model: text("model"),
+  language: text("language"),
+  errorCode: text("error_code"),
+  durationMs: integer("duration_ms"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const availabilityAdjustments = pgTable("availability_adjustments", {

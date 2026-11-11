@@ -3,7 +3,7 @@ import { appointmentTabSchema, type AppointmentTab } from "@/lib/validation/appo
 
 export type PatientAppointment = {
   appointment_id: string;
-  status: "payment_pending" | "confirmed" | "reschedule_pending" | "cancelled" | "expired";
+  status: "payment_pending" | "confirmed" | "reschedule_pending" | "cancelled" | "expired" | "completed";
   reason: string | null;
   doctor_name: string;
   specialty: string;
@@ -30,7 +30,7 @@ export type DoctorScheduleAppointment = {
   appointment_id: string;
   slot_id: string;
   patient_name: string;
-  status: "confirmed" | "cancelled";
+  status: "confirmed" | "completed" | "cancelled";
   slot_start_at: string;
   slot_end_at: string;
   scheduling_type: "wave" | "stream";
@@ -46,7 +46,7 @@ export async function getDoctorScheduleAppointments(sessionDate: string) {
 export type DoctorAppointment = {
   appointment_id: string;
   patient_name: string;
-  status: "confirmed" | "cancelled";
+  status: "confirmed" | "completed" | "cancelled";
   reason: string | null;
   clinic_name: string;
   timezone: string;
@@ -64,7 +64,7 @@ export async function getDoctorAppointments(tab: "upcoming" | "past" | "cancelle
 
 export type DoctorAppointmentDetail = {
   appointment_id: string;
-  status: "payment_pending" | "confirmed" | "reschedule_pending" | "cancelled" | "expired";
+  status: "payment_pending" | "confirmed" | "reschedule_pending" | "cancelled" | "expired" | "completed";
   reason: string | null;
   patient_name: string;
   clinic_name: string;
