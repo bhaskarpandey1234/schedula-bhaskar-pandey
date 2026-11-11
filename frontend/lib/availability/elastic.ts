@@ -137,8 +137,19 @@ export function elasticCandidatesForDate(candidates: ElasticCandidate[], date: s
 /** Deterministic capacity-aware assignment used by the preview UI. */
 export function suggestElasticAssignments(preview: ElasticPreview): ElasticAssignment[] {
   if (preview.scheduling_type === "stream") {
-    if (!preview.stream_overflow_appointments) return preview.appointments.map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: appointment.source_slot_id, action: "moved" as const }));
-    return (preview.stream_overflow_appointments ?? []).map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: null, action: "cancelled" as const }));
+    const overflow = preview.stream_overflow_appointments ?? [];
+    const retained = preview.stream_retained_appointments ?? [];
+    const legacyShape = !preview.stream_retained_appointments && !preview.stream_overflow_appointments;
+    const changed = preview.classification === "expansion" ? preview.appointments : (legacyShape ? preview.appointments : [...retained, ...overflow]);
+    const capacity = new Map(preview.candidates.map((candidate) => [candidate.slot_id, candidate.remaining_capacity]));
+    return changed.map((appointment) => {
+      if (preview.classification === "expansion" || legacyShape || retained.some((item) => item.appointment_id === appointment.appointment_id)) {
+        return { appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: appointment.source_slot_id, action: "moved" as const };
+      }
+      const target = [...preview.candidates].sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at) || a.slot_id.localeCompare(b.slot_id)).find((candidate) => (capacity.get(candidate.slot_id) ?? 0) > 0);
+      if (target) capacity.set(target.slot_id, (capacity.get(target.slot_id) ?? 1) - 1);
+      return { appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: target?.slot_id ?? null, action: target ? "moved" as const : "cancelled" as const };
+    });
   }
   const capacity = new Map(preview.candidates.map((candidate) => [candidate.slot_id, candidate.remaining_capacity]));
   const candidates = [...preview.candidates].sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));

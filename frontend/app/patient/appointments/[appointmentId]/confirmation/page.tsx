@@ -12,13 +12,14 @@ import {
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/guards";
-import { getAppointmentConfirmation } from "@/lib/booking/queries";
+import { getAppointmentConfirmation, getElasticBookingProposal } from "@/lib/booking/queries";
 import { getPatientPayments } from "@/lib/payments/queries";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
 import { formatLocalDate, formatSchedulingWindow } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ElasticProposalDecision } from "@/components/elastic-proposal-decision";
 
 export const instant = false;
 
@@ -31,9 +32,10 @@ export default async function AppointmentConfirmationPage({
   await requireRole("patient");
   const { appointmentId } = await params;
   if (!isUuid(appointmentId)) notFound();
-  const [confirmation, payments] = await Promise.all([
+  const [confirmation, payments, proposal] = await Promise.all([
     getAppointmentConfirmation(appointmentId),
     getPatientPayments(),
+    getElasticBookingProposal(appointmentId),
   ]);
   if (!confirmation) notFound();
   const { appointment, doctor, slot, notification } = confirmation;
@@ -41,11 +43,15 @@ export default async function AppointmentConfirmationPage({
   const title =
     appointment.status === "confirmed"
       ? "Your appointment is confirmed."
+      : appointment.status === "reschedule_pending"
+      ? "Your appointment needs a decision."
       : appointment.status === "payment_pending"
       ? "Payment is still pending."
       : "Appointment status updated.";
   const statusPresentation = appointment.status === "confirmed"
     ? { title, label: "Confirmed visit", description: "Your appointment has been registered with the clinic. Please arrive 10 minutes prior to your scheduled time.", icon: CheckCircle2, className: "bg-emerald-50 text-emerald-600 border-emerald-200", badgeClassName: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    : appointment.status === "reschedule_pending"
+    ? { title, label: "Action required", description: "Your doctor changed availability. Review the recommendation below before the deadline.", icon: Clock, className: "bg-amber-50 text-amber-600 border-amber-200", badgeClassName: "bg-amber-50 text-amber-700 border-amber-200" }
     : appointment.status === "payment_pending"
     ? { title, label: "Payment pending", description: "Your slot is reserved while payment is being completed. Review the payment section below for the latest status.", icon: Clock, className: "bg-amber-50 text-amber-600 border-amber-200", badgeClassName: "bg-amber-50 text-amber-700 border-amber-200" }
     : appointment.status === "cancelled"
@@ -170,6 +176,8 @@ export default async function AppointmentConfirmationPage({
             )}
           </CardContent>
         </Card>
+
+        {proposal && <ElasticProposalDecision proposal={proposal.proposal} candidates={proposal.candidates} />}
 
         {/* Action Buttons */}
         <div className="flex flex-wrap justify-center gap-3">

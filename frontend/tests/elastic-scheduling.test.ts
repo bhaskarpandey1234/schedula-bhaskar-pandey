@@ -36,9 +36,9 @@ describe("elastic scheduling suggestions", () => {
     expect(result.overflow.map((item) => item.appointment_id)).toEqual(["c"]);
   });
 
-  it("suggests cancellation until each Stream overflow booking gets a destination", () => {
+  it("suggests the earliest available destination for each Stream overflow booking", () => {
     const preview: ElasticPreview = { ...base, scheduling_type: "stream", stream_overflow_appointments: [{ appointment_id: "overflow", source_slot_id: "stream", patient_id: "patient", start_at: base.old_start_at, end_at: base.old_end_at }], candidates: [{ slot_id: "later", start_at: "2099-05-01T07:00:00.000Z", end_at: "2099-05-01T08:00:00.000Z", remaining_capacity: 1 }] };
-    expect(suggestElasticAssignments(preview)).toEqual([{ appointment_id: "overflow", source_slot_id: "stream", target_slot_id: null, action: "cancelled" }]);
+    expect(suggestElasticAssignments(preview)).toEqual([{ appointment_id: "overflow", source_slot_id: "stream", target_slot_id: "later", action: "moved" }]);
   });
   it("validates a pure expansion", () => {
     expect(validateElasticWindow({ mode: "expansion", oldStart: "10:00", oldEnd: "12:00", newStart: "09:00", newEnd: "12:00" })).toBeNull();

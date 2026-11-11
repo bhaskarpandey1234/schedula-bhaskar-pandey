@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompleteProfile, requireVerifiedUser } from "@/lib/auth/guards";
-import { suggestElasticAssignments, userFacingAvailabilityError, type ElasticAssignment, type ElasticPreview } from "@/lib/availability/elastic";
+import { userFacingAvailabilityError, type ElasticPreview } from "@/lib/availability/elastic";
 
-export type ElasticPreviewActionResult = { preview: ElasticPreview; assignments: ElasticAssignment[] } | { error: string };
+export type ElasticPreviewActionResult = { preview: ElasticPreview } | { error: string };
 
 export async function previewElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string }): Promise<ElasticPreviewActionResult> {
   await requireCompleteProfile("doctor");
@@ -16,17 +16,16 @@ export async function previewElasticAvailabilityAction(input: { sessionId: strin
     if (error) return { error: userFacingAvailabilityError(error) };
     if (!data || typeof data !== "object") return { error: "We could not read the availability preview. Refresh the schedule and try again." };
     const preview = data as ElasticPreview;
-    return { preview, assignments: suggestElasticAssignments(preview) };
+    return { preview };
   } catch (error) {
     return { error: userFacingAvailabilityError(error) };
   }
 }
-
-export async function applyElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string; assignments: ElasticAssignment[] }) {
+export async function applyElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string }) {
   await requireCompleteProfile("doctor");
   await requireVerifiedUser();
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("apply_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime, p_assignments: input.assignments });
+  const { data, error } = await supabase.rpc("apply_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime, p_assignments: [] });
   if (error) throw new Error(userFacingAvailabilityError(error));
   revalidatePath("/doctor/schedule", "page");
   revalidatePath("/doctor/appointments", "page");
