@@ -20,8 +20,29 @@ export const assistantFunctionDeclarations = [
   { name: "prepare_reschedule", description: "Prepare a reschedule preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" }, targetSlotId: { type: "string" } }, required: ["appointmentId", "targetSlotId"] } },
 ];
 
+export function assistantFunctionDeclarationsForRole(role: AssistantRole) {
+  const allowed = role === "doctor"
+    ? new Set(["doctor_appointments", "doctor_schedule_stats"])
+    : new Set(["patient_appointments", "search_doctors", "doctor_slots", "patient_payments", "patient_prescriptions", "prepare_booking", "prepare_cancellation", "prepare_reschedule"]);
+  return assistantFunctionDeclarations.filter((declaration) => allowed.has(declaration.name));
+}
+
+const modelSummaryKeys = new Set([
+  "appointment_id", "appointmentId", "doctor_id", "doctorId", "slot_id", "slotId", "status", "doctor_name", "patient_name", "full_name", "specialty", "clinic_name", "timezone", "slot_start_at", "slot_end_at", "start_at", "end_at", "payment_status", "refund_status", "amount_minor", "refund_amount_minor", "currency", "medication_name", "dosage", "frequency", "duration", "published_at", "date", "counts", "remaining_capacity", "feeMinor", "consultation_fee_minor",
+]);
+
+function summarizeForModel(value: unknown): string {
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => summarizeForModel(item)).join(" | ");
+  if (!value || typeof value !== "object") return String(value ?? "");
+  return Object.entries(value)
+    .filter(([key]) => modelSummaryKeys.has(key))
+    .map(([key, item]) => `${key}=${typeof item === "object" ? summarizeForModel(item) : String(item)}`)
+    .join(", ");
+}
+
 function textResult(title: string, summary: string, kind: "appointments" | "slots" | "doctors" | "payments" | "prescriptions" | "stats" | "message", data: unknown): AssistantToolResult {
-  return { modelSummary: summary, display: { kind, title, data } };
+  const details = summarizeForModel(data);
+  return { modelSummary: details ? `${summary} Details: ${details}` : summary, display: { kind, title, data } };
 }
 
 async function prepareAction(supabase: SupabaseClient, userId: string, role: AssistantRole, actionType: "booking" | "reschedule" | "cancellation", payload: Record<string, unknown>, preview: Record<string, unknown>) {

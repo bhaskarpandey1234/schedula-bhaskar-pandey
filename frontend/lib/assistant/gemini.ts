@@ -1,5 +1,5 @@
 import { assistantConfig } from "@/lib/assistant/config";
-import { assistantFunctionDeclarations, runAssistantTool } from "@/lib/assistant/tools";
+import { assistantFunctionDeclarationsForRole, runAssistantTool } from "@/lib/assistant/tools";
 import type { AssistantRole, AssistantToolResult } from "@/lib/assistant/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -29,7 +29,7 @@ export async function runGeminiAssistant(input: { role: AssistantRole; userId: s
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction(input.role, input.language) }] },
           contents,
-          tools: [{ functionDeclarations: assistantFunctionDeclarations }],
+          tools: [{ functionDeclarations: assistantFunctionDeclarationsForRole(input.role) }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 700 },
         }),
         signal: controller.signal,

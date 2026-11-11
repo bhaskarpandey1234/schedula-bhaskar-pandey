@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { assistantConfig, assistantErrorStatus } from "@/lib/assistant/config";
 import { runGeminiAssistant } from "@/lib/assistant/gemini";
 import { assistantErrorMessage, assistantLanguageLabel, assistantLanguageOptions, speechRecognitionLanguage } from "@/lib/assistant/presentation";
+import { assistantFunctionDeclarationsForRole } from "@/lib/assistant/tools";
 
 const input = { role: "doctor" as const, userId: "pilot-doctor", supabase: {} as never, messages: [{ role: "user" as const, text: "hello" }] };
 
@@ -45,5 +46,20 @@ describe("assistant language presentation", () => {
     expect(assistantLanguageLabel("hinglish")).toBe("Hinglish");
     expect(speechRecognitionLanguage("hinglish")).toBe("en-IN");
     expect(speechRecognitionLanguage("hi-IN")).toBe("hi-IN");
+  });
+});
+
+describe("assistant role tool allowlists", () => {
+  it("does not expose patient tools to doctors", () => {
+    const names = assistantFunctionDeclarationsForRole("doctor").map((tool) => tool.name);
+    expect(names).toEqual(["doctor_appointments", "doctor_schedule_stats"]);
+  });
+
+  it("does not expose doctor schedule statistics to patients", () => {
+    const names = assistantFunctionDeclarationsForRole("patient").map((tool) => tool.name);
+    expect(names).toContain("patient_appointments");
+    expect(names).toContain("doctor_slots");
+    expect(names).not.toContain("doctor_appointments");
+    expect(names).not.toContain("doctor_schedule_stats");
   });
 });
