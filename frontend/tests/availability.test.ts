@@ -28,6 +28,8 @@ describe("Phase 4 validation", () => {
   });
   it("accepts Stream windows without a duration and rejects a Stream duration", () => {
     expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", streamMinPatientMinutes: 15, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", streamMinPatientMinutes: 12, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(false);
     expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
   });
   it("rejects invalid intervals, capacity, dates, and time order", () => {
