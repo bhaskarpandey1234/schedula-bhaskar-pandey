@@ -13,7 +13,8 @@
     "verify:rpcs": "node scripts/verify-critical-rpcs.mjs",
     "test:quality": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e && pnpm build",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "seed:assistant-pilot": "node scripts/assistant-pilot-seed.mjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.1",

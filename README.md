@@ -47,6 +47,20 @@ GEMINI_LIVE_MODEL=gemini-3.8-live
 
 The free-tier provider may use submitted content to improve its products, so this pilot must use synthetic staging records only. Do not add real patient, clinician, prescription, or payment data. The assistant never stores raw audio or complete transcripts. Insert pilot access rows through a protected migration/admin session; authenticated users cannot grant themselves access.
 
+### Seed local assistant pilot data
+
+The repository includes an idempotent synthetic-data seed for local Supabase only. It creates one doctor and one patient, availability and overlapping slots, completed/upcoming/cancelled appointments, leave, a published prescription, and sandbox-labelled payment/refund records. It never calls Razorpay and refuses non-local URLs.
+
+Start local Supabase, apply migrations, and obtain the local service-role key from `supabase status -o env`. Then run the seed with a temporary password supplied at runtime:
+
+```powershell
+$env:SUPABASE_SERVICE_ROLE_KEY = "<local-service-role-key>"
+$env:PILOT_SEED_PASSWORD = "<temporary-local-password>"
+pnpm --filter frontend seed:assistant-pilot
+```
+
+The fixed local login emails are `pilot.doctor@schedula.example` and `pilot.patient@schedula.example`; the password is never printed or stored by the seed. The script requires both `NEXT_PUBLIC_SUPABASE_URL` and `DATABASE_URL` to point to `localhost`, `127.0.0.1`, or `::1`. Never run it with production credentials or production URLs. To reset only local data, use the local Supabase reset workflow after confirming Docker and the local URLs are active.
+
 ## Architecture
 
 ```text
