@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { assistantConfig, assistantErrorStatus } from "@/lib/assistant/config";
 import { runGeminiAssistant } from "@/lib/assistant/gemini";
 import { assistantErrorMessage, assistantLanguageLabel, assistantLanguageOptions, speechRecognitionLanguage } from "@/lib/assistant/presentation";
+import * as assistantTools from "@/lib/assistant/tools";
 import { assistantFunctionDeclarationsForRole } from "@/lib/assistant/tools";
 import { assistantChatRequestSchema, assistantDecisionSchema } from "@/lib/assistant/schemas";
 
@@ -164,6 +165,86 @@ describe("assistant error handling", () => {
       result: [{ type: "text", text: JSON.stringify({ result: "Found 0 recorded leave occurrences." }) }],
     });
     expect(create.mock.calls[2]?.[0].input).toEqual(continuation.input);
+  });
+
+  it("runs read-only calls in parallel while preserving call order", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const create = vi.fn()
+      .mockResolvedValueOnce({
+        id: "interaction-tool",
+        status: "requires_action",
+        steps: [
+          { type: "function_call", id: "call-leave-1", name: "doctor_leaves", arguments: {} },
+          { type: "function_call", id: "call-leave-2", name: "doctor_leaves", arguments: { date: "2026-11-12" } },
+        ],
+      })
+      .mockResolvedValueOnce(completed("Done."));
+    let resolveFirst!: (value: { data: never[]; error: null }) => void;
+    let resolveSecond!: (value: { data: never[]; error: null }) => void;
+    const firstResult = new Promise<{ data: never[]; error: null }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondResult = new Promise<{ data: never[]; error: null }>((resolve) => {
+      resolveSecond = resolve;
+    });
+    let queryIndex = 0;
+    const from = vi.fn(() => {
+      const pending = queryIndex++ === 0 ? firstResult : secondResult;
+      const query = {
+        eq: vi.fn(),
+        order: vi.fn(),
+        then: (resolve: (value: { data: never[]; error: null }) => unknown) => pending.then(resolve),
+      };
+      query.eq.mockReturnValue(query);
+      query.order.mockReturnValue(query);
+      return { select: () => query };
+    });
+
+    const run = runGeminiAssistant({ ...input, supabase: { from } as never }, runtimeFor(create));
+    await vi.waitFor(() => expect(from).toHaveBeenCalledTimes(2));
+    resolveFirst({ data: [], error: null });
+    resolveSecond({ data: [], error: null });
+    await expect(run).resolves.toMatchObject({ text: "Done." });
+
+    const continuation = create.mock.calls[1]?.[0] as { input: Array<Record<string, unknown>> };
+    expect(continuation.input.findIndex((step) => step.call_id === "call-leave-1")).toBeLessThan(continuation.input.findIndex((step) => step.call_id === "call-leave-2"));
+  });
+
+  it("stops after the first sensitive preview without executing a duplicate", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const tool = vi.spyOn(assistantTools, "runAssistantTool")
+      .mockResolvedValueOnce({ modelSummary: "Confirmation required.", pendingAction: { id: "action-1", actionType: "booking", preview: { operation: "booking" }, expiresAt: "2026-11-12T20:00:00.000Z" } });
+    const create = vi.fn().mockResolvedValueOnce({
+      id: "interaction-sensitive",
+      status: "requires_action",
+      steps: [
+        { type: "function_call", id: "call-book-1", name: "prepare_booking", arguments: { slotId: "slot-1" } },
+        { type: "function_call", id: "call-book-2", name: "prepare_booking", arguments: { slotId: "slot-2" } },
+      ],
+    });
+
+    await expect(runGeminiAssistant({ ...input, role: "patient" }, runtimeFor(create))).resolves.toMatchObject({
+      pendingAction: { id: "action-1" },
+    });
+    expect(tool).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects tool execution once the total deadline has expired", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const tool = vi.spyOn(assistantTools, "runAssistantTool");
+    const create = vi.fn().mockResolvedValueOnce({
+      id: "interaction-expired",
+      status: "requires_action",
+      steps: [{ type: "function_call", id: "call-expired", name: "doctor_leaves", arguments: {} }],
+    });
+    const now = vi.fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(45_001);
+
+    await expect(runGeminiAssistant(input, { ...runtimeFor(create), now })).rejects.toThrow("ASSISTANT_TIMEOUT");
+    expect(tool).not.toHaveBeenCalled();
   });
 });
 
