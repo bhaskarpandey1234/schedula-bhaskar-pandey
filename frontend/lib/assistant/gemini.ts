@@ -4,7 +4,9 @@ import type { AssistantRole, AssistantToolResult } from "@/lib/assistant/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ChatMessage = { role: "user" | "model"; text: string };
-type GeminiContent = { role: string; parts: Array<Record<string, unknown>> };
+type GeminiFunctionCall = { name: string; args?: Record<string, unknown> };
+type GeminiPart = Record<string, unknown> & { text?: string; functionCall?: GeminiFunctionCall; thoughtSignature?: string };
+type GeminiContent = { role: string; parts: GeminiPart[] };
 export const GEMINI_REQUEST_TIMEOUT_MS = 20_000;
 
 const systemInstruction = (role: AssistantRole, language?: string) => [
@@ -15,8 +17,7 @@ const systemInstruction = (role: AssistantRole, language?: string) => [
   `Reply in the user's language when clear; preferred language is ${language || "auto"}. Hindi and Hinglish are supported.`,
 ].join(" ");
 
-export async function runGeminiAssistant(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string }) {
-  if (!assistantConfig.geminiApiKey) throw new Error("ASSISTANT_UNAVAILABLE");
+async function runGeminiRemote(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string }) {
   const contents: GeminiContent[] = input.messages.map((message) => ({ role: message.role, parts: [{ text: message.text }] }));
   for (let iteration = 0; iteration < 4; iteration += 1) {
     const controller = new AbortController();
@@ -36,19 +37,23 @@ export async function runGeminiAssistant(input: { role: AssistantRole; userId: s
       });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw new Error("ASSISTANT_TIMEOUT");
-      throw error;
+      throw new Error("ASSISTANT_NETWORK_ERROR");
     } finally {
       clearTimeout(timeout);
     }
     if (response.status === 429) throw new Error("ASSISTANT_QUOTA_EXHAUSTED");
     if (response.status === 503) throw new Error("ASSISTANT_UNAVAILABLE");
+    if (response.status === 401 || response.status === 403) throw new Error("GEMINI_AUTH_FAILED");
+    if (response.status === 404) throw new Error("GEMINI_MODEL_UNAVAILABLE");
+    if (response.status === 400) throw new Error("GEMINI_INVALID_REQUEST");
     if (!response.ok) throw new Error("GEMINI_REQUEST_FAILED");
-    const payload = await response.json() as { candidates?: Array<{ content?: { role?: string; parts?: Array<{ text?: string; functionCall?: { name: string; args?: Record<string, unknown> } }> } }> };
-    const parts = payload.candidates?.[0]?.content?.parts ?? [];
-    const calls = parts.map((part) => part.functionCall).filter(Boolean) as Array<{ name: string; args?: Record<string, unknown> }>;
+    const payload = await response.json() as { candidates?: Array<{ content?: { role?: string; parts?: GeminiPart[] } }> };
+    const modelContent = payload.candidates?.[0]?.content;
+    const parts = modelContent?.parts ?? [];
+    const calls = parts.map((part) => part.functionCall).filter(Boolean) as GeminiFunctionCall[];
     const text = parts.map((part) => part.text).filter(Boolean).join(" ").trim();
     if (!calls.length) return { text: text || "I could not produce a response. Please try again.", displays: [] as AssistantToolResult[], pendingAction: undefined };
-    contents.push({ role: "model", parts: parts.map((part) => part.functionCall ? { functionCall: part.functionCall } : { text: part.text ?? "" }) });
+    contents.push({ role: modelContent?.role ?? "model", parts });
     const results: AssistantToolResult[] = [];
     for (const call of calls) {
       const result = await runAssistantTool({ name: call.name, args: call.args ?? {}, role: input.role, userId: input.userId, supabase: input.supabase });
@@ -60,4 +65,9 @@ export async function runGeminiAssistant(input: { role: AssistantRole; userId: s
     if (pendingAction) return { text: "I prepared this action for your confirmation.", displays: display ? [display] : [], pendingAction };
   }
   throw new Error("ASSISTANT_TOOL_LOOP_LIMIT");
+}
+
+export async function runGeminiAssistant(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string }) {
+  if (!assistantConfig.geminiApiKey) throw new Error("ASSISTANT_CONFIGURATION_REQUIRED");
+  return runGeminiRemote(input);
 }

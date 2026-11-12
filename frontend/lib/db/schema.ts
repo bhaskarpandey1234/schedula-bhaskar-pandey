@@ -236,7 +236,7 @@ export const rescheduleRequests = pgTable("reschedule_requests", {
 });
 
 export const prescriptionStatus = pgEnum("prescription_status", ["draft", "published"]);
-export const assistantActionStatus = pgEnum("assistant_action_status", ["pending", "confirmed", "executing", "succeeded", "failed", "expired", "declined"]);
+export const assistantActionStatus = pgEnum("assistant_action_status", ["pending", "confirmed", "executing", "awaiting_payment", "succeeded", "failed", "expired", "declined"]);
 
 export const doctorLeaveOccurrences = pgTable("doctor_leave_occurrences", {
   id: uuid("id").defaultRandom().primaryKey(),
