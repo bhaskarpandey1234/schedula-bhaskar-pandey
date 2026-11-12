@@ -30,6 +30,13 @@ export function assistantFunctionDeclarationsForRole(role: AssistantRole) {
   return assistantFunctionDeclarations.filter((declaration) => allowed.has(declaration.name));
 }
 
+export function assistantFunctionToolsForRole(role: AssistantRole) {
+  return assistantFunctionDeclarationsForRole(role).map((declaration) => ({
+    type: "function" as const,
+    function: declaration,
+  }));
+}
+
 const modelSummaryKeys = new Set([
   "appointment_id", "appointmentId", "doctor_id", "doctorId", "slot_id", "slotId", "status", "doctor_name", "patient_name", "full_name", "specialty", "clinic_name", "timezone", "slot_start_at", "slot_end_at", "start_at", "end_at", "payment_status", "refund_status", "amount_minor", "payment_amount_minor", "refund_amount_minor", "currency", "medication_name", "dosage", "frequency", "duration", "published_at", "date", "counts", "remaining_capacity", "feeMinor", "consultation_fee_minor",
 ]);

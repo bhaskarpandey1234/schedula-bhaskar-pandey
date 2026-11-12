@@ -14,15 +14,15 @@ export function speechRecognitionLanguage(value: string) {
 
 export function assistantErrorMessage(code?: string) {
   if (code === "ASSISTANT_DISABLED") return "The assistant is disabled for this environment. Ask an administrator to enable the pilot.";
-  if (code === "ASSISTANT_CONFIGURATION_REQUIRED") return "The assistant is not configured. A Gemini API key is required for this environment.";
-  if (code === "ASSISTANT_UNAVAILABLE") return "Gemini is temporarily unavailable. Please try again shortly.";
-  if (code === "ASSISTANT_QUOTA_EXHAUSTED") return "The Gemini free-tier quota is currently exhausted. Please try again later.";
+  if (code === "ASSISTANT_CONFIGURATION_REQUIRED") return "The assistant is not configured. A provider API key is required for this environment.";
+  if (code === "ASSISTANT_UNAVAILABLE") return "The AI service is temporarily unavailable. Please try again shortly.";
+  if (code === "ASSISTANT_QUOTA_EXHAUSTED") return "The assistant provider quota is currently exhausted. Please try again later.";
   if (code === "ASSISTANT_TIMEOUT") return "The assistant took too long to respond. Please try again.";
-  if (code === "ASSISTANT_NETWORK_ERROR") return "The assistant could not reach Gemini. Check the server connection and try again.";
-  if (code === "GEMINI_AUTH_FAILED") return "Gemini rejected the configured API key. Check the server configuration.";
-  if (code === "GEMINI_MODEL_UNAVAILABLE") return "The configured Gemini model is unavailable. Check the server model configuration.";
-  if (code === "GEMINI_INVALID_REQUEST") return "Gemini could not continue the tool conversation. Please retry or contact the administrator if it continues.";
-  if (code === "GEMINI_REQUEST_FAILED") return "Gemini returned an unexpected error. Please try again or contact the administrator if it continues.";
+  if (code === "ASSISTANT_NETWORK_ERROR") return "The assistant could not reach the AI service. Check the server connection and try again.";
+  if (code === "ASSISTANT_PROVIDER_AUTH_FAILED") return "The AI service rejected the configured API key. Check the server configuration.";
+  if (code === "ASSISTANT_PROVIDER_MODEL_UNAVAILABLE") return "The configured AI model is unavailable. Check the server model configuration.";
+  if (code === "ASSISTANT_PROVIDER_INVALID_REQUEST") return "The AI service could not continue the tool conversation. Please retry or contact the administrator if it continues.";
+  if (code === "ASSISTANT_PROVIDER_REQUEST_FAILED") return "The AI service returned an unexpected error. Please try again or contact the administrator if it continues.";
   if (code === "ASSISTANT_TOOL_LOOP_LIMIT") return "The assistant could not finish this multi-step request safely. Please try a simpler request.";
   if (code === "ASSISTANT_PAYMENT_SANDBOX_REQUIRED") return "Booking checkout is disabled until a Razorpay test-mode key is configured for this pilot.";
   if (code === "AUTHENTICATION_REQUIRED" || code === "ROLE_NOT_ALLOWED") return "Your session is no longer authorized. Please sign in again.";
