@@ -12,13 +12,14 @@ import type { Role } from "@/lib/validation/auth";
 
 type NavigationLink = { href: string; label: string };
 
-function linksFor(role?: Role): NavigationLink[] {
+function linksFor(role?: Role, assistantEnabled = false): NavigationLink[] {
   if (role === "patient")
     return [
       { href: "/", label: "Home" },
       { href: "/patient", label: "Dashboard" },
       { href: "/doctors", label: "Find Doctors" },
       { href: "/patient/appointments", label: "Appointments" },
+      ...(assistantEnabled ? [{ href: "/patient/assistant", label: "AI Assistant" }] : []),
       { href: "/patient/profile", label: "Profile" },
     ];
   if (role === "doctor")
@@ -27,6 +28,7 @@ function linksFor(role?: Role): NavigationLink[] {
       { href: "/doctor", label: "Dashboard" },
       { href: "/doctor/schedule", label: "Schedule" },
       { href: "/doctor/appointments", label: "Appointments" },
+      ...(assistantEnabled ? [{ href: "/doctor/assistant", label: "AI Assistant" }] : []),
       { href: "/doctor/profile", label: "Profile" },
     ];
   return [
@@ -36,9 +38,9 @@ function linksFor(role?: Role): NavigationLink[] {
   ];
 }
 
-export function SiteHeader({ role, name, unreadCount = 0 }: { role?: Role; name?: string; unreadCount?: number }) {
+export function SiteHeader({ role, name, unreadCount = 0, assistantEnabled = false }: { role?: Role; name?: string; unreadCount?: number; assistantEnabled?: boolean }) {
   const [open, setOpen] = useState(false);
-  const links = linksFor(role);
+  const links = linksFor(role, assistantEnabled);
   const home = "/";
   const navigation = (mobile = false) =>
     links.map((link) => (

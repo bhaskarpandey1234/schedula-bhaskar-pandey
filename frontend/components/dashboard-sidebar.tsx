@@ -34,12 +34,14 @@ const doctorItems = [
 export function DashboardSidebar({
   role,
   name,
+  assistantEnabled = false,
 }: {
   role: Role;
   name?: string;
+  assistantEnabled?: boolean;
 }) {
   const pathname = usePathname();
-  const items = role === "patient" ? patientItems : doctorItems;
+  const items = (role === "patient" ? patientItems : doctorItems).filter((item) => assistantEnabled || !item.href.endsWith("/assistant"));
 
   const displayName = name || (role === "doctor" ? "Doctor" : "Patient");
   const initials = displayName
