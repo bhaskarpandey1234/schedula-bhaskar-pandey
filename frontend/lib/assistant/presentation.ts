@@ -23,6 +23,7 @@ export function assistantErrorMessage(code?: string) {
   if (code === "GEMINI_MODEL_UNAVAILABLE") return "The configured Gemini model is unavailable. Check the server model configuration.";
   if (code === "GEMINI_INVALID_REQUEST") return "Gemini could not continue the tool conversation. Please retry or contact the administrator if it continues.";
   if (code === "GEMINI_REQUEST_FAILED") return "Gemini returned an unexpected error. Please try again or contact the administrator if it continues.";
+  if (code === "ASSISTANT_TOOL_LOOP_LIMIT") return "The assistant could not finish this multi-step request safely. Please try a simpler request.";
   if (code === "ASSISTANT_PAYMENT_SANDBOX_REQUIRED") return "Booking checkout is disabled until a Razorpay test-mode key is configured for this pilot.";
   if (code === "AUTHENTICATION_REQUIRED" || code === "ROLE_NOT_ALLOWED") return "Your session is no longer authorized. Please sign in again.";
   if (code === "ASSISTANT_PILOT_ACCESS_REQUIRED") return "This synthetic account is not enabled for the assistant pilot.";

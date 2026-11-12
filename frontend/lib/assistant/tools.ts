@@ -7,20 +7,20 @@ import { assistantConfig } from "@/lib/assistant/config";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const assistantFunctionDeclarations = [
-  { name: "doctor_appointments", description: "Read this doctor's appointments for a date or tab.", parameters: { type: "object", properties: { date: { type: "string" }, tab: { type: "string", enum: ["upcoming", "past", "cancelled"] } } } },
-  { name: "doctor_schedule_stats", description: "Read this doctor's schedule counts and conflicts for a date.", parameters: { type: "object", properties: { date: { type: "string" } }, required: ["date"] } },
-  { name: "doctor_availability", description: "Read this doctor's working hours, shifts, and available slots for a date.", parameters: { type: "object", properties: { date: { type: "string" } } } },
-  { name: "doctor_leaves", description: "Read this doctor's recorded leave occurrences.", parameters: { type: "object", properties: { date: { type: "string" } } } },
-  { name: "doctor_next_slot", description: "Find this doctor's next available appointment slot.", parameters: { type: "object", properties: {} } },
-  { name: "doctor_reschedule_slots", description: "Suggest available slots that could replace an overlapping or cancelled appointment.", parameters: { type: "object", properties: { date: { type: "string" } } } },
-  { name: "patient_appointments", description: "Read the signed-in patient's appointments.", parameters: { type: "object", properties: { tab: { type: "string", enum: ["upcoming", "past", "cancelled"] } } } },
-  { name: "search_doctors", description: "Search real bookable doctors by name or specialty.", parameters: { type: "object", properties: { search: { type: "string" }, specialty: { type: "string" } } } },
-  { name: "doctor_slots", description: "Read real available slots for a doctor.", parameters: { type: "object", properties: { doctorId: { type: "string" } }, required: ["doctorId"] } },
-  { name: "patient_payments", description: "Read the signed-in patient's payment and refund history.", parameters: { type: "object", properties: {} } },
-  { name: "patient_prescriptions", description: "Read published prescriptions for the signed-in patient.", parameters: { type: "object", properties: {} } },
-  { name: "prepare_booking", description: "Prepare a booking preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { slotId: { type: "string" }, reason: { type: "string" } }, required: ["slotId"] } },
-  { name: "prepare_cancellation", description: "Prepare a cancellation preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" } }, required: ["appointmentId"] } },
-  { name: "prepare_reschedule", description: "Prepare a reschedule preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" }, targetSlotId: { type: "string" } }, required: ["appointmentId", "targetSlotId"] } },
+  { type: "function" as const, name: "doctor_appointments", description: "Read this doctor's appointments for a date or tab.", parameters: { type: "object", properties: { date: { type: "string" }, tab: { type: "string", enum: ["upcoming", "past", "cancelled"] } } } },
+  { type: "function" as const, name: "doctor_schedule_stats", description: "Read this doctor's schedule counts and conflicts for a date.", parameters: { type: "object", properties: { date: { type: "string" } }, required: ["date"] } },
+  { type: "function" as const, name: "doctor_availability", description: "Read this doctor's working hours, shifts, and available slots for a date.", parameters: { type: "object", properties: { date: { type: "string" } } } },
+  { type: "function" as const, name: "doctor_leaves", description: "Read this doctor's recorded leave occurrences.", parameters: { type: "object", properties: { date: { type: "string" } } } },
+  { type: "function" as const, name: "doctor_next_slot", description: "Find this doctor's next available appointment slot.", parameters: { type: "object", properties: {} } },
+  { type: "function" as const, name: "doctor_reschedule_slots", description: "Suggest available slots that could replace an overlapping or cancelled appointment.", parameters: { type: "object", properties: { date: { type: "string" } } } },
+  { type: "function" as const, name: "patient_appointments", description: "Read the signed-in patient's appointments.", parameters: { type: "object", properties: { tab: { type: "string", enum: ["upcoming", "past", "cancelled"] } } } },
+  { type: "function" as const, name: "search_doctors", description: "Search real bookable doctors by name or specialty.", parameters: { type: "object", properties: { search: { type: "string" }, specialty: { type: "string" } } } },
+  { type: "function" as const, name: "doctor_slots", description: "Read real available slots for a doctor.", parameters: { type: "object", properties: { doctorId: { type: "string" } }, required: ["doctorId"] } },
+  { type: "function" as const, name: "patient_payments", description: "Read the signed-in patient's payment and refund history.", parameters: { type: "object", properties: {} } },
+  { type: "function" as const, name: "patient_prescriptions", description: "Read published prescriptions for the signed-in patient.", parameters: { type: "object", properties: {} } },
+  { type: "function" as const, name: "prepare_booking", description: "Prepare a booking preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { slotId: { type: "string" }, reason: { type: "string" } }, required: ["slotId"] } },
+  { type: "function" as const, name: "prepare_cancellation", description: "Prepare a cancellation preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" } }, required: ["appointmentId"] } },
+  { type: "function" as const, name: "prepare_reschedule", description: "Prepare a reschedule preview; never execute without explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" }, targetSlotId: { type: "string" } }, required: ["appointmentId", "targetSlotId"] } },
 ];
 
 export function assistantFunctionDeclarationsForRole(role: AssistantRole) {

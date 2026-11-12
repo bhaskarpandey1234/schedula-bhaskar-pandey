@@ -11,9 +11,16 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: "INVALID_ASSISTANT_REQUEST" }, { status: 400 });
     const { role, messages, language } = parsed.data;
     const access = await requireAssistantPilotAccess(role);
-    const result = await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
-    await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model: assistantConfig.textModel, language, duration_ms: Date.now() - started });
-    return NextResponse.json(result);
+    try {
+      const result = await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
+      const { model, ...publicResult } = result;
+      await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model, language, duration_ms: Date.now() - started });
+      return NextResponse.json(publicResult);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "ASSISTANT_UNAVAILABLE";
+      await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "failed", model: assistantConfig.textModel, language, error_code: code.startsWith("ASSISTANT_") || code.startsWith("GEMINI_") ? code : "ASSISTANT_UNAVAILABLE", duration_ms: Date.now() - started });
+      throw error;
+    }
   } catch (error) {
     const status = assistantErrorStatus(error);
     const code = error instanceof Error ? error.message : "ASSISTANT_UNAVAILABLE";
