@@ -36,16 +36,16 @@ Doctor-initiated appointment cancellation remains explicitly deferred. The deplo
 
 ## Free-tier assistant pilot
 
-The assistant is available at `/doctor/assistant` and `/patient/assistant` after migration `frontend/drizzle/0042-ai-assistant-pilot.sql` is applied. It is deliberately disabled unless `ASSISTANT_PILOT_MODE=true`, `GEMINI_API_KEY` is configured, and the signed-in synthetic account exists in `assistant_pilot_access`.
+The assistant is available at `/doctor/assistant` and `/patient/assistant` after migration `frontend/drizzle/0042-ai-assistant-pilot.sql` is applied. It is deliberately disabled unless `ASSISTANT_PILOT_MODE=true`, `GROQ_API_KEY` is configured, and the signed-in synthetic account exists in `assistant_pilot_access`.
 
-Use Gemini free-tier models only:
+Use Groq's free plan models only:
 
 ```text
-GEMINI_TEXT_MODEL=gemini-3.8-flash
-GEMINI_LIVE_MODEL=gemini-3.8-live
+GROQ_TEXT_MODEL=qwen/qwen3.8-27b
+GROQ_FALLBACK_TEXT_MODEL=openai/gpt-oss-120b
 ```
 
-The free-tier provider may use submitted content to improve its products, so this pilot must use synthetic staging records only. Do not add real patient, clinician, prescription, or payment data. The assistant never stores raw audio or complete transcripts. Insert pilot access rows through a protected migration/admin session; authenticated users cannot grant themselves access.
+Before hosted testing, enable Zero Data Retention in the Groq project's Data Controls. Groq's free plan is rate-limited, so provider quota failures are shown as retryable assistant errors. This pilot must use synthetic staging records only: do not add real patient, clinician, prescription, or payment data. Groq configuration does not establish healthcare-regulatory compliance. The assistant never stores raw audio or complete transcripts. Insert pilot access rows through a protected migration/admin session; authenticated users cannot grant themselves access.
 
 ### Seed local assistant pilot data
 
