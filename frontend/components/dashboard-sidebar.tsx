@@ -19,6 +19,7 @@ const patientItems = [
   { href: "/patient", label: "Overview", icon: Home },
   { href: "/doctors", label: "Find Doctors", icon: Search },
   { href: "/patient/appointments", label: "Appointments", icon: CalendarDays },
+  { href: "/patient/assistant", label: "AI Assistant", icon: HeartPulse },
   { href: "/patient/profile", label: "My Profile", icon: UserRound },
 ];
 
@@ -26,6 +27,7 @@ const doctorItems = [
   { href: "/doctor", label: "Overview", icon: Home },
   { href: "/doctor/schedule", label: "Availability", icon: CalendarDays },
   { href: "/doctor/appointments", label: "Appointments", icon: ClipboardList },
+  { href: "/doctor/assistant", label: "AI Assistant", icon: HeartPulse },
   { href: "/doctor/profile", label: "Doctor Profile", icon: UserRound },
 ];
 
