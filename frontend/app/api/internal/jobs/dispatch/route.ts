@@ -87,6 +87,7 @@ export async function POST(request: Request) {
   if (!expected || supplied !== expected) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createDb();
   const expired = await db.execute(sql`select public.expire_payment_holds() as count`);
+  await db.execute(sql`select public.expire_elastic_booking_proposals() as count`);
   const events = await db.select().from(paymentWebhookEvents).where(inArray(paymentWebhookEvents.status, ["pending", "failed"])).limit(50);
   let processed = 0;
   let reconciled = 0;
@@ -236,11 +237,11 @@ export async function POST(request: Request) {
   const claimed = (await db.execute(sql`select * from public.claim_notification_deliveries(50)`)) as unknown as Array<{ id: string; recipient_id: string; appointment_id: string; channel: string; template: string; dedupe_key: string; attempts: number }>;
   let delivered = 0;
   for (const delivery of claimed) {
-    let details: Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string } | null }> = [];
+    let details: Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string } | null }> = [];
     try {
       details = (await db.execute(sql`
         SELECT * FROM public.notification_delivery_context(${delivery.id}::uuid)
-      `)) as unknown as Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string } | null }>;
+      `)) as unknown as Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string } | null }>;
     } catch {
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'delivery_context_lookup_failed')`);
       await finalizeDeliveryFailure(db, delivery, "internal", "delivery_context_lookup_failed", true);
@@ -260,7 +261,7 @@ export async function POST(request: Request) {
         await finalizeDeliveryFailure(db, delivery, "internal", "recipient_mismatch", false);
         continue;
       }
-      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at, schedulingType: row.scheduling_type, previousSlotStartAt: row.notification_metadata?.old_start_at, previousSlotEndAt: row.notification_metadata?.old_end_at }, delivery.channel === "sms" ? "sms" : delivery.channel === "whatsapp" ? "whatsapp" : "email");
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at, schedulingType: row.scheduling_type, previousSlotStartAt: row.notification_metadata?.old_start_at, previousSlotEndAt: row.notification_metadata?.old_end_at, recommendedSlotStartAt: row.notification_metadata?.recommended_start_at, recommendedSlotEndAt: row.notification_metadata?.recommended_end_at, decisionDeadline: row.notification_metadata?.decision_deadline }, delivery.channel === "sms" ? "sms" : delivery.channel === "whatsapp" ? "whatsapp" : "email");
       const result = delivery.channel === "sms"
         ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.SMS_PROVIDER?.trim().toLowerCase() === "vonage" ? "vonage" : "twilio", errorCode: "phone_missing" })
         : delivery.channel === "whatsapp"
