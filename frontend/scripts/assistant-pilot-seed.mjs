@@ -102,6 +102,7 @@ async function seedDatabase(databaseUrl, ids) {
     const cancelledSlot = await ensureSlot(pastSessionId, dateAt(completedDate, 10, 0), dateAt(completedDate, 10, 30));
     const upcomingSlot = await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 9, 0), dateAt(upcomingDate, 9, 30));
     const overlappingSlot = await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 9, 15), dateAt(upcomingDate, 9, 45));
+    await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 10, 0), dateAt(upcomingDate, 10, 30));
 
     async function ensureAppointment(slotId, status, reason, completedAt = null) {
       const existing = await tx`SELECT id FROM public.appointments WHERE patient_id = ${ids.patient} AND slot_id = ${slotId} LIMIT 1`;

@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { assistantErrorStatus, requireAssistantPilotAccess } from "@/lib/assistant/config";
+import { assistantConfig, assistantErrorStatus, assertAssistantMutationOrigin, requireAssistantPilotAccess } from "@/lib/assistant/config";
 import { runGeminiAssistant } from "@/lib/assistant/gemini";
-import type { AssistantRole } from "@/lib/assistant/types";
+import { assistantChatRequestSchema } from "@/lib/assistant/schemas";
 
 export async function POST(request: Request) {
   const started = Date.now();
   try {
-    const body = await request.json() as { role?: AssistantRole; messages?: Array<{ role: "user" | "model"; text: string }>; language?: string };
-    const role = body.role === "doctor" ? "doctor" : body.role === "patient" ? "patient" : null;
-    if (!role || !Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > 20) return NextResponse.json({ error: "Invalid assistant request" }, { status: 400 });
+    assertAssistantMutationOrigin(request);
+    const parsed = assistantChatRequestSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "INVALID_ASSISTANT_REQUEST" }, { status: 400 });
+    const { role, messages, language } = parsed.data;
     const access = await requireAssistantPilotAccess(role);
-    const result = await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages: body.messages, language: body.language });
-    await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model: process.env.GEMINI_TEXT_MODEL ?? "gemini-3.8-flash", language: body.language ?? "auto", duration_ms: Date.now() - started });
+    const result = await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
+    await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model: assistantConfig.textModel, language, duration_ms: Date.now() - started });
     return NextResponse.json(result);
   } catch (error) {
     const status = assistantErrorStatus(error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Assistant unavailable" }, { status });
+    const code = error instanceof Error ? error.message : "ASSISTANT_UNAVAILABLE";
+    return NextResponse.json({ error: code.startsWith("ASSISTANT_") || code.startsWith("GEMINI_") ? code : "ASSISTANT_UNAVAILABLE" }, { status });
   }
 }
