@@ -139,6 +139,69 @@ async function createInteractionWithRetry(input: {
   throw new Error(lastFailure.code);
 }
 
+function isSensitiveAssistantTool(name: string) {
+  return name.startsWith("prepare_");
+}
+
+async function runAssistantToolWithDeadline(input: {
+  call: FunctionCallStep;
+  role: AssistantRole;
+  userId: string;
+  supabase: SupabaseClient;
+  deadlineAt: number;
+  now: () => number;
+}) {
+  const remainingMs = input.deadlineAt - input.now();
+  if (remainingMs <= 0) throw new Error("ASSISTANT_TIMEOUT");
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const operation = runAssistantTool({
+    name: input.call.name,
+    args: input.call.arguments,
+    role: input.role,
+    userId: input.userId,
+    supabase: input.supabase,
+  });
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("ASSISTANT_TIMEOUT")), remainingMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function executeAssistantCalls(input: {
+  calls: FunctionCallStep[];
+  role: AssistantRole;
+  userId: string;
+  supabase: SupabaseClient;
+  deadlineAt: number;
+  now: () => number;
+}) {
+  const firstSensitiveIndex = input.calls.findIndex((call) => isSensitiveAssistantTool(call.name));
+  const callsToExecute = firstSensitiveIndex === -1
+    ? input.calls
+    : input.calls.slice(0, firstSensitiveIndex + 1);
+  const results = new Array<AssistantToolResult | undefined>(callsToExecute.length);
+  const readOnlyCalls = callsToExecute
+    .map((call, index) => ({ call, index }))
+    .filter(({ call }) => !isSensitiveAssistantTool(call.name));
+
+  await Promise.all(readOnlyCalls.map(async ({ call, index }) => {
+    results[index] = await runAssistantToolWithDeadline({ ...input, call });
+  }));
+
+  if (firstSensitiveIndex !== -1) {
+    const call = input.calls[firstSensitiveIndex];
+    results[firstSensitiveIndex] = await runAssistantToolWithDeadline({ ...input, call });
+  }
+
+  return callsToExecute.map((call, index) => ({ call, result: results[index] as AssistantToolResult }));
+}
+
 async function runGeminiRemote(input: {
   role: AssistantRole;
   userId: string;
@@ -177,8 +240,15 @@ async function runGeminiRemote(input: {
     history.push(...steps as InteractionStep[]);
     const results: AssistantToolResult[] = [];
     const functionResults: FunctionResultStep[] = [];
-    for (const call of calls) {
-      const result = await runAssistantTool({ name: call.name, args: call.arguments, role: input.role, userId: input.userId, supabase: input.supabase });
+    const toolExecutions = await executeAssistantCalls({
+      calls,
+      role: input.role,
+      userId: input.userId,
+      supabase: input.supabase,
+      deadlineAt,
+      now: resolvedRuntime.now,
+    });
+    for (const { call, result } of toolExecutions) {
       results.push(result);
       if (result.pendingAction) {
         return {
