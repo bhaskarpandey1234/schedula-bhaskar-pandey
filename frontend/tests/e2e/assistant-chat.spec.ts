@@ -31,6 +31,43 @@ const users: TestUser[] = [];
 
 test.afterEach(async () => { await deleteTestUsers(users.splice(0)); });
 
+test("doctor assistant renders verified appointment cards without patient names or internal IDs", async ({ page }) => {
+  const doctor = await createTestUser("doctor", "assistant-appointment-cards");
+  users.push(doctor);
+  await onboardTestUser(doctor);
+  await page.route("**/api/assistant/chat", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      text: "I found 2 appointments. Details are shown below.",
+      displays: [{ kind: "appointments", title: "Doctor appointments", data: [
+        { patient_count: 1, status: "confirmed", slot_start_at: "2026-11-14T04:00:00.000Z", slot_end_at: "2026-11-14T04:30:00.000Z", timezone: "Asia/Kolkata", reason: null },
+        { patient_count: 1, status: "confirmed", slot_start_at: "2026-12-08T03:30:00.000Z", slot_end_at: "2026-12-08T05:00:00.000Z", timezone: "Asia/Kolkata", reason: "Consultation" },
+      ] }],
+    }) });
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "SpeechRecognition", { value: undefined, configurable: true });
+    Object.defineProperty(window, "webkitSpeechRecognition", { value: undefined, configurable: true });
+  });
+  await page.goto("/auth/login");
+  await page.getByLabel("Email").fill(doctor.email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/doctor$/);
+  await page.goto("/doctor/assistant");
+  const conversation = page.getByRole("log", { name: "Assistant conversation" });
+  await page.getByPlaceholder("Ask about appointments or slots…").fill("show my upcoming appointments");
+  await page.getByPlaceholder("Ask about appointments or slots…").press("Enter");
+  await expect(conversation.getByText("I found 2 appointments. Details are shown below.")).toBeVisible();
+  await expect(conversation.getByText("2 appointments", { exact: true })).toBeVisible();
+  await expect(conversation.getByText("Saturday, November 14, 2026, 9:30 AM – 10:00 AM (Asia/Kolkata)")).toBeVisible();
+  await expect(conversation.getByText("Tuesday, December 8, 2026, 9:00 AM – 10:30 AM (Asia/Kolkata)")).toBeVisible();
+  await expect(conversation.getByText("Patient count: 1").first()).toBeVisible();
+  await expect(conversation.getByText("No specific visit reason provided by patient.")).toBeVisible();
+  await expect(conversation.getByText("Visit reason: Consultation")).toBeVisible();
+  await expect(conversation.getByText("Raj Pandey", { exact: true })).toHaveCount(0);
+  await expect(conversation.getByText(/appointment_id|idempotency key/i)).toHaveCount(0);
+});
+
 test("assistant shows success, retry, confirmation, and stale-action recovery states", async ({ page }) => {
   const doctor = await createTestUser("doctor", "assistant-browser");
   users.push(doctor);

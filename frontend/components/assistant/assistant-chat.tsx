@@ -7,7 +7,7 @@ import { CustomSelect } from "@/components/ui/custom-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assistantBookingPreviewRequiredText, assistantErrorCanRetry, assistantErrorMessage, assistantIsFreeformSlotPrompt, assistantIsUnstructuredBookingPreview, assistantLanguageOptions, assistantTypedSlotSelectionRequiredText, speechRecognitionLanguage, speechSynthesisLanguage } from "@/lib/assistant/presentation";
-import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
+import { formatLocalDate, formatLocalSlotRange, formatSchedulingWindow } from "@/lib/scheduling/time";
 import type { AssistantDisplayPayload, AssistantRole, BookingPreview, PendingAssistantAction } from "@/lib/assistant/types";
 
 type ProposalDecisionSelection = { proposalId: string; decision: "approve" | "cancel" | "choose_slot"; slotId?: string };
@@ -253,19 +253,24 @@ function ResultCard({ display, onSelectDoctor, onSelectSlot, onSelectProposalDec
     return (
       <section className="mt-4 grid gap-3 rounded-xl border bg-background/70 p-3 sm:p-4" aria-label={display.title}>
         <h3 className="text-sm font-semibold">{display.title}</h3>
-        {values.length === 0 ? <p className="text-sm text-muted-foreground">No appointments were found.</p> : values.slice(0, 12).map((value, index) => {
+        {interactiveAppointments === false && <p className="text-sm text-muted-foreground">{values.length} {values.length === 1 ? "appointment" : "appointments"}</p>}
+        {values.length === 0 ? <p className="text-sm text-muted-foreground">No appointments were found.</p> : values.map((value, index) => {
           const row = asRecord(value);
           if (!row) return null;
           const appointmentId = typeof row.appointment_id === "string" ? row.appointment_id : undefined;
-          const name = typeof row.doctor_name === "string" ? row.doctor_name : typeof row.patient_name === "string" ? row.patient_name : "Appointment";
+          const isDoctorAppointment = interactiveAppointments === false;
+          const name = isDoctorAppointment ? "Appointment" : typeof row.doctor_name === "string" ? row.doctor_name : typeof row.patient_name === "string" ? row.patient_name : "Appointment";
           const timezone = typeof row.timezone === "string" ? row.timezone : "Asia/Kolkata";
-          const when = typeof row.slot_start_at === "string" && typeof row.slot_end_at === "string" ? `${formatLocalDate(row.slot_start_at, timezone)}, ${formatLocalSlotRange(row.slot_start_at, row.slot_end_at, timezone)}` : "Time unavailable";
+          const schedulingType = row.scheduling_type === "stream" ? "stream" : "wave";
+          const when = typeof row.slot_start_at === "string" && typeof row.slot_end_at === "string" ? `${formatLocalDate(row.slot_start_at, timezone)}, ${formatSchedulingWindow(row.slot_start_at, row.slot_end_at, timezone, schedulingType)}` : "Time unavailable";
           const canChange = interactiveAppointments && appointmentId && row.status === "confirmed";
           return <article key={appointmentId ?? index} className="grid gap-1 rounded-lg border bg-card p-3 text-sm">
             <p className="font-semibold">{name}</p>
             <p>{when} ({timezone})</p>
             {typeof row.clinic_name === "string" && <p className="text-muted-foreground">{row.clinic_name}</p>}
             <p className="capitalize text-muted-foreground">{String(row.status ?? "status unavailable").replaceAll("_", " ")}</p>
+            {isDoctorAppointment && <p className="text-muted-foreground">Patient count: {typeof row.patient_count === "number" ? row.patient_count : 1}</p>}
+            {isDoctorAppointment && <p className="text-muted-foreground">{typeof row.reason === "string" && row.reason.trim() ? `Visit reason: ${row.reason}` : "No specific visit reason provided by patient."}</p>}
             {canChange && <div className="mt-2 flex flex-wrap gap-2">
               {appointmentId && <Button size="sm" variant="outline" disabled={disabled} onClick={() => onSelectPatientAppointment?.({ appointmentId, action: "reschedule" }, `Find another time for ${name}`)}>Reschedule</Button>}
               {appointmentId && <Button size="sm" variant="outline" disabled={disabled} onClick={() => onSelectPatientAppointment?.({ appointmentId, action: "cancel" }, `Cancel appointment with ${name}`)}>Cancel</Button>}

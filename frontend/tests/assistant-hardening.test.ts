@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { assistantConfig, assistantErrorStatus } from "@/lib/assistant/config";
 import { runGroqAssistant } from "@/lib/assistant/groq";
 import * as bookingQueries from "@/lib/booking/queries";
-import { assistantBookingPreviewRequiredText, assistantErrorCanRetry, assistantErrorMessage, assistantGroundedResultText, assistantIsFreeformSlotPrompt, assistantIsUnstructuredBookingPreview, assistantLanguageLabel, assistantLanguageOptions, assistantRequiresVerifiedDoctorData, assistantResponseLanguageInstruction, assistantTypedSlotSelectionRequiredText, assistantVerificationRequiredText, speechRecognitionLanguage, speechSynthesisLanguage } from "@/lib/assistant/presentation";
+import { assistantBookingPreviewRequiredText, assistantErrorCanRetry, assistantErrorMessage, assistantGroundedAppointmentText, assistantGroundedResultText, assistantIsFreeformSlotPrompt, assistantIsUnstructuredBookingPreview, assistantLanguageLabel, assistantLanguageOptions, assistantRequiresVerifiedDoctorData, assistantResponseLanguageInstruction, assistantTypedSlotSelectionRequiredText, assistantVerificationRequiredText, speechRecognitionLanguage, speechSynthesisLanguage } from "@/lib/assistant/presentation";
+import * as appointmentQueries from "@/lib/appointments/queries";
 import * as assistantTools from "@/lib/assistant/tools";
 import { assistantFunctionDeclarationsForRole } from "@/lib/assistant/tools";
 import { assistantChatRequestSchema, assistantDecisionSchema } from "@/lib/assistant/schemas";
@@ -119,6 +120,50 @@ describe("Groq assistant provider", () => {
     expect(result.text).not.toContain("Invented");
     expect(result.displays).toHaveLength(1);
     expect(result.displays[0]).toMatchObject({ kind: "doctors", data: [{ full_name: "Dr. Rao" }] });
+  });
+
+  it("grounds doctor appointment replies and keeps patient details and identifiers out of Groq context", async () => {
+    assistantConfig.groqApiKey = "test-key";
+    vi.spyOn(assistantTools, "runAssistantTool").mockResolvedValueOnce({
+      modelSummary: "Found 2 appointments.",
+      display: {
+        kind: "appointments",
+        title: "Doctor appointments",
+        data: [
+          { patient_count: 1, status: "confirmed", slot_start_at: "2026-11-14T04:00:00.000Z", slot_end_at: "2026-11-14T04:30:00.000Z", timezone: "Asia/Kolkata", reason: null },
+          { patient_count: 1, status: "confirmed", slot_start_at: "2026-12-08T03:30:00.000Z", slot_end_at: "2026-12-08T05:00:00.000Z", timezone: "Asia/Kolkata", reason: null },
+        ],
+      },
+    });
+    const create = vi.fn()
+      .mockResolvedValueOnce(toolCompletion([{ id: "appointments-1", name: "doctor_appointments", arguments: "{\"tab\":\"upcoming\"}" }]))
+      .mockResolvedValueOnce(completed("You have one appointment in 2025-06-22. Patient S, idempotency key fake-key."));
+    const result = await runGroqAssistant(input, runtimeFor(create));
+    expect(result.text).toBe("I found 2 appointments. Details are shown below.");
+    expect(result.displays[0]?.data).toHaveLength(2);
+    expect(JSON.stringify(result)).not.toContain("Patient S");
+    expect(JSON.stringify(result)).not.toContain("fake-key");
+    expect(JSON.stringify(result)).not.toContain("appointment_id");
+    const continuation = create.mock.calls[1][0].messages as Array<{ role?: string; content?: string }>;
+    const toolContext = continuation.find((message) => message.role === "tool")?.content ?? "";
+    expect(toolContext).toBe('{"result":"Found 2 appointments."}');
+  });
+
+  it("uses the signed-in doctor's upcoming RPC rows and removes identifiers and names from appointment cards", async () => {
+    const rows: appointmentQueries.DoctorAppointment[] = [
+      { appointment_id: "appointment-1", patient_name: "Raj Pandey", status: "confirmed", reason: null, clinic_name: "Clinic", timezone: "Asia/Kolkata", slot_start_at: "2026-11-14T04:00:00.000Z", slot_end_at: "2026-11-14T04:30:00.000Z", scheduling_type: "wave" },
+      { appointment_id: "appointment-2", patient_name: "Raj Pandey", status: "confirmed", reason: "Consultation", clinic_name: "Clinic", timezone: "Asia/Kolkata", slot_start_at: "2026-12-08T03:30:00.000Z", slot_end_at: "2026-12-08T05:00:00.000Z", scheduling_type: "stream" },
+    ];
+    const query = vi.spyOn(appointmentQueries, "getDoctorAppointments").mockResolvedValueOnce(rows);
+    const result = await assistantTools.runAssistantTool({ name: "doctor_appointments", args: { tab: "upcoming" }, role: "doctor", userId: "doctor-1", supabase: {} as never });
+    expect(query).toHaveBeenCalledWith("upcoming");
+    expect(result.display?.data).toEqual([
+      expect.objectContaining({ patient_count: 1, status: "confirmed", timezone: "Asia/Kolkata", slot_start_at: rows[0]?.slot_start_at }),
+      expect.objectContaining({ patient_count: 1, status: "confirmed", timezone: "Asia/Kolkata", slot_start_at: rows[1]?.slot_start_at, scheduling_type: "stream" }),
+    ]);
+    expect(JSON.stringify(result.display)).not.toContain("Raj Pandey");
+    expect(JSON.stringify(result.display)).not.toContain("appointment-1");
+    await expect(assistantTools.runAssistantTool({ name: "doctor_appointments", args: {}, role: "patient", userId: "patient-1", supabase: {} as never })).rejects.toThrow("ROLE_TOOL_NOT_ALLOWED");
   });
 
   it("does not return model-generated doctor recommendations when no verified lookup ran", async () => {
@@ -247,6 +292,8 @@ describe("assistant language, permissions, and validation", () => {
   it("uses grounded results and exposes retry only for recoverable failures", () => {
     expect(assistantGroundedResultText("doctors", 2, "en-IN")).toContain("2 verified doctors");
     expect(assistantGroundedResultText("slots", 0, "hi-IN")).toContain("कोई उपलब्ध");
+    expect(assistantGroundedAppointmentText(2, "en-IN")).toContain("2 appointments");
+    expect(assistantGroundedAppointmentText(0, "hi-IN")).toContain("कोई अपॉइंटमेंट नहीं");
     expect(assistantIsFreeformSlotPrompt("Please tell me the date and time.", "13 Nov 2026 9:00 AM – 9:30 AM")).toBe(true);
     expect(assistantIsUnstructuredBookingPreview("Great choice! Here is your booking preview. Please confirm.")).toBe(true);
     expect(assistantTypedSlotSelectionRequiredText("en-IN")).toContain("button");

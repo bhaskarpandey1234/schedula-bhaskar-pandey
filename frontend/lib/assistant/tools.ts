@@ -64,6 +64,9 @@ type DoctorScheduleRow = {
   appointment_id: string;
   patient_name: string;
   status: string;
+  reason?: string | null;
+  clinic_name?: string;
+  timezone: string;
   slot_start_at: string;
   slot_end_at: string;
   scheduling_type?: string;
@@ -167,7 +170,20 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
         return appointment.status !== "cancelled" && appointment.status !== "completed";
       })
       : await getDoctorAppointments(tab);
-    return textResult("Doctor appointments", `Found ${data.length} appointments${requestedDate ? ` on ${requestedDate}` : ""}.`, "appointments", data);
+    const cards = data.map((appointment) => ({
+      patient_count: 1,
+      status: appointment.status,
+      reason: appointment.reason,
+      clinic_name: appointment.clinic_name,
+      timezone: appointment.timezone,
+      slot_start_at: appointment.slot_start_at,
+      slot_end_at: appointment.slot_end_at,
+      scheduling_type: appointment.scheduling_type,
+    }));
+    return {
+      modelSummary: `Found ${cards.length} appointments${requestedDate ? ` on ${requestedDate}` : ""}.`,
+      display: { kind: "appointments", title: "Doctor appointments", data: cards },
+    };
   }
   if (name === "doctor_schedule_stats") {
     const date = String(args.date ?? new Date().toISOString().slice(0, 10));

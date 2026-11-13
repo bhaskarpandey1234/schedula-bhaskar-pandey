@@ -1,6 +1,6 @@
 import Groq from "groq-sdk";
 import { assistantConfig } from "@/lib/assistant/config";
-import { assistantGroundedResultText, assistantRequiresVerifiedDoctorData, assistantResponseLanguageInstruction, assistantVerificationRequiredText } from "@/lib/assistant/presentation";
+import { assistantGroundedAppointmentText, assistantGroundedResultText, assistantRequiresVerifiedDoctorData, assistantResponseLanguageInstruction, assistantVerificationRequiredText } from "@/lib/assistant/presentation";
 import { assistantFunctionToolsForRole, runAssistantTool } from "@/lib/assistant/tools";
 import type { AssistantDisplayPayload, AssistantRole, AssistantToolResult } from "@/lib/assistant/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -165,6 +165,9 @@ async function runGroqRemote(input: { role: AssistantRole; userId: string; supab
       const groundedResult = input.role === "patient"
         ? [...displays].reverse().find((display) => display.kind === "doctors" || display.kind === "slots")
         : undefined;
+      const groundedAppointments = input.role === "doctor"
+        ? [...displays].reverse().find((display) => display.kind === "appointments")
+        : undefined;
       const groundedKind = groundedResult?.kind === "doctors" || groundedResult?.kind === "slots"
         ? groundedResult.kind
         : undefined;
@@ -172,7 +175,9 @@ async function runGroqRemote(input: { role: AssistantRole; userId: string; supab
         ? (Array.isArray(groundedResult.data) ? groundedResult.data.length : groundedResult.data ? 1 : 0)
         : 0;
       return {
-        text: groundedKind
+        text: groundedAppointments
+          ? assistantGroundedAppointmentText(Array.isArray(groundedAppointments.data) ? groundedAppointments.data.length : groundedAppointments.data ? 1 : 0, input.language)
+          : groundedKind
           ? assistantGroundedResultText(groundedKind, count, input.language)
           : input.role === "patient" && assistantRequiresVerifiedDoctorData(latestUserMessage)
             ? assistantVerificationRequiredText(input.language)
