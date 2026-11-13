@@ -306,6 +306,25 @@ export const assistantAuditEvents = pgTable("assistant_audit_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const assistantConversations = pgTable("assistant_conversations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  role: userRole("role").notNull(),
+  title: text("title").notNull().default("New conversation"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ userUpdated: index("assistant_conversations_user_updated_idx").on(table.userId, table.updatedAt) }));
+
+export const assistantMessages = pgTable("assistant_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull().references(() => assistantConversations.id, { onDelete: "cascade" }),
+  role: text("role").$type<"user" | "assistant">().notNull(),
+  text: text("text").notNull(),
+  displayPayloads: jsonb("display_payloads"),
+  pendingAction: jsonb("pending_action"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ conversationCreated: index("assistant_messages_conversation_created_idx").on(table.conversationId, table.createdAt) }));
+
 export const availabilityAdjustments = pgTable("availability_adjustments", {
   id: uuid("id").defaultRandom().primaryKey(),
   doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),

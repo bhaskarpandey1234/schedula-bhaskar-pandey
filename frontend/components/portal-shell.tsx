@@ -5,6 +5,7 @@ import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import type { Role } from "@/lib/validation/auth";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 import { assistantConfig } from "@/lib/assistant/config";
+import { FloatingAssistant } from "@/components/assistant/floating-assistant";
 
 export async function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
   const unreadCount = role ? await getUnreadNotificationCount() : 0;
@@ -31,6 +32,7 @@ export async function PortalShell({ children, role, name }: { children: React.Re
           <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
         </main>
       </div>
+      {assistantConfig.enabled && Boolean(assistantConfig.groqApiKey) && <FloatingAssistant role={role} />}
     </div>
   );
 }

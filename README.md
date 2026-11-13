@@ -45,7 +45,7 @@ GROQ_TEXT_MODEL=qwen/qwen3.8-27b
 GROQ_FALLBACK_TEXT_MODEL=openai/gpt-oss-120b
 ```
 
-Before hosted testing, enable Zero Data Retention in the Groq project's Data Controls. Groq's free plan is rate-limited, so provider quota failures are shown as retryable assistant errors. This pilot must use synthetic staging records only: do not add real patient, clinician, prescription, or payment data. Groq configuration does not establish healthcare-regulatory compliance. The assistant never stores raw audio or complete transcripts. Insert pilot access rows through a protected migration/admin session; authenticated users cannot grant themselves access.
+Before hosted testing, enable Zero Data Retention in the Groq project's Data Controls. Groq's free plan is rate-limited, so provider quota failures are shown as retryable assistant errors. This pilot must use synthetic staging records only: do not add real patient, clinician, prescription, or payment data. Groq configuration does not establish healthcare-regulatory compliance. The assistant never stores raw audio. It stores complete text conversations for the signed-in pilot account until that account deletes the chat. Insert pilot access rows through a protected migration/admin session; authenticated users cannot grant themselves access.
 
 ### Seed local assistant pilot data
 

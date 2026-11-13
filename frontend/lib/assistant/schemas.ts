@@ -7,6 +7,7 @@ export const assistantMessageSchema = z.object({
   text: z.string().trim().min(1).max(4_000),
 });
 export const assistantChatRequestSchema = z.object({
+  conversationId: z.string().uuid().optional(),
   role: assistantRoleSchema,
   language: assistantLanguageSchema,
   messages: z.array(assistantMessageSchema).min(1).max(20),
@@ -34,6 +35,7 @@ export const assistantChatRequestSchema = z.object({
   const selectionCount = [value.selectedDoctorId, value.selectedSlotId, value.selectedProposalDecision, value.selectedPatientAppointment, value.selectedRescheduleSlot].filter(Boolean).length;
   if (selectionCount > 1) ctx.addIssue({ code: "custom", message: "Submit one structured selection at a time", path: ["selectedSlotId"] });
 });
+export const assistantConversationTitleSchema = z.object({ title: z.string().trim().min(1).max(120) });
 export const assistantDecisionSchema = z.object({
   decision: z.enum(["confirm", "decline", "payment_verified"]),
   paymentId: z.string().uuid().optional(),

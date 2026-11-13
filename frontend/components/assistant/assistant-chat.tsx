@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AudioLines, Loader2, Mic, Send, ShieldCheck, Square, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AudioLines, Check, History, Loader2, Mic, Pencil, Plus, Send, ShieldCheck, Square, Trash2, Volume2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import type { AssistantDisplayPayload, AssistantRole, BookingPreview, PendingAss
 type ProposalDecisionSelection = { proposalId: string; decision: "approve" | "cancel" | "choose_slot"; slotId?: string };
 type PatientAppointmentSelection = { appointmentId: string; action: "cancel" | "reschedule" };
 type RescheduleSlotSelection = { appointmentId: string; slotId: string };
-type Message = { role: "user" | "assistant"; text: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; retryText?: string; retrySelection?: AssistantSelection };
+type Message = { id?: string; role: "user" | "assistant"; text: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; retryText?: string; retrySelection?: AssistantSelection; staleAction?: boolean };
 type AssistantSelection = { selectedDoctorId?: string; selectedSlotId?: string; selectedProposalDecision?: ProposalDecisionSelection; selectedPatientAppointment?: PatientAppointmentSelection; selectedRescheduleSlot?: RescheduleSlotSelection };
+type Conversation = { id: string; title: string; role: AssistantRole; created_at: string; updated_at: string };
 type VoiceState = "idle" | "listening" | "processing" | "speaking" | "error";
 type RecognitionResult = ArrayLike<{ transcript: string }> & { isFinal?: boolean };
 type Recognition = { continuous: boolean; interimResults: boolean; lang: string; start: () => void; stop: () => void; onresult: ((event: { results: ArrayLike<RecognitionResult> }) => void) | null; onend: (() => void) | null; onerror: ((event?: { error?: string }) => void) | null };
@@ -309,11 +310,69 @@ function ResultCard({ display, onSelectDoctor, onSelectSlot, onSelectProposalDec
   );
 }
 
-export function AssistantChat({ role }: { role: AssistantRole }) {
+export function AssistantChat({ role, compact = false }: { role: AssistantRole; compact?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([{ role: "assistant", text: role === "doctor" ? "I can check your schedule, appointments, conflicts, and availability." : "I can find doctors, check slots, and manage your appointments with confirmation." }]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationId, setConversationId] = useState<string>();
+  const [historyBusy, setHistoryBusy] = useState(true);
+  const [historyError, setHistoryError] = useState<string>();
+  const [editingConversationId, setEditingConversationId] = useState<string>();
+  const [editingTitle, setEditingTitle] = useState("");
   const [input, setInput] = useState(""); const [language, setLanguage] = useState("en-IN"); const [busy, setBusy] = useState(false); const [voiceState, setVoiceState] = useState<VoiceState>("idle"); const [voiceActive, setVoiceActive] = useState(false); const [oneTurnActive, setOneTurnActive] = useState(false); const [oneTurnTranscript, setOneTurnTranscript] = useState(""); const [voiceError, setVoiceError] = useState<string>(); const [actionBusy, setActionBusy] = useState<string | null>(null);
   const recognitionRef = useRef<Recognition | null>(null); const voiceEnabledRef = useRef(false); const oneTurnActiveRef = useRef(false); const oneTurnTranscriptRef = useRef(""); const oneTurnSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const speakingRef = useRef(false); const languageRef = useRef(language); const messagesRef = useRef(messages); const busyRef = useRef(false); const bottomRef = useRef<HTMLDivElement>(null); const sendRef = useRef<(value?: string, selection?: AssistantSelection) => Promise<void>>(async () => undefined);
   useEffect(() => { messagesRef.current = messages; bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  const greeting = role === "doctor" ? "I can check your schedule, appointments, conflicts, and availability." : "I can find doctors, check slots, and manage your appointments with confirmation.";
+  const loadConversation = useCallback(async (id: string) => {
+    setHistoryBusy(true); setHistoryError(undefined);
+    try {
+      const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`);
+      const payload = await response.json() as { messages?: Message[]; error?: string };
+      if (!response.ok) throw new Error(payload.error);
+      const next = payload.messages?.length ? payload.messages : [{ role: "assistant" as const, text: greeting }];
+      setConversationId(id); setMessages(next); messagesRef.current = next;
+    } catch { setHistoryError("Chat history could not be loaded. Please try again."); }
+    finally { setHistoryBusy(false); }
+  }, [greeting, role]);
+  const loadConversations = useCallback(async () => {
+    setHistoryBusy(true); setHistoryError(undefined);
+    try {
+      const response = await fetch(`/api/assistant/conversations?role=${role}`);
+      const payload = await response.json() as { conversations?: Conversation[]; error?: string };
+      if (!response.ok) throw new Error(payload.error);
+      const next = payload.conversations ?? []; setConversations(next);
+      if (next[0]) await loadConversation(next[0].id); else setMessages([{ role: "assistant", text: greeting }]);
+    } catch { setHistoryError("Chat history could not be loaded. You can still start a new chat."); }
+    finally { setHistoryBusy(false); }
+  }, [greeting, loadConversation, role]);
+  useEffect(() => { void loadConversations(); }, [loadConversations]);
+  const newConversation = async () => {
+    setHistoryBusy(true); setHistoryError(undefined);
+    try {
+      const response = await fetch("/api/assistant/conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
+      const payload = await response.json() as { conversation?: Conversation; error?: string };
+      if (!response.ok || !payload.conversation) throw new Error(payload.error);
+      setConversations((current) => [payload.conversation!, ...current]); setConversationId(payload.conversation.id);
+      const next = [{ role: "assistant" as const, text: greeting }]; setMessages(next); messagesRef.current = next;
+    } catch { setHistoryError("A new chat could not be created. Please try again."); }
+    finally { setHistoryBusy(false); }
+  };
+  const renameConversation = async (id: string) => {
+    const title = editingTitle.trim(); if (!title) return;
+    const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+    if (!response.ok) { setHistoryError("The chat name could not be updated."); return; }
+    setConversations((current) => current.map((item) => item.id === id ? { ...item, title } : item)); setEditingConversationId(undefined);
+  };
+  const deleteConversation = async (id: string) => {
+    if (!window.confirm("Delete this chat and all of its messages? This cannot be undone.")) return;
+    const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`, { method: "DELETE" });
+    if (!response.ok) { setHistoryError("The chat could not be deleted."); return; }
+    const remaining = conversations.filter((item) => item.id !== id); setConversations(remaining);
+    if (conversationId === id) { setConversationId(undefined); setMessages([{ role: "assistant", text: greeting }]); if (remaining[0]) void loadConversation(remaining[0].id); }
+  };
+  const persistActionReply = (text: string) => {
+    if (!conversationId) return;
+    void fetch(`/api/assistant/conversations/${conversationId}?role=${role}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+  };
   const clearOneTurnSilenceTimer = () => { if (oneTurnSilenceTimerRef.current !== null) clearTimeout(oneTurnSilenceTimerRef.current); oneTurnSilenceTimerRef.current = null; };
   const startContinuousRecognition = () => {
     const recognition = recognitionRef.current;
@@ -347,7 +406,7 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
     window.speechSynthesis.speak(utterance);
   };
   const openCheckout = async (action: PendingAssistantAction, checkout: CheckoutSession) => { const launch = () => { if (!window.Razorpay) throw new Error("Payment checkout could not load."); let completed = false; const instance = new window.Razorpay({ key: checkout.keyId, amount: checkout.amountMinor, currency: checkout.currency, order_id: checkout.orderId, name: "Schedula Healthcare", description: "Online consultation", prefill: checkout.prefill, handler: async (payment: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => { completed = true; const response = await fetch(`/api/assistant/actions/${action.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: "payment_verified", paymentId: checkout.paymentId, orderId: payment.razorpay_order_id, providerPaymentId: payment.razorpay_payment_id, signature: payment.razorpay_signature }) }); const result = await response.json() as { error?: string }; const reply = response.ok ? "Payment verified and your appointment is confirmed." : assistantErrorMessage(result.error); setMessages((current) => [...current.map((message) => message.pendingAction?.id === action.id ? { ...message, pendingAction: undefined } : message), { role: "assistant", text: reply }]); speak(reply); }, modal: { ondismiss: () => { if (!completed) setMessages((current) => [...current, { role: "assistant", text: "Checkout was dismissed. The appointment is not confirmed; you can retry while the hold is active." }]); } } }); instance.on?.("payment.failed", () => setMessages((current) => [...current, { role: "assistant", text: "Payment failed safely. No appointment was confirmed." }])); instance.open(); }; if (window.Razorpay) launch(); else { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = launch; script.onerror = () => setMessages((current) => [...current, { role: "assistant", text: "Payment checkout could not load. No appointment was confirmed." }]); document.body.appendChild(script); } };
-  const decideAction = async (action: PendingAssistantAction, decision: "confirm" | "decline") => { setActionBusy(action.id); try { const response = await fetch(`/api/assistant/actions/${action.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) }); const result = await response.json() as { error?: string; status?: string; result?: CheckoutSession }; if (response.ok && result.status === "payment_required" && result.result) { await openCheckout(action, result.result); return; } const reply = response.ok ? (decision === "confirm" ? actionSuccessText(action) : "Okay, I did not change anything.") : assistantErrorMessage(result.error); setMessages((current) => [...current.map((message) => message.pendingAction?.id === action.id ? { ...message, pendingAction: undefined } : message), { role: "assistant", text: reply }]); speak(reply); } catch { setMessages((current) => [...current, { role: "assistant", text: "The action could not be reached. No appointment was changed; please retry." }]); } finally { setActionBusy(null); } };
+  const decideAction = async (action: PendingAssistantAction, decision: "confirm" | "decline") => { setActionBusy(action.id); try { const response = await fetch(`/api/assistant/actions/${action.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) }); const result = await response.json() as { error?: string; status?: string; result?: CheckoutSession }; if (response.ok && result.status === "payment_required" && result.result) { await openCheckout(action, result.result); return; } const reply = response.ok ? (decision === "confirm" ? actionSuccessText(action) : "Okay, I did not change anything.") : assistantErrorMessage(result.error); setMessages((current) => [...current.map((message) => message.pendingAction?.id === action.id ? { ...message, pendingAction: undefined } : message), { role: "assistant", text: reply }]); persistActionReply(reply); speak(reply); } catch { const reply = "The action could not be reached. No appointment was changed; please retry."; setMessages((current) => [...current, { role: "assistant", text: reply }]); persistActionReply(reply); } finally { setActionBusy(null); } };
   const send = async (value = input, selection: AssistantSelection = {}) => {
     const text = value.trim();
     if (!text || busyRef.current || actionBusy) return;
@@ -391,18 +450,27 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          conversationId,
           role,
           language: languageRef.current,
-          messages: next.map(({ role: itemRole, text: itemText }) => ({ role: itemRole === "assistant" ? "model" : "user", text: itemText })),
+          messages: next.slice(-20).map(({ role: itemRole, text: itemText }) => ({ role: itemRole === "assistant" ? "model" : "user", text: itemText })),
           selectedDoctorId: selection.selectedDoctorId,
           selectedSlotId: selection.selectedSlotId,
           selectedProposalDecision: selection.selectedProposalDecision,
         }),
       });
-      const payload = await response.json() as { text?: string; error?: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction };
+      const payload = await response.json() as { text?: string; error?: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; conversationId?: string };
       const reply = response.ok ? (payload.text ?? "I could not complete that request.") : assistantErrorMessage(payload.error);
       const canRetry = !response.ok && assistantErrorCanRetry(payload.error);
       setMessages((current) => [...current, { role: "assistant", text: reply, displays: payload.displays, pendingAction: payload.pendingAction, retryText: canRetry ? text : undefined, retrySelection: canRetry ? selection : undefined }]);
+      if (payload.conversationId) {
+        setConversationId(payload.conversationId);
+        setConversations((current) => {
+          const existing = current.find((item) => item.id === payload.conversationId);
+          if (existing) return [{ ...existing, updated_at: new Date().toISOString() }, ...current.filter((item) => item.id !== existing.id)];
+          return [{ id: payload.conversationId!, title: text.slice(0, 72), role, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...current];
+        });
+      }
       speak(reply);
     } catch {
       const reply = assistantErrorMessage("ASSISTANT_NETWORK_ERROR");
@@ -546,9 +614,14 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
     recognitionRef.current = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
-  const prompts = role === "doctor" ? ["Show today's appointments", "Find my next available slot"] : ["Show my upcoming appointments", "Find a cardiologist"];
+  const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+  const prompts = lastAssistant?.pendingAction
+    ? ["What will change if I confirm?", "Show the details again"]
+    : role === "doctor"
+      ? ["Show today's appointments", "Find my next available slot", "Check schedule conflicts"]
+      : ["Show my upcoming appointments", "Find a cardiologist", "Show available slots"];
   return (
-    <Card className="mx-auto flex h-[min(72svh,46rem)] min-h-[28rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-sm">
+    <Card className={`mx-auto flex ${compact ? "h-[min(76svh,43rem)] min-h-[32rem] max-w-3xl" : "h-[min(72svh,46rem)] min-h-[28rem] max-w-5xl"} w-full flex-col overflow-hidden rounded-2xl shadow-sm`}>
       <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -558,6 +631,25 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
             </CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">Scheduling operations only · pilot accounts · no medical advice</p>
           </div>
+          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-0.5" aria-label="Chat history">
+            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => void newConversation()} disabled={historyBusy || busy}>
+              <Plus className="mr-1 size-3.5" />New chat
+            </Button>
+            <History className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {conversations.map((conversation) => editingConversationId === conversation.id ? (
+              <form key={conversation.id} className="flex shrink-0 items-center gap-1" onSubmit={(event) => { event.preventDefault(); void renameConversation(conversation.id); }}>
+                <input aria-label="Chat name" className="h-8 w-36 rounded-md border bg-background px-2 text-xs" value={editingTitle} onChange={(event) => setEditingTitle(event.target.value)} autoFocus />
+                <Button type="submit" size="icon" variant="ghost" className="size-8" aria-label="Save chat name"><Check className="size-3.5" /></Button>
+              </form>
+            ) : (
+              <div key={conversation.id} className={`flex shrink-0 items-center rounded-lg border text-xs ${conversationId === conversation.id ? "border-primary bg-primary/10" : "bg-background"}`}>
+                <button type="button" className="max-w-36 truncate px-2 py-1.5 text-left" onClick={() => void loadConversation(conversation.id)} aria-current={conversationId === conversation.id ? "true" : undefined}>{conversation.title}</button>
+                <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Rename ${conversation.title}`} onClick={() => { setEditingConversationId(conversation.id); setEditingTitle(conversation.title); }}><Pencil className="size-3" /></button>
+                <button type="button" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`Delete ${conversation.title}`} onClick={() => void deleteConversation(conversation.id)}><Trash2 className="size-3" /></button>
+              </div>
+            ))}
+          </div>
+          {historyError && <p className="mt-2 text-xs text-destructive" role="alert">{historyError}</p>}
           <label className="sr-only" htmlFor="assistant-language">Assistant language</label>
           <CustomSelect
             id="assistant-language"
@@ -570,20 +662,6 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {prompts.map((prompt) => (
-            <Button
-              key={prompt}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void send(prompt)}
-              disabled={busy || oneTurnActive || Boolean(actionBusy)}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </div>
         <div
           className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
           role="log"
@@ -674,9 +752,13 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
                   </div>
                 </div>
               )}
+              {message.staleAction && <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50/70 p-2 text-xs text-amber-950">This saved action is no longer available. Ask the assistant to prepare a new review.</p>}
             </div>
           ))}
           <div ref={bottomRef} />
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2" aria-label="Suggested prompts">
+          {prompts.map((prompt) => <Button key={prompt} type="button" size="sm" variant="outline" className="transition-transform hover:-translate-y-0.5" onClick={() => void send(prompt)} disabled={busy || oneTurnActive || Boolean(actionBusy)}>{prompt}</Button>)}
         </div>
         <div className="flex shrink-0 items-end gap-2 border-t pt-3">
           <Button
