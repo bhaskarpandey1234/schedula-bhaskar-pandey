@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatLocalDate, formatLocalSlotRange } from "@/lib/scheduling/time";
 import { isUuid } from "@/lib/discovery/directory";
+import { AppointmentCompletionForm } from "@/components/clinical/appointment-completion-form";
+import { PrescriptionForm } from "@/components/clinical/prescription-form";
 
 export const instant = false;
 
@@ -44,6 +46,8 @@ export default async function DoctorAppointmentDetailPage({ params }: { params: 
               <p className="mt-2 flex items-center gap-2 text-muted-foreground"><MapPin className="size-4" />{appointment.clinic_name}</p>
             </div>
             {appointment.reason && <div className="rounded-lg bg-muted p-4"><p className="font-medium">Patient stated reason</p><p className="mt-1 text-muted-foreground">{appointment.reason}</p></div>}
+            {appointment.status === "confirmed" && <div className="border-t pt-4"><AppointmentCompletionForm appointmentId={appointment.appointment_id} /></div>}
+            {appointment.status === "completed" && <div className="border-t pt-4"><PrescriptionForm appointmentId={appointment.appointment_id} /></div>}
             {appointment.is_cancellable && <div className="flex justify-end border-t pt-4"><CancelDoctorAppointmentForm appointmentId={appointment.appointment_id} /></div>}
           </CardContent>
         </Card>
