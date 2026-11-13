@@ -7,6 +7,16 @@ export type ElasticAppointment = {
   patient_name?: string | null;
   start_at: string;
   end_at: string;
+  created_at?: string;
+};
+
+export type ElasticStreamCapacity = {
+  minimum_patient_minutes: number;
+  original_capacity: number;
+  reduced_capacity: number;
+  booked_count: number;
+  retained_count: number;
+  overflow_count: number;
 };
 
 export type ElasticCandidate = {
@@ -44,6 +54,7 @@ export function userFacingAvailabilityError(error: unknown) {
   if (message.includes("3 hours") || message.includes("three hours")) return "This availability can be changed only more than 3 hours before its current start time.";
   if (message.includes("future")) return "Only future availability can be edited.";
   if (message.includes("align")) return "Wave boundaries must align with the appointment duration.";
+  if (message.includes("minimum consultation")) return "The new Stream window is too short for one minimum consultation.";
   if (message.includes("pure shrink")) return "Choose a pure shrink or pure expansion; shifting both edges is not supported.";
   return "We could not update this availability. Please review the window and try again.";
 }
@@ -83,7 +94,21 @@ export type ElasticPreview = {
   affected_slots: Array<{ slot_id: string; start_at: string; end_at: string; allocated_count: number; capacity: number }>;
   appointments: ElasticAppointment[];
   candidates: ElasticCandidate[];
+  stream_capacity?: ElasticStreamCapacity;
+  stream_retained_appointments?: ElasticAppointment[];
+  stream_overflow_appointments?: ElasticAppointment[];
 };
+
+export function reducedStreamCapacity(originalCapacity: number, startAt: string, endAt: string, minimumPatientMinutes: number) {
+  const minutes = Math.floor((Date.parse(endAt) - Date.parse(startAt)) / 60000);
+  if (minimumPatientMinutes <= 0 || minutes < minimumPatientMinutes) return 0;
+  return Math.min(originalCapacity, Math.floor(minutes / minimumPatientMinutes));
+}
+
+export function partitionStreamAppointments(appointments: ElasticAppointment[], retainedCapacity: number) {
+  const ordered = [...appointments].sort((left, right) => Date.parse(left.created_at ?? left.start_at) - Date.parse(right.created_at ?? right.start_at) || left.appointment_id.localeCompare(right.appointment_id));
+  return { retained: ordered.slice(0, retainedCapacity), overflow: ordered.slice(retainedCapacity) };
+}
 
 /**
  * Candidate capacity after accounting for the other choices in this preview.
@@ -112,7 +137,8 @@ export function elasticCandidatesForDate(candidates: ElasticCandidate[], date: s
 /** Deterministic capacity-aware assignment used by the preview UI. */
 export function suggestElasticAssignments(preview: ElasticPreview): ElasticAssignment[] {
   if (preview.scheduling_type === "stream") {
-    return preview.appointments.map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: appointment.source_slot_id, action: "moved" }));
+    if (!preview.stream_overflow_appointments) return preview.appointments.map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: appointment.source_slot_id, action: "moved" as const }));
+    return (preview.stream_overflow_appointments ?? []).map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: null, action: "cancelled" as const }));
   }
   const capacity = new Map(preview.candidates.map((candidate) => [candidate.slot_id, candidate.remaining_capacity]));
   const candidates = [...preview.candidates].sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));

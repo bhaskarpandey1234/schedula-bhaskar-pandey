@@ -211,6 +211,38 @@ describe("local Supabase scheduling RPCs", () => {
     expect(appointment).toEqual({ slot_id: customSlots!.id, status: "confirmed" });
   });
 
+  it("reduces Stream capacity by minimum patient minutes and moves overflow bookings", async () => {
+    const doctor = await user("doctor", "stream-shrink-capacity-doctor");
+    const patients = await Promise.all(Array.from({ length: 6 }, (_, index) => user("patient", `stream-shrink-capacity-patient-${index}`)));
+    const sourceDate = futureDate(21);
+    const targetDate = futureDate(22);
+    const { data: sourceSession, error: sourceError } = await doctor.client.rpc("create_custom_availability_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_capacity: 6, p_scheduling_type: "stream" });
+    expect(sourceError).toBeNull();
+    const { error: minutesError } = await doctor.client.rpc("set_stream_min_patient_minutes", { p_session_ids: [sourceSession], p_minutes: 10 });
+    expect(minutesError).toBeNull();
+    const { data: targetSession, error: targetError } = await doctor.client.rpc("create_custom_availability_with_slots", { p_session_date: targetDate, p_start_time: "11:00", p_end_time: "12:00", p_timezone: "Asia/Kolkata", p_capacity: 3, p_scheduling_type: "stream" });
+    expect(targetError).toBeNull();
+    const { data: sourceSlots } = await doctor.client.from("appointment_slots").select("id").eq("availability_session_id", sourceSession!).single();
+    const { data: targetSlots } = await doctor.client.from("appointment_slots").select("id").eq("availability_session_id", targetSession!).single();
+    const appointments = [];
+    for (const patient of patients) {
+      const { data: appointmentId, error } = await patient.client.rpc("book_appointment", { p_slot_id: sourceSlots!.id, p_reason: "Stream shrink capacity" });
+      expect(error).toBeNull();
+      appointments.push(appointmentId);
+    }
+    const { data: preview, error: previewError } = await doctor.client.rpc("preview_doctor_occurrence_adjustment", { p_session_id: sourceSession, p_occurrence_date: sourceDate, p_start_time: "09:30", p_end_time: "10:00" });
+    expect(previewError).toBeNull();
+    expect(preview?.stream_capacity).toMatchObject({ original_capacity: 6, reduced_capacity: 3, booked_count: 6, retained_count: 3, overflow_count: 3 });
+    expect(preview?.stream_overflow_appointments).toHaveLength(3);
+    const { error: applyError } = await doctor.client.rpc("apply_doctor_occurrence_adjustment", { p_session_id: sourceSession, p_occurrence_date: sourceDate, p_start_time: "09:30", p_end_time: "10:00", p_assignments: preview.stream_overflow_appointments.map((appointment: { appointment_id: string; source_slot_id: string }) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: targetSlots!.id, action: "moved" })) });
+    expect(applyError).toBeNull();
+    const { data: sourceAfter } = await doctor.client.from("appointment_slots").select("capacity, allocated_count, slot_start_at, slot_end_at").eq("id", sourceSlots!.id).single();
+    const { data: targetAfter } = await doctor.client.from("appointment_slots").select("capacity, allocated_count").eq("id", targetSlots!.id).single();
+    expect(sourceAfter).toMatchObject({ capacity: 3, allocated_count: 3 });
+    expect(targetAfter).toMatchObject({ capacity: 3, allocated_count: 3 });
+    expect(appointments).toHaveLength(6);
+  });
+
   it("still rejects Stream expansion into an active available overlap", async () => {
     const doctor = await user("doctor", "elastic-stream-overlap-doctor");
     const date = futureDate();

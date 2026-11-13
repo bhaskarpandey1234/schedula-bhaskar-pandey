@@ -47,10 +47,13 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
       const result = await previewElasticAvailabilityAction({ sessionId, occurrenceDate, startTime: start, endTime: end });
       if ("error" in result) { setError(result.error); return; }
       setPreview(result.preview);
+      const affectedAppointments = result.preview.scheduling_type === "stream"
+        ? (result.preview.stream_overflow_appointments ?? [])
+        : result.preview.appointments;
       setAssignments(result.preview.scheduling_type === "wave"
-        ? result.preview.appointments.map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: null, action: "cancelled" as const }))
-        : result.assignments);
-      setDecisions(Object.fromEntries(result.preview.appointments.map((appointment) => [appointment.appointment_id, result.preview.scheduling_type === "wave" ? "unselected" : "moved"])));
+        ? affectedAppointments.map((appointment) => ({ appointment_id: appointment.appointment_id, source_slot_id: appointment.source_slot_id, target_slot_id: null, action: "cancelled" as const }))
+        : (result.preview.classification === "expansion" ? [] : result.assignments));
+      setDecisions(Object.fromEntries(affectedAppointments.map((appointment) => [appointment.appointment_id, "unselected"])));
       setSelectedDates({});
       setActiveBookingId(null);
     } catch (reason) {
@@ -62,7 +65,7 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
 
   async function confirm() {
     if (!preview) return;
-    if (preview.scheduling_type === "wave" && preview.appointments.some((appointment) => decisions[appointment.appointment_id] === "unselected" || decisions[appointment.appointment_id] === "choosing_move" || (decisions[appointment.appointment_id] === "moved" && !assignments.find((assignment) => assignment.appointment_id === appointment.appointment_id)?.target_slot_id))) {
+    if (assignments.some((assignment) => decisions[assignment.appointment_id] === "unselected" || decisions[assignment.appointment_id] === "choosing_move" || (decisions[assignment.appointment_id] === "moved" && !assignment.target_slot_id))) {
       setError("Choose Move booking and an available time, or select Cancel + full refund, for every affected booking.");
       return;
     }
@@ -131,7 +134,7 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
     if (!value) reset();
   };
   const recommendations = preview ? suggestElasticAssignments(preview) : [];
-  const hasIncompleteMoves = Boolean(preview?.scheduling_type === "wave" && preview.appointments.some((appointment) => decisions[appointment.appointment_id] === "unselected" || decisions[appointment.appointment_id] === "choosing_move" || (decisions[appointment.appointment_id] === "moved" && !assignments.find((assignment) => assignment.appointment_id === appointment.appointment_id)?.target_slot_id)));
+  const hasIncompleteMoves = Boolean(preview && assignments.some((assignment) => decisions[assignment.appointment_id] === "unselected" || decisions[assignment.appointment_id] === "choosing_move" || (decisions[assignment.appointment_id] === "moved" && !assignment.target_slot_id)));
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -185,7 +188,7 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
           {preview && <section className="grid gap-4 rounded-xl border border-border/80 bg-background p-4" aria-label="Availability change preview">
             <div className="grid gap-1">
               <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" aria-hidden="true" />Review change impact</div>
-              <p className="text-sm text-muted-foreground">These {preview.appointments.length} booking{preview.appointments.length === 1 ? "" : "s"} are affected by this change.</p>
+              <p className="text-sm text-muted-foreground">These {(preview.scheduling_type === "stream" ? (preview.stream_overflow_appointments?.length ?? 0) : preview.appointments.length)} booking{(preview.scheduling_type === "stream" ? (preview.stream_overflow_appointments?.length ?? 0) : preview.appointments.length) === 1 ? "" : "s"} require a decision; other bookings keep the updated window.</p>
             </div>
             <div className="grid gap-2 rounded-lg bg-surface-muted/50 p-3 text-sm">
               <p className="font-medium">New window</p>
@@ -194,7 +197,7 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
               <p className="text-xs text-muted-foreground">{preview.classification === "shrink" ? "The removed time is outside the new window." : "The new time will be added to this occurrence."}</p>
             </div>
             {preview.affected_slots.length > 0 && <div className="grid gap-2"><p className="text-sm font-semibold">Affected slots</p><div className="grid gap-2 sm:grid-cols-2">{preview.affected_slots.map((slot) => <div key={slot.slot_id} className="rounded-lg border border-border/70 px-3 py-2 text-sm"><p className="font-medium">{formatLocalDate(slot.start_at, preview.timezone)}</p><p>{formatSchedulingWindow(slot.start_at, slot.end_at, preview.timezone, preview.scheduling_type)}</p><p className="text-xs text-muted-foreground">{slot.allocated_count} of {slot.capacity} booked</p></div>)}</div></div>}
-            {preview.scheduling_type === "wave" && assignments.length > 0 && <div className="grid min-w-0 gap-3"><div><p className="text-sm font-semibold">Choose an outcome for each booking</p><p className="text-xs text-muted-foreground">Choose Move booking or Cancel + full refund. The earliest eligible slot is shown as a recommendation but is not selected automatically.</p></div>{assignments.map((assignment) => {
+            {((preview.scheduling_type === "wave") || (preview.scheduling_type === "stream" && preview.classification === "shrink")) && assignments.length > 0 && <div className="grid min-w-0 gap-3"><div><p className="text-sm font-semibold">Choose an outcome for each excess booking</p><p className="text-xs text-muted-foreground">Choose Move booking or Cancel + full refund. The earliest eligible slot is shown as a recommendation but is not selected automatically.</p></div>{assignments.map((assignment) => {
               const appointment = preview.appointments.find((item) => item.appointment_id === assignment.appointment_id);
               if (!appointment) return null;
               const decision = decisions[assignment.appointment_id] ?? "unselected";
@@ -215,7 +218,8 @@ export function ElasticAvailabilityForm({ sessionId, occurrenceDate, startTime, 
                 </>}
               </article>;
             })}</div>}
-            {preview.scheduling_type === "stream" && <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-muted-foreground">All bookings keep their allocation and receive the updated arrival window.</p>}
+            {preview.scheduling_type === "stream" && preview.stream_capacity && <div className="grid gap-2 rounded-lg bg-primary/5 px-3 py-3 text-sm"><p className="font-semibold">Stream capacity impact</p><p>{preview.stream_capacity.original_capacity} patients fit the current window; {preview.stream_capacity.reduced_capacity} fit the new window at {preview.stream_capacity.minimum_patient_minutes} minutes per patient.</p><p className="text-muted-foreground">{preview.stream_capacity.retained_count} booking{preview.stream_capacity.retained_count === 1 ? "" : "s"} stay in the shortened window and {preview.stream_capacity.overflow_count} require a new Stream slot or full refund.</p></div>}
+            {preview.scheduling_type === "stream" && preview.classification === "expansion" && <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-muted-foreground">All bookings keep their allocation and receive the expanded arrival window.</p>}
             {Object.values(decisions).filter((decision) => decision === "cancelled").length > 0 && <p role="alert" className="rounded-lg bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive">{Object.values(decisions).filter((decision) => decision === "cancelled").length} booking{Object.values(decisions).filter((decision) => decision === "cancelled").length === 1 ? "" : "s"} will be cancelled and refunded.</p>}
             {hasIncompleteMoves && <p role="alert" className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">Choose a replacement time or select cancel + full refund for each affected booking.</p>}
             <DialogFooter><Button type="button" variant="outline" onClick={() => { setPreview(null); setAssignments([]); setDecisions({}); setSelectedDates({}); setActiveBookingId(null); setError(null); }}><ArrowLeft className="size-4" />Back</Button><Button type="button" onClick={confirm} disabled={pending || hasIncompleteMoves}>{pending ? "Applying change…" : "Confirm change"}<MoveRight className="size-4" /></Button></DialogFooter>

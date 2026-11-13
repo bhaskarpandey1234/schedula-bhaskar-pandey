@@ -3,6 +3,7 @@ import { deriveRecurrenceEndDate, isRecurrenceDuration } from "@/lib/scheduling/
 
 const timezone = z.string().trim().refine((value) => { try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); return true; } catch { return false; } }, "Use a valid IANA timezone.");
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.");
+const streamMinutes = z.coerce.number().int().refine((value) => [5, 10, 15, 20, 30, 45, 60].includes(value), "Choose a supported minimum consultation time.");
 function isFutureLocal(value: string, time: string, zone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
   const current = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
@@ -13,11 +14,12 @@ export const availabilitySessionSchema = z.object({
   sessionType: z.enum(["recurring", "specific_date"]), recurrenceMethod: z.enum(["day", "date"]).optional(), schedulingType: z.enum(["wave", "stream"]),
   sessionDates: z.array(date).optional(), recurrenceStartDate: date.optional(), recurrenceDuration: z.string().optional(), monthlyDays: z.array(z.coerce.number().int().min(1).max(31)).optional(), consultingDays: z.array(z.coerce.number().int().min(1).max(7)).optional(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), timezone,
-  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value)).optional(), capacity: z.coerce.number().int().min(1).max(10),
+  intervalMinutes: z.coerce.number().int().refine((value) => [15, 30, 60].includes(value)).optional(), streamMinPatientMinutes: streamMinutes.optional(), capacity: z.coerce.number().int().min(1).max(10),
 }).superRefine((value, ctx) => {
   if (value.endTime <= value.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time." });
   if (value.schedulingType === "wave" && value.intervalMinutes == null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Choose an appointment duration for Wave scheduling." });
   if (value.schedulingType === "stream" && value.intervalMinutes != null) ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Stream scheduling uses the full time window." });
+  if (value.schedulingType === "wave" && value.streamMinPatientMinutes != null) ctx.addIssue({ code: "custom", path: ["streamMinPatientMinutes"], message: "Minimum consultation time applies only to Stream scheduling." });
   if (value.sessionType === "recurring" && !value.recurrenceMethod) ctx.addIssue({ code: "custom", path: ["recurrenceMethod"], message: "Choose By Day (Weekly) or By Date (Monthly)." });
   if (value.sessionType === "recurring" && !value.recurrenceStartDate) ctx.addIssue({ code: "custom", path: ["recurrenceStartDate"], message: "Choose a recurrence start date." });
   if (value.sessionType === "recurring" && (!value.recurrenceDuration || !isRecurrenceDuration(value.recurrenceDuration) || (value.recurrenceMethod === "day" && value.recurrenceDuration === "1m") || (value.recurrenceMethod === "date" && value.recurrenceDuration === "30d"))) ctx.addIssue({ code: "custom", path: ["recurrenceDuration"], message: "Choose a valid repeat duration." });

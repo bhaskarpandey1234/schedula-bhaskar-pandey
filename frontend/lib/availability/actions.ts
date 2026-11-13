@@ -89,6 +89,11 @@ export async function createAvailabilityAction(_: AvailabilityActionState, formD
     return { error: userMessage, values: submittedValues };
   }
   if (!data) return { error: "We could not create this availability.", values: submittedValues };
+  if (parsed.data.schedulingType === "stream") {
+    const sessionIds = (Array.isArray(data) ? data : [data]).filter((value): value is string => typeof value === "string");
+    const { error: streamMinutesError } = await supabase.rpc("set_stream_min_patient_minutes", { p_session_ids: sessionIds, p_minutes: parsed.data.streamMinPatientMinutes ?? 10 });
+    if (streamMinutesError) return { error: "The Stream was created, but its minimum consultation time could not be saved. Please edit it or try again.", values: submittedValues };
+  }
   revalidatePath("/doctors", "page");
   revalidatePath(`/doctors/${user.id}`, "page");
   const redirectDate = parsed.data.sessionDates?.[0] ?? parsed.data.recurrenceStartDate ?? nextConsultingDate(parsed.data.consultingDays ?? [], parsed.data.timezone);
