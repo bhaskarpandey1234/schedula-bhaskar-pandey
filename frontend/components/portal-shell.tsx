@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import type { Role } from "@/lib/validation/auth";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
+import { assistantConfig } from "@/lib/assistant/config";
 
 export async function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
   const unreadCount = role ? await getUnreadNotificationCount() : 0;
@@ -12,7 +13,7 @@ export async function PortalShell({ children, role, name }: { children: React.Re
     return (
       <div className={`min-h-svh flex flex-col justify-between bg-background ${accent}`}>
         <div>
-          <SiteHeader role={role} name={name} unreadCount={unreadCount} />
+          <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.geminiApiKey)} />
           <main>
             <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
           </main>
@@ -23,9 +24,9 @@ export async function PortalShell({ children, role, name }: { children: React.Re
   }
   return (
     <div className={`min-h-svh bg-background ${accent}`}>
-      <SiteHeader role={role} name={name} unreadCount={unreadCount} />
+      <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.geminiApiKey)} />
       <div className="flex min-h-[calc(100svh-4rem)]">
-        <DashboardSidebar role={role} name={name} />
+        <DashboardSidebar role={role} name={name} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.geminiApiKey)} />
         <main className="min-w-0 flex-1">
           <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
         </main>
