@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Send, ShieldCheck, Square, Volume2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assistantErrorMessage, assistantLanguageOptions, speechRecognitionLanguage } from "@/lib/assistant/presentation";
@@ -17,7 +18,36 @@ declare global { interface Window { Razorpay?: new (options: Record<string, unkn
 function getRecognition() { const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }; const Constructor = w.SpeechRecognition ?? w.webkitSpeechRecognition; return Constructor ? new Constructor() : null; }
 function confirmationDecision(text: string): "confirm" | "decline" | null { const normalized = text.trim().toLocaleLowerCase().replace(/[.!?,。！？]+$/g, ""); if (/^(yes|y|confirm|confirm it|go ahead|haan|han|हाँ|ठीक|ठीक है)$/.test(normalized)) return "confirm"; if (/^(no|n|decline|cancel|don't|do not|nahin|nahi|नहीं|नही)$/.test(normalized)) return "decline"; return null; }
 function formatValue(value: unknown) { if (value === null || value === undefined) return "—"; if (typeof value === "object") return JSON.stringify(value); return String(value); }
-function ResultCard({ display }: { display: Display }) { const values = Array.isArray(display.data) ? display.data : [display.data]; return <details className="mt-3 rounded-xl border bg-background/70 p-3" open><summary className="cursor-pointer text-sm font-semibold">{display.title}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{values.slice(0, 12).map((value, index) => <div key={index} className="rounded-lg bg-muted/40 p-2 text-xs">{value && typeof value === "object" ? Object.entries(value as Record<string, unknown>).filter(([key]) => key !== "notes").slice(0, 8).map(([key, item]) => <div key={key} className="flex justify-between gap-3 border-b border-border/50 py-1 last:border-0"><span className="capitalize text-muted-foreground">{key.replaceAll("_", " ")}</span><span className="text-right font-medium">{formatValue(item)}</span></div>) : formatValue(value)}</div>)}</div></details>; }
+function ResultCard({ display }: { display: Display }) {
+  const values = Array.isArray(display.data) ? display.data : [display.data];
+
+  return (
+    <details className="mt-4 rounded-xl border bg-background/70 p-3 sm:p-4" open>
+      <summary className="cursor-pointer text-sm font-semibold">{display.title}</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {values.slice(0, 12).map((value, index) => (
+          <div key={index} className="min-w-0 rounded-xl border bg-card p-3 text-xs">
+            {value && typeof value === "object" ? (
+              <dl className="grid gap-2">
+                {Object.entries(value as Record<string, unknown>)
+                  .filter(([key]) => key !== "notes")
+                  .slice(0, 8)
+                  .map(([key, item]) => (
+                    <div key={key} className="grid gap-0.5 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                      <dt className="capitalize text-muted-foreground">{key.replaceAll("_", " ")}</dt>
+                      <dd className="break-words font-medium">{formatValue(item)}</dd>
+                    </div>
+                  ))}
+              </dl>
+            ) : (
+              <p className="break-words">{formatValue(value)}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function AssistantChat({ role }: { role: AssistantRole }) {
   const [messages, setMessages] = useState<Message[]>([{ role: "assistant", text: role === "doctor" ? "I can check your schedule, appointments, conflicts, and availability." : "I can find doctors, check slots, and manage your appointments with confirmation." }]);
@@ -32,5 +62,173 @@ export function AssistantChat({ role }: { role: AssistantRole }) {
   const toggleVoice = () => { if (voiceEnabledRef.current) { voiceEnabledRef.current = false; setVoiceActive(false); recognitionRef.current?.stop(); stopSpeaking(); return; } const recognition = getRecognition(); if (!recognition) { setVoiceError("Voice input is not supported in this browser. You can still use text chat."); setVoiceState("error"); return; } recognition.continuous = true; recognition.interimResults = false; recognition.lang = speechRecognitionLanguage(language); recognition.onresult = (event) => { const last = event.results[event.results.length - 1]; const transcript = last?.[0]?.transcript ?? ""; if (transcript) void send(transcript); }; recognition.onend = () => { if (voiceEnabledRef.current && !busyRef.current && voiceState !== "speaking") { try { recognition.start(); } catch { /* browser is already restarting */ } } }; recognition.onerror = () => { setVoiceError("Microphone access failed. Check browser permission and try again."); setVoiceState("error"); }; recognitionRef.current = recognition; voiceEnabledRef.current = true; setVoiceActive(true); setVoiceError(undefined); setVoiceState("listening"); recognition.start(); };
   useEffect(() => () => { voiceEnabledRef.current = false; recognitionRef.current?.stop(); if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }, []);
   const prompts = role === "doctor" ? ["Show today's appointments", "Find my next available slot"] : ["Show my upcoming appointments", "Find a cardiologist"];
-  return <Card className="mx-auto flex min-h-[34rem] max-w-3xl flex-col overflow-hidden rounded-2xl shadow-sm"><CardHeader className="border-b bg-muted/20"><div className="flex items-center justify-between gap-3"><div><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="size-5 text-primary" />Schedula assistant</CardTitle><p className="mt-1 text-xs text-muted-foreground">Scheduling operations only · pilot accounts · no medical advice</p></div><select aria-label="Assistant language" className="rounded-md border bg-background px-2 py-1 text-xs" value={language} onChange={(event) => setLanguage(event.target.value)}>{assistantLanguageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div></CardHeader><CardContent className="flex flex-1 flex-col gap-4 p-4"><div className="flex flex-wrap gap-2">{prompts.map((prompt) => <Button key={prompt} type="button" size="sm" variant="outline" onClick={() => void send(prompt)} disabled={busy || Boolean(actionBusy)}>{prompt}</Button>)}</div><div className="flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={message.role === "user" ? "ml-auto max-w-[88%] rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground" : "max-w-[94%] rounded-2xl border bg-muted/40 px-3 py-2 text-sm"}><p>{message.text}</p>{message.retryText && <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void send(message.retryText)} disabled={busy || Boolean(actionBusy)}>Retry</Button>}{message.display && <ResultCard display={message.display} />}{message.pendingAction && <div className="mt-3 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3 text-xs text-amber-950"><div><p className="font-semibold">Review before confirming</p><p className="mt-1">This action expires {new Date(message.pendingAction.expiresAt).toLocaleString()}.</p></div><dl className="grid gap-1 sm:grid-cols-2">{Object.entries(message.pendingAction.preview).map(([key, value]) => <div key={key}><dt className="font-medium capitalize">{key.replaceAll("_", " ")}</dt><dd className="break-words">{formatValue(value)}</dd></div>)}</dl><div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => void decideAction(message.pendingAction!, "confirm")} disabled={busy || actionBusy === message.pendingAction.id}>{actionBusy === message.pendingAction.id ? <><Loader2 className="mr-1 size-3 animate-spin" />Processing…</> : "Confirm"}</Button><Button size="sm" variant="outline" onClick={() => void decideAction(message.pendingAction!, "decline")} disabled={busy || actionBusy === message.pendingAction.id}>Decline</Button></div></div>}</div>)}<div ref={bottomRef} /></div><div className="flex items-end gap-2 border-t pt-3"><Button type="button" variant={voiceActive ? "destructive" : "outline"} size="icon" aria-label={voiceActive ? "Stop voice assistant" : "Start voice assistant"} onClick={toggleVoice}>{voiceActive ? <Square className="size-4" /> : <Mic className="size-4" />}</Button><textarea className="min-h-10 min-w-0 flex-1 resize-y rounded-md border bg-background px-3 py-2 text-sm" placeholder="Ask about appointments or slots…" value={input} rows={1} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} disabled={busy || Boolean(actionBusy)} /><Button type="button" size="icon" aria-label="Send message" onClick={() => void send()} disabled={busy || Boolean(actionBusy) || !input.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>{voiceState === "speaking" && <Button type="button" variant="outline" size="icon" aria-label="Stop speaking" onClick={stopSpeaking}><Volume2 className="size-4" /></Button>}</div><div className="min-h-5 text-xs text-muted-foreground">{voiceState === "listening" && "Listening continuously"}{voiceState === "processing" && "Processing your request…"}{voiceState === "speaking" && "Assistant is speaking · stop anytime"}{voiceError && <span className="text-destructive">{voiceError}</span>}{!voiceError && voiceState === "idle" && "Enter to send · Shift+Enter for a new line"}</div></CardContent></Card>;
+  return (
+    <Card className="mx-auto flex h-[min(72svh,46rem)] min-h-[28rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-sm">
+      <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ShieldCheck className="size-5 text-primary" />
+              Schedula assistant
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Scheduling operations only · pilot accounts · no medical advice</p>
+          </div>
+          <select
+            aria-label="Assistant language"
+            className="shrink-0 rounded-md border bg-background px-2 py-2 text-xs"
+            value={language}
+            onChange={(event) => setLanguage(event.target.value)}
+          >
+            {assistantLanguageOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {prompts.map((prompt) => (
+            <Button
+              key={prompt}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void send(prompt)}
+              disabled={busy || Boolean(actionBusy)}
+            >
+              {prompt}
+            </Button>
+          ))}
+        </div>
+        <div
+          className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
+          role="log"
+          aria-label="Assistant conversation"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={message.role === "user"
+                ? "ml-auto max-w-[92%] rounded-2xl bg-primary px-3 py-2.5 text-sm text-primary-foreground sm:max-w-[82%]"
+                : "max-w-full rounded-2xl border bg-muted/40 px-3 py-2.5 text-sm sm:max-w-[94%]"}
+            >
+              <p className={`mb-1 text-[11px] font-semibold ${message.role === "user" ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
+                {message.role === "user" ? "You" : "Schedula"}
+              </p>
+              {message.role === "assistant" ? (
+                <div className="break-words leading-6 [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                  <ReactMarkdown>{message.text}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="break-words whitespace-pre-wrap leading-6">{message.text}</p>
+              )}
+              {message.retryText && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => void send(message.retryText)}
+                  disabled={busy || Boolean(actionBusy)}
+                >
+                  Retry
+                </Button>
+              )}
+              {message.display && <ResultCard display={message.display} />}
+              {message.pendingAction && (
+                <div className="mt-3 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3 text-xs text-amber-950">
+                  <div>
+                    <p className="font-semibold">Review before confirming</p>
+                    <p className="mt-1">This action expires {new Date(message.pendingAction.expiresAt).toLocaleString()}.</p>
+                  </div>
+                  <dl className="grid gap-2 sm:grid-cols-2">
+                    {Object.entries(message.pendingAction.preview).map(([key, value]) => (
+                      <div key={key}>
+                        <dt className="font-medium capitalize">{key.replaceAll("_", " ")}</dt>
+                        <dd className="break-words">{formatValue(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void decideAction(message.pendingAction!, "confirm")}
+                      disabled={busy || actionBusy === message.pendingAction.id}
+                    >
+                      {actionBusy === message.pendingAction.id
+                        ? <><Loader2 className="mr-1 size-3 animate-spin" />Processing…</>
+                        : "Confirm"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void decideAction(message.pendingAction!, "decline")}
+                      disabled={busy || actionBusy === message.pendingAction.id}
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+        <div className="flex shrink-0 items-end gap-2 border-t pt-3">
+          <Button
+            type="button"
+            variant={voiceActive ? "destructive" : "outline"}
+            size="icon"
+            aria-label={voiceActive ? "Stop voice assistant" : "Start voice assistant"}
+            onClick={toggleVoice}
+          >
+            {voiceActive ? <Square className="size-4" /> : <Mic className="size-4" />}
+          </Button>
+          <textarea
+            aria-label="Message to the assistant"
+            className="max-h-32 min-h-10 min-w-0 flex-1 resize-y rounded-md border bg-background px-3 py-2 text-sm"
+            placeholder="Ask about appointments or slots…"
+            value={input}
+            rows={1}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void send();
+              }
+            }}
+            disabled={busy || Boolean(actionBusy)}
+          />
+          <Button
+            type="button"
+            size="icon"
+            aria-label="Send message"
+            onClick={() => void send()}
+            disabled={busy || Boolean(actionBusy) || !input.trim()}
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          </Button>
+          {voiceState === "speaking" && (
+            <Button type="button" variant="outline" size="icon" aria-label="Stop speaking" onClick={stopSpeaking}>
+              <Volume2 className="size-4" />
+            </Button>
+          )}
+        </div>
+        <div className="min-h-5 shrink-0 text-xs text-muted-foreground" role="status" aria-live="polite">
+          {busy
+            ? "Schedula is preparing a response…"
+            : voiceState === "listening"
+              ? "Listening continuously"
+              : voiceState === "processing"
+                ? "Processing your request…"
+                : voiceState === "speaking"
+                  ? "Assistant is speaking · stop anytime"
+                  : !voiceError && "Enter to send · Shift+Enter for a new line"}
+          {voiceError && <span className="text-destructive">{voiceError}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
