@@ -7,95 +7,163 @@ import { assistantChatRequestSchema, assistantDecisionSchema } from "@/lib/assis
 
 const input = { role: "doctor" as const, userId: "pilot-doctor", supabase: {} as never, messages: [{ role: "user" as const, text: "hello" }] };
 
+function providerError(status: number, reason: string) {
+  return Object.assign(new Error(reason), { status });
+}
+
+function completed(text: string) {
+  return {
+    id: "interaction-complete",
+    status: "completed",
+    output_text: text,
+    steps: [{ type: "model_output", content: [{ type: "text", text }] }],
+  };
+}
+
+function runtimeFor(create: ReturnType<typeof vi.fn>) {
+  return {
+    client: { interactions: { create } } as never,
+    random: () => 0.5,
+    sleep: async () => undefined,
+  };
+}
+
 describe("assistant error handling", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     assistantConfig.geminiApiKey = "";
+    assistantConfig.textModel = "gemini-3.8-flash";
+    assistantConfig.fallbackTextModel = "gemini-3.7-flash";
   });
 
-  it("does not fall back to local database tools when Gemini is unavailable", async () => {
-    assistantConfig.geminiApiKey = "test-key";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_UNAVAILABLE");
-    expect(assistantErrorMessage("ASSISTANT_UNAVAILABLE")).toMatch(/temporarily unavailable/i);
-
-    assistantConfig.geminiApiKey = "";
+  it("requires a configured API key", async () => {
     await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_CONFIGURATION_REQUIRED");
     expect(assistantErrorStatus(new Error("ASSISTANT_CONFIGURATION_REQUIRED"))).toBe(503);
     expect(assistantErrorMessage("ASSISTANT_CONFIGURATION_REQUIRED")).toMatch(/api key/i);
   });
 
-  it("maps temporary Gemini unavailability and quota errors", async () => {
+  it("uses stateless low-thinking Interactions requests", async () => {
     assistantConfig.geminiApiKey = "test-key";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_UNAVAILABLE");
-    expect(assistantErrorStatus(new Error("ASSISTANT_UNAVAILABLE"))).toBe(503);
+    const create = vi.fn().mockResolvedValueOnce(completed("Hello."));
+    await expect(runGeminiAssistant(input, runtimeFor(create))).resolves.toMatchObject({ text: "Hello.", model: "gemini-3.8-flash" });
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("quota", { status: 429 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_QUOTA_EXHAUSTED");
+    expect(create).toHaveBeenCalledTimes(1);
+    const [request, options] = create.mock.calls[0] as [{
+      model: string;
+      store: boolean;
+      input: Array<Record<string, unknown>>;
+      tools: Array<{ type: string; name: string }>;
+      generation_config: { thinking_level: string; max_output_tokens: number };
+    }, { timeout_ms: number; retries: { strategy: string } }];
+    expect(request).toMatchObject({
+      model: "gemini-3.8-flash",
+      store: false,
+      generation_config: { thinking_level: "low", max_output_tokens: 1_600 },
+    });
+    expect(request.input[0]).toEqual({ type: "user_input", content: [{ type: "text", text: "hello" }] });
+    expect(request.tools.every((tool) => tool.type === "function")).toBe(true);
+    expect(options).toMatchObject({ timeout_ms: 15_000, retries: { strategy: "none" } });
+  });
+
+  it("retries transient provider errors and keeps safe diagnostics", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const create = vi.fn()
+      .mockRejectedValueOnce(providerError(503, "UNAVAILABLE: provider overloaded"))
+      .mockResolvedValueOnce(completed("Recovered."));
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await expect(runGeminiAssistant(input, runtimeFor(create))).resolves.toMatchObject({ text: "Recovered." });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls.map((call) => call[0].model)).toEqual(["gemini-3.8-flash", "gemini-3.8-flash"]);
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("hello");
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("test-key");
+    expect(warning).toHaveBeenCalledWith("assistant_gemini_attempt_failed", expect.objectContaining({ providerReason: "UNAVAILABLE", status: 503 }));
+  });
+
+  it("falls back after two transient primary-model failures", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const create = vi.fn()
+      .mockRejectedValueOnce(providerError(503, "UNAVAILABLE"))
+      .mockRejectedValueOnce(providerError(503, "UNAVAILABLE"))
+      .mockResolvedValueOnce(completed("Fallback response."));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await expect(runGeminiAssistant(input, runtimeFor(create))).resolves.toMatchObject({ text: "Fallback response.", model: "gemini-3.7-flash" });
+    expect(create.mock.calls.map((call) => call[0].model)).toEqual(["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.7-flash"]);
+  });
+
+  it("returns normalized timeout and quota errors after retries are exhausted", async () => {
+    assistantConfig.geminiApiKey = "test-key";
+    const timeout = Object.assign(new Error("request timed out"), { name: "RequestTimeoutError" });
+    const timedOutCreate = vi.fn().mockRejectedValue(timeout);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await expect(runGeminiAssistant(input, runtimeFor(timedOutCreate))).rejects.toThrow("ASSISTANT_TIMEOUT");
+    expect(assistantErrorStatus(new Error("ASSISTANT_TIMEOUT"))).toBe(504);
+
+    const quotaCreate = vi.fn().mockRejectedValue(providerError(429, "RESOURCE_EXHAUSTED"));
+    await expect(runGeminiAssistant(input, runtimeFor(quotaCreate))).rejects.toThrow("ASSISTANT_QUOTA_EXHAUSTED");
     expect(assistantErrorStatus(new Error("ASSISTANT_QUOTA_EXHAUSTED"))).toBe(429);
   });
 
-  it("maps aborted requests to a retryable timeout", async () => {
+  it("does not retry invalid credentials, model IDs, or payloads", async () => {
     assistantConfig.geminiApiKey = "test-key";
-    const error = new Error("aborted");
-    error.name = "AbortError";
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(error));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_TIMEOUT");
-    expect(assistantErrorStatus(new Error("ASSISTANT_TIMEOUT"))).toBe(504);
-  });
-
-  it("keeps network failures separate from provider errors", async () => {
-    assistantConfig.geminiApiKey = "test-key";
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("offline")));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("ASSISTANT_NETWORK_ERROR");
-    expect(assistantErrorStatus(new Error("ASSISTANT_NETWORK_ERROR"))).toBe(503);
-    expect(assistantErrorMessage("ASSISTANT_NETWORK_ERROR")).toMatch(/reach Gemini/i);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("invalid", { status: 401 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("GEMINI_AUTH_FAILED");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    for (const [status, code] of [[400, "GEMINI_INVALID_REQUEST"], [401, "GEMINI_AUTH_FAILED"], [403, "GEMINI_AUTH_FAILED"], [404, "GEMINI_MODEL_UNAVAILABLE"]] as const) {
+      const create = vi.fn().mockRejectedValue(providerError(status, code));
+      await expect(runGeminiAssistant(input, runtimeFor(create))).rejects.toThrow(code);
+      expect(create).toHaveBeenCalledTimes(1);
+    }
     expect(assistantErrorMessage("GEMINI_AUTH_FAILED")).toMatch(/api key/i);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("GEMINI_MODEL_UNAVAILABLE");
     expect(assistantErrorMessage("GEMINI_MODEL_UNAVAILABLE")).toMatch(/model/i);
     expect(assistantErrorMessage("ASSISTANT_PAYMENT_SANDBOX_REQUIRED")).toMatch(/test-mode/i);
   });
 
-  it("preserves Gemini thought signatures across a function-call continuation", async () => {
+  it("preserves returned steps and exact call IDs without re-running tools on provider retry", async () => {
     assistantConfig.geminiApiKey = "test-key";
-    const thoughtSignature = "provider-generated-signature";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "doctor_leaves", args: {} }, thoughtSignature }] } }],
-      }), { status: 200, headers: { "content-type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        candidates: [{ content: { role: "model", parts: [{ text: "You have no recorded leave." }] } }],
-      }), { status: 200, headers: { "content-type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    const thoughtStep = { type: "thought", signature: "provider-generated-signature" };
+    const create = vi.fn()
+      .mockResolvedValueOnce({
+        id: "interaction-tool",
+        status: "requires_action",
+        steps: [
+          thoughtStep,
+          { type: "function_call", id: "call-leave-1", name: "doctor_leaves", arguments: {} },
+          { type: "function_call", id: "call-leave-2", name: "doctor_leaves", arguments: { date: "2026-11-12" } },
+        ],
+      })
+      .mockRejectedValueOnce(providerError(503, "UNAVAILABLE"))
+      .mockResolvedValueOnce(completed("You have no recorded leave."));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const leaveQuery = {
+      eq: vi.fn(),
+      order: vi.fn(),
+      then: (resolve: (value: { data: never[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+    };
+    leaveQuery.eq.mockReturnValue(leaveQuery);
+    leaveQuery.order.mockReturnValue(leaveQuery);
+    const from = vi.fn(() => ({ select: () => leaveQuery }));
     const supabase = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
-        }),
-      }),
+      from,
     } as never;
 
-    await expect(runGeminiAssistant({ ...input, supabase, messages: [{ role: "user", text: "Do I have leave?" }] })).resolves.toMatchObject({
+    await expect(runGeminiAssistant({ ...input, supabase, messages: [{ role: "user", text: "Do I have leave?" }] }, runtimeFor(create))).resolves.toMatchObject({
       text: "You have no recorded leave.",
     });
 
-    const secondRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as { contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> };
-    expect(secondRequest.contents[1]).toEqual({
-      role: "model",
-      parts: [{ functionCall: { name: "doctor_leaves", args: {} }, thoughtSignature }],
+    expect(from).toHaveBeenCalledTimes(2);
+    const continuation = create.mock.calls[1]?.[0] as { input: Array<Record<string, unknown>> };
+    expect(continuation.input).toContainEqual(thoughtStep);
+    expect(continuation.input).toContainEqual({
+      type: "function_result",
+      name: "doctor_leaves",
+      call_id: "call-leave-1",
+      result: [{ type: "text", text: JSON.stringify({ result: "Found 0 recorded leave occurrences." }) }],
     });
-  });
-
-  it("maps a rejected Gemini tool continuation to a safe error", async () => {
-    assistantConfig.geminiApiKey = "test-key";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("invalid", { status: 400 })));
-    await expect(runGeminiAssistant(input)).rejects.toThrow("GEMINI_INVALID_REQUEST");
-    expect(assistantErrorStatus(new Error("GEMINI_INVALID_REQUEST"))).toBe(502);
-    expect(assistantErrorMessage("GEMINI_INVALID_REQUEST")).toMatch(/tool conversation/i);
+    expect(continuation.input).toContainEqual({
+      type: "function_result",
+      name: "doctor_leaves",
+      call_id: "call-leave-2",
+      result: [{ type: "text", text: JSON.stringify({ result: "Found 0 recorded leave occurrences." }) }],
+    });
+    expect(create.mock.calls[2]?.[0].input).toEqual(continuation.input);
   });
 });
 

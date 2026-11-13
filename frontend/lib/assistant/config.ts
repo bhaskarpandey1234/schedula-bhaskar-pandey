@@ -6,6 +6,7 @@ export const assistantConfig = {
   enabled: process.env.ASSISTANT_PILOT_MODE === "true",
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   textModel: process.env.GEMINI_TEXT_MODEL ?? "gemini-3.8-flash",
+  fallbackTextModel: process.env.GEMINI_FALLBACK_TEXT_MODEL ?? "gemini-3.7-flash",
   liveModel: process.env.GEMINI_LIVE_MODEL ?? "gemini-3.8-live",
   confirmationTtlMs: 5 * 60 * 1000,
 };
@@ -46,5 +47,6 @@ export function assistantErrorStatus(error: unknown) {
   if (code === "ASSISTANT_PAYMENT_SANDBOX_REQUIRED") return 503;
   if (code === "GEMINI_INVALID_REQUEST") return 502;
   if (code === "GEMINI_REQUEST_FAILED") return 502;
+  if (code === "ASSISTANT_TOOL_LOOP_LIMIT") return 502;
   return 400;
 }
