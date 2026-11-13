@@ -155,6 +155,20 @@
       "when": 1793801900000,
       "tag": "0027-sinch-sandbox-appointment-sms",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793802000000,
+      "tag": "0044-assistant-verified-doctors",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794570000000,
+      "tag": "0045-assistant-workflow-parity",
+      "breakpoints": true
     }
   ]
 }

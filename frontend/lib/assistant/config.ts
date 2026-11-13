@@ -44,6 +44,7 @@ export function assistantErrorStatus(error: unknown) {
   if (code === "ASSISTANT_TIMEOUT") return 504;
   if (code === "ASSISTANT_NETWORK_ERROR" || code === "ASSISTANT_PROVIDER_AUTH_FAILED" || code === "ASSISTANT_PROVIDER_MODEL_UNAVAILABLE") return 503;
   if (code === "ASSISTANT_PAYMENT_SANDBOX_REQUIRED") return 503;
+  if (code === "ASSISTANT_ACTION_STALE") return 409;
   if (code === "ASSISTANT_PROVIDER_INVALID_REQUEST") return 502;
   if (code === "ASSISTANT_PROVIDER_REQUEST_FAILED") return 502;
   if (code === "ASSISTANT_TOOL_LOOP_LIMIT") return 502;
