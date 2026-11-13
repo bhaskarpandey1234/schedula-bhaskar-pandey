@@ -38,6 +38,17 @@ export function assistantGroundedResultText(kind: "doctors" | "slots", count: nu
   return count ? "These appointment times are available. Choose a slot to review the booking." : "No appointment slots are currently available.";
 }
 
+export function assistantGroundedAppointmentText(count: number, language?: string) {
+  if (language === "hi-IN") {
+    return count ? `${count} अपॉइंटमेंट मिले हैं। विवरण नीचे दिए गए हैं।` : "कोई अपॉइंटमेंट नहीं मिला।";
+  }
+  if (language === "hinglish") {
+    return count ? `${count} appointments mile hain. Details neeche diye gaye hain.` : "Koi appointment nahi mila.";
+  }
+  if (!count) return "No appointments were found.";
+  return `I found ${count} ${count === 1 ? "appointment" : "appointments"}. Details are shown below.`;
+}
+
 export function assistantVerificationRequiredText(language?: string) {
   if (language === "hi-IN") return "डॉक्टर या अपॉइंटमेंट समय बताने से पहले मुझे सिस्टम में उनकी पुष्टि करनी होगी। कृपया डॉक्टर खोजने के लिए फिर से पूछें।";
   if (language === "hinglish") return "Doctor ya appointment time batane se pehle mujhe system mein verify karna hoga. Doctor search karne ke liye dobara poochhein.";
