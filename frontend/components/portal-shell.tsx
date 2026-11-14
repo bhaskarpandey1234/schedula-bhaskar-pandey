@@ -14,7 +14,7 @@ export async function PortalShell({ children, role, name }: { children: React.Re
     return (
       <div className={`min-h-svh flex flex-col justify-between bg-background ${accent}`}>
         <div>
-          <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey)} />
+          <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
           <main>
             <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
           </main>
@@ -25,14 +25,14 @@ export async function PortalShell({ children, role, name }: { children: React.Re
   }
   return (
     <div className={`min-h-svh bg-background ${accent}`}>
-      <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey)} />
+      <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
       <div className="flex min-h-[calc(100svh-4rem)]">
-        <DashboardSidebar role={role} name={name} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey)} />
+        <DashboardSidebar role={role} name={name} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
         <main className="min-w-0 flex-1">
           <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
         </main>
       </div>
-      {assistantConfig.enabled && Boolean(assistantConfig.groqApiKey) && <FloatingAssistant role={role} />}
+      {assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey) && <FloatingAssistant role={role} />}
     </div>
   );
 }

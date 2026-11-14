@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assistantConfig, assistantErrorStatus, assertAssistantMutationOrigin, requireAssistantPilotAccess } from "@/lib/assistant/config";
 import { runGroqAssistant } from "@/lib/assistant/groq";
+import { runGeminiAssistant } from "@/lib/assistant/gemini";
 import { assistantChatRequestSchema } from "@/lib/assistant/schemas";
 import { getAssistantDoctorSlots, getAssistantRescheduleSlots, prepareAssistantCancellationSelection, prepareAssistantElasticDecision, prepareAssistantRescheduleSelection, prepareAssistantSlotSelection } from "@/lib/assistant/tools";
 import { conversationTitle, getConversation, persistMessage } from "@/lib/assistant/history";
@@ -41,7 +42,9 @@ export async function POST(request: Request) {
           ? { text: "Please review this appointment change before confirming.", displays: [], pendingAction: await prepareAssistantElasticDecision({ ...selectedProposalDecision, userId: access.user.id, supabase: access.supabase }), model: "direct-elastic-decision" }
         : selectedDoctorId
           ? await getAssistantDoctorSlots({ doctorId: selectedDoctorId, language, userId: access.user.id, supabase: access.supabase })
-        : await runGroqAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
+        : (assistantConfig.geminiApiKey && (!assistantConfig.groqApiKey || assistantConfig.groqApiKey.includes("placeholder")))
+          ? await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language })
+          : await runGroqAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
       const { model, ...publicResult } = result;
       await persistMessage(access.supabase, { conversationId: resolvedConversationId, role: "assistant", text: publicResult.text ?? "I could not complete that request.", displays: publicResult.displays, pendingAction: publicResult.pendingAction });
       await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model, language, duration_ms: Date.now() - started });

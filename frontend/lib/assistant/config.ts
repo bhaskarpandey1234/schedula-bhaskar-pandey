@@ -5,7 +5,9 @@ import { getCurrentAccount } from "@/lib/auth/guards";
 export const assistantConfig = {
   enabled: process.env.ASSISTANT_PILOT_MODE === "true",
   groqApiKey: process.env.GROQ_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   textModel: process.env.GROQ_TEXT_MODEL ?? "qwen/qwen3.8-27b",
+  geminiTextModel: process.env.GEMINI_TEXT_MODEL ?? "gemini-3.5-flash-lite",
   fallbackTextModel: process.env.GROQ_FALLBACK_TEXT_MODEL ?? "openai/gpt-oss-120b",
   confirmationTtlMs: 5 * 60 * 1000,
 };
@@ -18,7 +20,7 @@ export function assertAssistantMutationOrigin(request: Request) {
 
 export async function requireAssistantPilotAccess(role: Role) {
   if (!assistantConfig.enabled) throw new Error("ASSISTANT_DISABLED");
-  if (!assistantConfig.groqApiKey) throw new Error("ASSISTANT_CONFIGURATION_REQUIRED");
+  if (!assistantConfig.groqApiKey && !assistantConfig.geminiApiKey) throw new Error("ASSISTANT_CONFIGURATION_REQUIRED");
   const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("AUTHENTICATION_REQUIRED");

@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ auditInsert: vi.fn(), runGroqAssistant: vi.fn() }));
-vi.mock("@/lib/assistant/config", () => ({ assistantConfig: { textModel: "qwen/qwen3.8-27b" }, assertAssistantMutationOrigin: vi.fn(), assistantErrorStatus: (error: unknown) => error instanceof Error && error.message === "ASSISTANT_UNAVAILABLE" ? 503 : 400, requireAssistantPilotAccess: vi.fn(async () => ({ user: { id: "00000000-0000-4000-8000-000000000001" }, supabase: { from: (table: string) => {
+const mocks = vi.hoisted(() => ({ auditInsert: vi.fn(), runGeminiAssistant: vi.fn(), runGroqAssistant: vi.fn() }));
+vi.mock("@/lib/assistant/config", () => ({ assistantConfig: { geminiApiKey: "gemini-key", groqApiKey: "groq-key", textModel: "qwen/qwen3.8-27b" }, assertAssistantMutationOrigin: vi.fn(), assistantErrorStatus: (error: unknown) => error instanceof Error && error.message === "ASSISTANT_UNAVAILABLE" ? 503 : 400, requireAssistantPilotAccess: vi.fn(async () => ({ user: { id: "00000000-0000-4000-8000-000000000001" }, supabase: { from: (table: string) => {
   if (table === "assistant_audit_events") return { insert: mocks.auditInsert };
   if (table === "assistant_conversations") return { insert: () => ({ select: () => ({ single: async () => ({ data: { id: "00000000-0000-4000-8000-000000000099" }, error: null }) }) }), update: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }) };
   return { insert: async () => ({ error: null }), select: () => ({ eq: () => ({ data: null, error: null }) }) };
 } } })) }));
+vi.mock("@/lib/assistant/gemini", () => ({ runGeminiAssistant: mocks.runGeminiAssistant }));
 vi.mock("@/lib/assistant/groq", () => ({ runGroqAssistant: mocks.runGroqAssistant }));
 import { POST } from "@/app/api/assistant/chat/route";
 function request() { return new Request("https://preview.example/api/assistant/chat", { method: "POST", headers: { "content-type": "application/json", origin: "https://preview.example" }, body: JSON.stringify({ role: "doctor", language: "en-IN", messages: [{ role: "user", text: "hello" }] }) }); }
 describe("assistant chat route audit events", () => {
-  beforeEach(() => { mocks.auditInsert.mockReset().mockResolvedValue({ error: null }); mocks.runGroqAssistant.mockReset(); });
+  beforeEach(() => { mocks.auditInsert.mockReset().mockResolvedValue({ error: null }); mocks.runGeminiAssistant.mockReset(); mocks.runGroqAssistant.mockReset(); });
   it("records a sanitized neutral provider failure", async () => { mocks.runGroqAssistant.mockRejectedValueOnce(new Error("ASSISTANT_UNAVAILABLE")); const response = await POST(request()); expect(response.status).toBe(503); await expect(response.json()).resolves.toEqual({ error: "ASSISTANT_UNAVAILABLE" }); const audit = mocks.auditInsert.mock.calls[0]?.[0]; expect(audit).toMatchObject({ outcome: "failed", model: "qwen/qwen3.8-27b", error_code: "ASSISTANT_UNAVAILABLE" }); expect(JSON.stringify(audit)).not.toContain("hello"); });
   it("audits the selected Groq model without exposing it publicly", async () => { mocks.runGroqAssistant.mockResolvedValueOnce({ text: "Hello.", displays: [], pendingAction: undefined, model: "openai/gpt-oss-120b" }); const response = await POST(request()); await expect(response.json()).resolves.toEqual(expect.objectContaining({ text: "Hello.", displays: [] })); expect(mocks.auditInsert).toHaveBeenCalledWith(expect.objectContaining({ outcome: "succeeded", model: "openai/gpt-oss-120b" })); });
+  it("prefers Groq when both provider keys are configured", async () => { mocks.runGroqAssistant.mockResolvedValueOnce({ text: "Groq response.", displays: [], pendingAction: undefined, model: "qwen/qwen3.8-27b" }); const response = await POST(request()); await expect(response.json()).resolves.toEqual(expect.objectContaining({ text: "Groq response.", displays: [] })); expect(mocks.runGroqAssistant).toHaveBeenCalledTimes(1); expect(mocks.runGeminiAssistant).not.toHaveBeenCalled(); });
 });

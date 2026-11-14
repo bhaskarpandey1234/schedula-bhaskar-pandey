@@ -1,7 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioLines, Check, History, Loader2, Mic, Pencil, Plus, Send, ShieldCheck, Square, Trash2, Volume2 } from "lucide-react";
+import {
+  AudioLines,
+  Bot,
+  Calendar,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  Clock,
+  Globe,
+  History,
+  Loader2,
+  Mic,
+  Pencil,
+  Plus,
+  Radio,
+  RotateCcw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Trash2,
+  User,
+  X,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Button } from "@/components/ui/button";
@@ -13,7 +36,35 @@ import type { AssistantDisplayPayload, AssistantRole, BookingPreview, PendingAss
 type ProposalDecisionSelection = { proposalId: string; decision: "approve" | "cancel" | "choose_slot"; slotId?: string };
 type PatientAppointmentSelection = { appointmentId: string; action: "cancel" | "reschedule" };
 type RescheduleSlotSelection = { appointmentId: string; slotId: string };
-type Message = { id?: string; role: "user" | "assistant"; text: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; retryText?: string; retrySelection?: AssistantSelection; staleAction?: boolean };
+type Message = {
+  id?: string;
+  role: "user" | "assistant";
+  text: string;
+  timestamp?: string;
+  displays?: AssistantDisplayPayload[];
+  pendingAction?: PendingAssistantAction;
+  retryText?: string;
+  retrySelection?: AssistantSelection;
+  staleAction?: boolean;
+};
+
+function formatTimestamp(value?: string) {
+  if (!value) {
+    return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  if (/^\d{1,2}:\d{2}(\s*(?:AM|PM|am|pm))?$/i.test(value.trim())) {
+    return value.trim();
+  }
+  try {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+  } catch {
+    // fallback
+  }
+  return value;
+}
 type AssistantSelection = { selectedDoctorId?: string; selectedSlotId?: string; selectedProposalDecision?: ProposalDecisionSelection; selectedPatientAppointment?: PatientAppointmentSelection; selectedRescheduleSlot?: RescheduleSlotSelection };
 type Conversation = { id: string; title: string; role: AssistantRole; created_at: string; updated_at: string };
 type VoiceState = "idle" | "listening" | "processing" | "speaking" | "error";
@@ -218,7 +269,7 @@ function ResultCard({ display, onSelectDoctor, onSelectSlot, onSelectProposalDec
           return <article key={proposalId} className="grid gap-2 rounded-lg border bg-card p-3 text-sm">
             <p className="font-medium">{typeof row.doctor_name === "string" ? `${row.doctor_name} · ` : "Appointment change · "}{oldTime}</p>
             {recommended && <p>Recommended: {recommended}</p>}
-            <p className="text-xs text-muted-foreground">Respond by {typeof row.decision_deadline === "string" ? new Date(row.decision_deadline).toLocaleString() : "the deadline shown in your appointment"}.</p>
+            <p suppressHydrationWarning className="text-xs text-muted-foreground">Respond by {typeof row.decision_deadline === "string" ? new Date(row.decision_deadline).toLocaleString() : "the deadline shown in your appointment"}.</p>
             <div className="flex flex-wrap gap-2">
               {typeof row.recommended_slot_id === "string" && onSelectProposalDecision && <Button size="sm" variant="outline" disabled={disabled} onClick={() => onSelectProposalDecision({ proposalId, decision: "approve" }, "Approve recommended time")}>Approve recommended time</Button>}
               {onSelectProposalDecision && <Button size="sm" variant="outline" disabled={disabled || candidates.length === 0} onClick={() => setShowCandidates((current) => !current)}>Choose another time</Button>}
@@ -310,14 +361,24 @@ function ResultCard({ display, onSelectDoctor, onSelectSlot, onSelectProposalDec
   );
 }
 
-export function AssistantChat({ role, compact = false }: { role: AssistantRole; compact?: boolean }) {
-  const [messages, setMessages] = useState<Message[]>([{ role: "assistant", text: role === "doctor" ? "I can check your schedule, appointments, conflicts, and availability." : "I can find doctors, check slots, and manage your appointments with confirmation." }]);
+export function AssistantChat({ role, compact = false, onClose }: { role: AssistantRole; compact?: boolean; onClose?: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      text: role === "doctor"
+        ? "I can check your schedule, appointments, conflicts, and availability."
+        : "I can find doctors, check slots, and manage your appointments with confirmation.",
+    },
+  ]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [historyBusy, setHistoryBusy] = useState(true);
   const [historyError, setHistoryError] = useState<string>();
   const [editingConversationId, setEditingConversationId] = useState<string>();
   const [editingTitle, setEditingTitle] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState(""); const [language, setLanguage] = useState("en-IN"); const [busy, setBusy] = useState(false); const [voiceState, setVoiceState] = useState<VoiceState>("idle"); const [voiceActive, setVoiceActive] = useState(false); const [oneTurnActive, setOneTurnActive] = useState(false); const [oneTurnTranscript, setOneTurnTranscript] = useState(""); const [voiceError, setVoiceError] = useState<string>(); const [actionBusy, setActionBusy] = useState<string | null>(null);
   const recognitionRef = useRef<Recognition | null>(null); const voiceEnabledRef = useRef(false); const oneTurnActiveRef = useRef(false); const oneTurnTranscriptRef = useRef(""); const oneTurnSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const speakingRef = useRef(false); const languageRef = useRef(language); const messagesRef = useRef(messages); const busyRef = useRef(false); const bottomRef = useRef<HTMLDivElement>(null); const sendRef = useRef<(value?: string, selection?: AssistantSelection) => Promise<void>>(async () => undefined);
   useEffect(() => { messagesRef.current = messages; bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -328,7 +389,9 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`);
       const payload = await response.json() as { messages?: Message[]; error?: string };
       if (!response.ok) throw new Error(payload.error);
-      const next = payload.messages?.length ? payload.messages : [{ role: "assistant" as const, text: greeting }];
+      const next = payload.messages?.length
+        ? payload.messages.map((m) => ({ ...m, timestamp: formatTimestamp(m.timestamp) }))
+        : [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }];
       setConversationId(id); setMessages(next); messagesRef.current = next;
     } catch { setHistoryError("Chat history could not be loaded. Please try again."); }
     finally { setHistoryBusy(false); }
@@ -340,7 +403,7 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       const payload = await response.json() as { conversations?: Conversation[]; error?: string };
       if (!response.ok) throw new Error(payload.error);
       const next = payload.conversations ?? []; setConversations(next);
-      if (next[0]) await loadConversation(next[0].id); else setMessages([{ role: "assistant", text: greeting }]);
+      if (next[0]) await loadConversation(next[0].id); else setMessages([{ role: "assistant", text: greeting, timestamp: formatTimestamp() }]);
     } catch { setHistoryError("Chat history could not be loaded. You can still start a new chat."); }
     finally { setHistoryBusy(false); }
   }, [greeting, loadConversation, role]);
@@ -352,7 +415,7 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       const payload = await response.json() as { conversation?: Conversation; error?: string };
       if (!response.ok || !payload.conversation) throw new Error(payload.error);
       setConversations((current) => [payload.conversation!, ...current]); setConversationId(payload.conversation.id);
-      const next = [{ role: "assistant" as const, text: greeting }]; setMessages(next); messagesRef.current = next;
+      const next = [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }]; setMessages(next); messagesRef.current = next;
     } catch { setHistoryError("A new chat could not be created. Please try again."); }
     finally { setHistoryBusy(false); }
   };
@@ -439,8 +502,10 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       speak(reply);
       return;
     }
-    const next = [...messagesRef.current, { role: "user" as const, text }];
+    const userTimestamp = formatTimestamp();
+    const next = [...messagesRef.current, { role: "user" as const, text, timestamp: userTimestamp }];
     messagesRef.current = next;
+    setMessages(next);
     busyRef.current = true;
     setBusy(true);
     setVoiceState(voiceEnabledRef.current ? "processing" : "idle");
@@ -462,7 +527,8 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       const payload = await response.json() as { text?: string; error?: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; conversationId?: string };
       const reply = response.ok ? (payload.text ?? "I could not complete that request.") : assistantErrorMessage(payload.error);
       const canRetry = !response.ok && assistantErrorCanRetry(payload.error);
-      setMessages((current) => [...current, { role: "assistant", text: reply, displays: payload.displays, pendingAction: payload.pendingAction, retryText: canRetry ? text : undefined, retrySelection: canRetry ? selection : undefined }]);
+      const botTimestamp = formatTimestamp();
+      setMessages((current) => [...current, { role: "assistant", text: reply, displays: payload.displays, pendingAction: payload.pendingAction, retryText: canRetry ? text : undefined, retrySelection: canRetry ? selection : undefined, timestamp: botTimestamp }]);
       if (payload.conversationId) {
         setConversationId(payload.conversationId);
         setConversations((current) => {
@@ -474,7 +540,8 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       speak(reply);
     } catch {
       const reply = assistantErrorMessage("ASSISTANT_NETWORK_ERROR");
-      setMessages((current) => [...current, { role: "assistant", text: reply, retryText: text, retrySelection: selection }]);
+      const botTimestamp = formatTimestamp();
+      setMessages((current) => [...current, { role: "assistant", text: reply, retryText: text, retrySelection: selection, timestamp: botTimestamp }]);
       speak(reply);
     } finally {
       busyRef.current = false;
@@ -621,213 +688,594 @@ export function AssistantChat({ role, compact = false }: { role: AssistantRole; 
       ? ["Show today's appointments", "Find my next available slot", "Check schedule conflicts"]
       : ["Show my upcoming appointments", "Find a cardiologist", "Show available slots"];
   return (
-    <Card className={`mx-auto flex ${compact ? "h-[min(76svh,43rem)] min-h-[32rem] max-w-3xl" : "h-[min(72svh,46rem)] min-h-[28rem] max-w-5xl"} w-full flex-col overflow-hidden rounded-2xl shadow-sm`}>
-      <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
+    <Card className={`mx-auto flex ${compact ? "h-full w-full rounded-none border-0 shadow-none" : "flex-1 min-h-0 max-w-5xl rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-card"} w-full flex-col overflow-hidden`}>
+      <CardHeader className="shrink-0 border-b bg-card/60 px-4 py-2.5 sm:px-5 sm:py-3">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ShieldCheck className="size-5 text-primary" />
-              Schedula assistant
-            </CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">Scheduling operations only · pilot accounts · no medical advice</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100/90 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              <ShieldCheck className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="truncate text-sm sm:text-base font-semibold leading-tight text-slate-900 dark:text-slate-100">
+                Schedule Assistant
+              </CardTitle>
+              <p className="truncate text-[11px] sm:text-xs text-muted-foreground">
+                Scheduling operations only · No medical advice
+              </p>
+            </div>
           </div>
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-0.5" aria-label="Chat history">
-            <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => void newConversation()} disabled={historyBusy || busy}>
-              <Plus className="mr-1 size-3.5" />New chat
-            </Button>
-            <History className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            {conversations.map((conversation) => editingConversationId === conversation.id ? (
-              <form key={conversation.id} className="flex shrink-0 items-center gap-1" onSubmit={(event) => { event.preventDefault(); void renameConversation(conversation.id); }}>
-                <input aria-label="Chat name" className="h-8 w-36 rounded-md border bg-background px-2 text-xs" value={editingTitle} onChange={(event) => setEditingTitle(event.target.value)} autoFocus />
-                <Button type="submit" size="icon" variant="ghost" className="size-8" aria-label="Save chat name"><Check className="size-3.5" /></Button>
-              </form>
-            ) : (
-              <div key={conversation.id} className={`flex shrink-0 items-center rounded-lg border text-xs ${conversationId === conversation.id ? "border-primary bg-primary/10" : "bg-background"}`}>
-                <button type="button" className="max-w-36 truncate px-2 py-1.5 text-left" onClick={() => void loadConversation(conversation.id)} aria-current={conversationId === conversation.id ? "true" : undefined}>{conversation.title}</button>
-                <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Rename ${conversation.title}`} onClick={() => { setEditingConversationId(conversation.id); setEditingTitle(conversation.title); }}><Pencil className="size-3" /></button>
-                <button type="button" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`Delete ${conversation.title}`} onClick={() => void deleteConversation(conversation.id)}><Trash2 className="size-3" /></button>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="group/btn relative flex items-center justify-center">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-8"
+                aria-label="Start new chat"
+                onClick={() => {
+                  void newConversation();
+                  setShowHistory(false);
+                }}
+                disabled={historyBusy || busy}
+              >
+                <Plus className="size-4" />
+              </Button>
+              <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                New chat
+              </span>
+            </div>
+            <div className="group/btn relative flex items-center justify-center">
+              <Button
+                type="button"
+                size="icon"
+                variant={showHistory ? "secondary" : "ghost"}
+                className="size-8"
+                aria-label="Chat history"
+                onClick={() => setShowHistory((prev) => !prev)}
+                disabled={historyBusy}
+              >
+                <History className="size-4" />
+              </Button>
+              <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                Chat history
+              </span>
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background/80 px-2 py-0.5 text-xs shadow-xs">
+              <Globe className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <label className="sr-only" htmlFor="assistant-language">Assistant language</label>
+              <CustomSelect
+                id="assistant-language"
+                name="assistantLanguage"
+                value={language}
+                onValueChange={handleLanguageChange}
+                options={assistantLanguageOptions.map(({ value, label }) => ({ value, label }))}
+                className="h-7 w-20 border-0 bg-transparent px-1 text-xs focus:ring-0"
+              />
+            </div>
+            {onClose && (
+              <div className="group/btn relative flex items-center justify-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-8 text-muted-foreground hover:text-foreground"
+                  aria-label="Close assistant"
+                  onClick={onClose}
+                >
+                  <X className="size-4" />
+                </Button>
+                <span className="pointer-events-none absolute -bottom-7 right-0 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                  Close (Esc)
+                </span>
               </div>
-            ))}
+            )}
           </div>
-          {historyError && <p className="mt-2 text-xs text-destructive" role="alert">{historyError}</p>}
-          <label className="sr-only" htmlFor="assistant-language">Assistant language</label>
-          <CustomSelect
-            id="assistant-language"
-            name="assistantLanguage"
-            value={language}
-            onValueChange={handleLanguageChange}
-            options={assistantLanguageOptions.map(({ value, label }) => ({ value, label }))}
-            className="h-9 w-32 shrink-0 px-3 text-xs"
-          />
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
-        <div
-          className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
-          role="log"
-          aria-label="Assistant conversation"
-          aria-live="polite"
-          aria-relevant="additions text"
-        >
-          {messages.map((message, index) => (
-            <div
-              key={`${message.role}-${index}`}
-              className={message.role === "user"
-                ? "ml-auto max-w-[92%] rounded-2xl bg-primary px-3 py-2.5 text-sm text-primary-foreground sm:max-w-[82%]"
-                : "max-w-full rounded-2xl border bg-muted/40 px-3 py-2.5 text-sm sm:max-w-[94%]"}
+
+      {/* Top Quick Actions Pills (visible on full page, matching reference img1) */}
+      {!compact && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/30 px-4 py-2 sm:px-5" aria-label="Quick scheduling actions">
+          {prompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-all hover:border-primary/50 hover:bg-emerald-50/60 hover:text-primary dark:border-slate-800 dark:bg-card dark:text-slate-200"
+              onClick={() => void send(prompt)}
+              disabled={busy || oneTurnActive || Boolean(actionBusy)}
             >
-              <p className={`mb-1 text-[11px] font-semibold ${message.role === "user" ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
-                {message.role === "user" ? "You" : "Schedula"}
-              </p>
-              {message.role === "assistant" ? (
-                <div className="break-words leading-6 [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-                  <ReactMarkdown>{message.text}</ReactMarkdown>
-                </div>
+              {prompt.includes("appointment") || prompt.includes("slot") ? (
+                <Calendar className="size-3.5 text-primary transition-transform group-hover:scale-110" />
+              ) : prompt.includes("available") || prompt.includes("time") ? (
+                <Clock className="size-3.5 text-teal-600 transition-transform group-hover:scale-110" />
               ) : (
-                <p className="break-words whitespace-pre-wrap leading-6">{message.text}</p>
+                <Sparkles className="size-3.5 text-amber-500 transition-transform group-hover:scale-110" />
               )}
-              {message.retryText && (
+              <span>{prompt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+        {showHistory ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-3 flex items-center justify-between border-b pb-2.5">
+              <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <History className="size-3.5 text-muted-foreground" />
+                Conversation history
+              </h3>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => {
+                  void newConversation();
+                  setShowHistory(false);
+                }}
+                disabled={historyBusy || busy}
+              >
+                <Plus className="mr-1 size-3" />
+                New chat
+              </Button>
+            </div>
+
+            {historyError && (
+              <p className="mb-2 text-xs text-destructive" role="alert">{historyError}</p>
+            )}
+
+            {historyBusy ? (
+              <div className="flex flex-1 items-center justify-center py-8 text-xs text-muted-foreground">
+                <Loader2 className="mr-2 size-4 animate-spin" /> Loading conversations…
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center py-8 text-center text-xs text-muted-foreground">
+                <p>No previous conversations.</p>
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => void send(message.retryText, message.retrySelection)}
-                  disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                  variant="link"
+                  className="mt-1 text-xs"
+                  onClick={() => {
+                    void newConversation();
+                    setShowHistory(false);
+                  }}
                 >
-                  Retry
+                  Start a new chat
                 </Button>
-              )}
-              {message.displays?.map((display, displayIndex) => (
-                <ResultCard
-                  key={`${display.kind}-${display.title}-${displayIndex}`}
-                  display={display}
-                  interactiveDoctors={role === "patient"}
-                  interactiveSlots={role === "patient"}
-                  interactiveAppointments={role === "patient"}
-                  disabled={busy || oneTurnActive || Boolean(actionBusy)}
-                  onSelectDoctor={(doctorId, doctorName) => void send(`Show available slots for ${doctorName}`, { selectedDoctorId: doctorId })}
-                  onSelectSlot={(slotId, label) => void send(`I want to book this available slot: ${label}`, { selectedSlotId: slotId })}
-                  onSelectProposalDecision={(selectedProposalDecision, label) => void send(label, { selectedProposalDecision })}
-                  onSelectPatientAppointment={(selectedPatientAppointment, label) => void send(label, { selectedPatientAppointment })}
-                  onSelectRescheduleSlot={(selectedRescheduleSlot, label) => void send(label, { selectedRescheduleSlot })}
-                />
-              ))}
-              {message.pendingAction && (
-                <div className="mt-3 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3 text-xs text-amber-950">
-                  <div>
-                    <p className="font-semibold">Review before confirming</p>
-                    <p className="mt-1">This action expires {new Date(message.pendingAction.expiresAt).toLocaleString()}.</p>
-                  </div>
-                  {message.pendingAction.preview.operation === "booking" ? (
-                    <BookingPreviewDetails preview={message.pendingAction.preview as BookingPreview} />
+              </div>
+            ) : (
+              <div className="flex-1 space-y-1.5 overflow-y-auto pr-1" role="list" aria-label="Past conversations">
+                {conversations.map((conversation) => (
+                  editingConversationId === conversation.id ? (
+                    <form
+                      key={conversation.id}
+                      className="flex items-center gap-1 rounded-lg border bg-background p-1 text-xs"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void renameConversation(conversation.id);
+                      }}
+                    >
+                      <input
+                        aria-label="Chat name"
+                        className="h-7 flex-1 rounded border bg-background px-2 text-xs"
+                        value={editingTitle}
+                        onChange={(event) => setEditingTitle(event.target.value)}
+                        autoFocus
+                      />
+                      <Button type="submit" size="icon" variant="ghost" className="size-7" aria-label="Save chat name">
+                        <Check className="size-3" />
+                      </Button>
+                    </form>
                   ) : (
-                    <dl className="grid gap-2 sm:grid-cols-2">
-                      {Object.entries(message.pendingAction.preview).map(([key, value]) => (
-                        <div key={key}>
-                          <dt className="font-medium capitalize">{key.replaceAll("_", " ")}</dt>
-                          <dd className="break-words">{formatValue(value)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => void decideAction(message.pendingAction!, "confirm")}
-                      disabled={busy || oneTurnActive || actionBusy === message.pendingAction.id}
+                    <div
+                      key={conversation.id}
+                      className={`group flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+                        conversationId === conversation.id
+                          ? "border-primary/50 bg-primary/10 font-medium text-primary"
+                          : "bg-card hover:bg-muted/60"
+                      }`}
                     >
-                      {actionBusy === message.pendingAction.id
-                        ? <><Loader2 className="mr-1 size-3 animate-spin" />Processing…</>
-                        : actionConfirmLabel(message.pendingAction)}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void decideAction(message.pendingAction!, "decline")}
-                      disabled={busy || oneTurnActive || actionBusy === message.pendingAction.id}
-                    >
-                      {message.pendingAction.actionType === "doctor_cancellation" ? "Keep appointment" : message.pendingAction.actionType === "doctor_completion" ? "Do not mark completed" : "Don't apply"}
-                    </Button>
+                      <button
+                        type="button"
+                        className="flex-1 truncate text-left pr-2"
+                        onClick={() => {
+                          void loadConversation(conversation.id);
+                          setShowHistory(false);
+                        }}
+                        aria-current={conversationId === conversation.id ? "true" : undefined}
+                      >
+                        {conversation.title}
+                      </button>
+                      <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100">
+                        <button
+                          type="button"
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={`Rename ${conversation.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingConversationId(conversation.id);
+                            setEditingTitle(conversation.title);
+                          }}
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={`Delete ${conversation.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteConversation(conversation.id);
+                          }}
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full text-xs text-muted-foreground"
+              onClick={() => setShowHistory(false)}
+            >
+              <ChevronLeft className="mr-1 size-3.5" /> Back to chat
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Conversation Messages OR Welcome Empty State */}
+            {compact && messages.length <= 1 && !busy ? (
+              <div className="my-auto flex flex-col items-center justify-center px-2 py-6 text-center">
+                <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+                  <Sparkles className="size-6" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">Welcome to Schedula Assistant</h3>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  {role === "doctor"
+                    ? "Check your schedule, find open slots, and review conflicts with ease."
+                    : "Find verified doctors, check available slots, and book or manage appointments."}
+                </p>
+
+                <div className="mt-6 w-full space-y-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    Suggested prompts
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {prompts.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        className="flex items-center justify-between w-full rounded-xl border bg-card px-3.5 py-2.5 text-left text-xs font-medium text-foreground shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                        onClick={() => void send(prompt)}
+                        disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                      >
+                        <span>{prompt}</span>
+                        <span className="text-muted-foreground" aria-hidden="true">→</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
-              {message.staleAction && <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50/70 p-2 text-xs text-amber-950">This saved action is no longer available. Ask the assistant to prepare a new review.</p>}
+              </div>
+            ) : (
+              <div
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1"
+                role="log"
+                aria-label="Assistant conversation"
+                aria-live="polite"
+                aria-relevant="additions text"
+              >
+                {messages.map((message, index) => (
+                  <div key={`${message.role}-${index}`}>
+                    {message.role === "assistant" ? (
+                      <div className="flex items-start gap-2.5 sm:gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100/90 text-emerald-700 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+                          <Bot className="size-4" />
+                        </div>
+                        <div className="min-w-0 max-w-[92%] sm:max-w-[85%]">
+                          <span className="mb-1 block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            Schedule Assistant
+                          </span>
+                          <div className="rounded-2xl rounded-tl-sm bg-slate-100/90 dark:bg-slate-800/80 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 shadow-sm">
+                            {message.text.includes("could not connect") ? (
+                              <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-2.5 text-xs text-destructive">
+                                <p className="font-medium">{message.text}</p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-2 h-7 gap-1.5 border-destructive/30 text-xs text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    const lastUser = messages.filter((m) => m.role === "user").at(-1)?.text;
+                                    if (lastUser) void send(lastUser);
+                                  }}
+                                  disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                                >
+                                  <RotateCcw className="size-3" />
+                                  Retry request
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="break-words leading-relaxed [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                                <ReactMarkdown>{message.text}</ReactMarkdown>
+                              </div>
+                            )}
+                            <span
+                              suppressHydrationWarning
+                              className="mt-1.5 block text-right text-[10px] text-slate-400 dark:text-slate-400"
+                            >
+                              {mounted ? (message.timestamp || formatTimestamp()) : ""}
+                            </span>
+                          </div>
+
+                          {message.retryText && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 text-xs"
+                              onClick={() => void send(message.retryText, message.retrySelection)}
+                              disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                            >
+                              Retry
+                            </Button>
+                          )}
+
+                          {message.displays?.map((display, displayIndex) => (
+                            <ResultCard
+                              key={`${display.kind}-${display.title}-${displayIndex}`}
+                              display={display}
+                              interactiveDoctors={role === "patient"}
+                              interactiveSlots={role === "patient"}
+                              interactiveAppointments={role === "patient"}
+                              disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                              onSelectDoctor={(doctorId, doctorName) => void send(`Show available slots for ${doctorName}`, { selectedDoctorId: doctorId })}
+                              onSelectSlot={(slotId, label) => void send(`I want to book this available slot: ${label}`, { selectedSlotId: slotId })}
+                              onSelectProposalDecision={(selectedProposalDecision, label) => void send(label, { selectedProposalDecision })}
+                              onSelectPatientAppointment={(selectedPatientAppointment, label) => void send(label, { selectedPatientAppointment })}
+                              onSelectRescheduleSlot={(selectedRescheduleSlot, label) => void send(label, { selectedRescheduleSlot })}
+                            />
+                          ))}
+
+                          {message.pendingAction && (
+                            <div className="mt-3 grid gap-3 rounded-2xl border border-amber-300/60 bg-amber-50/70 p-3.5 text-xs text-amber-950 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-100">
+                              <div>
+                                <p className="font-semibold">Review before confirming</p>
+                                <p suppressHydrationWarning className="mt-1">This action expires {new Date(message.pendingAction.expiresAt).toLocaleString()}.</p>
+                              </div>
+                              {message.pendingAction.preview.operation === "booking" ? (
+                                <BookingPreviewDetails preview={message.pendingAction.preview as BookingPreview} />
+                              ) : (
+                                <dl className="grid gap-2 sm:grid-cols-2">
+                                  {Object.entries(message.pendingAction.preview).map(([key, value]) => (
+                                    <div key={key}>
+                                      <dt className="font-medium capitalize">{key.replaceAll("_", " ")}</dt>
+                                      <dd className="break-words">{formatValue(value)}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              )}
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => void decideAction(message.pendingAction!, "confirm")}
+                                  disabled={busy || oneTurnActive || actionBusy === message.pendingAction.id}
+                                >
+                                  {actionBusy === message.pendingAction.id
+                                    ? <><Loader2 className="mr-1 size-3 animate-spin" />Processing…</>
+                                    : actionConfirmLabel(message.pendingAction)}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void decideAction(message.pendingAction!, "decline")}
+                                  disabled={busy || oneTurnActive || actionBusy === message.pendingAction.id}
+                                >
+                                  {message.pendingAction.actionType === "doctor_cancellation" ? "Keep appointment" : message.pendingAction.actionType === "doctor_completion" ? "Do not mark completed" : "Don't apply"}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {message.staleAction && <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50/70 p-2 text-xs text-amber-950">This saved action is no longer available. Ask the assistant to prepare a new review.</p>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-end gap-2.5 sm:gap-3">
+                        <div className="flex flex-col items-end min-w-0 max-w-[92%] sm:max-w-[85%]">
+                          <span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400 text-right">
+                            You
+                          </span>
+                          <div className="rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm text-primary-foreground shadow-sm">
+                            <p className="break-words whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                            <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] text-white/80">
+                              <span suppressHydrationWarning>{mounted ? (message.timestamp || formatTimestamp()) : ""}</span>
+                              <CheckCheck className="size-3 text-white/90" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
+                          <User className="size-4" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Inline Typing Indicator */}
+                {(busy || voiceState === "processing") && (
+                  <div className="flex items-start gap-2.5 sm:gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100/90 text-emerald-700 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+                      <Bot className="size-4" />
+                    </div>
+                    <div>
+                      <span className="mb-1 block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        Schedule Assistant
+                      </span>
+                      <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm bg-slate-100/90 dark:bg-slate-800/80 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 shadow-sm">
+                        <span className="flex items-center gap-1">
+                          <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+                          <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+                          <span className="size-1.5 animate-bounce rounded-full bg-primary" />
+                        </span>
+                        <span className="font-medium text-slate-500">Schedule Assistant is typing…</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+            )}
+
+            {/* Quick prompt suggestions when conversation is active and in compact drawer */}
+            {compact && messages.length > 1 && (
+              <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto py-1 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Suggested prompts">
+                <span className="shrink-0 text-[10px] font-medium text-muted-foreground">Suggestions:</span>
+                {prompts.map((prompt) => (
+                  <Button
+                    key={prompt}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 shrink-0 whitespace-nowrap rounded-full px-2.5 text-[11px] font-normal transition-transform hover:-translate-y-0.5 hover:bg-muted"
+                    onClick={() => void send(prompt)}
+                    disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                  >
+                    {prompt}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Unified Composer Bar matching Reference img1 */}
+            <div className="shrink-0 border-t pt-3">
+              <div className="rounded-2xl border border-slate-200/90 bg-card p-1.5 sm:p-2 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="group/btn relative flex items-center justify-center">
+                      <Button
+                        type="button"
+                        variant={oneTurnActive ? "destructive" : "ghost"}
+                        size="icon"
+                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${oneTurnActive ? "animate-pulse text-destructive" : ""}`}
+                        aria-label={oneTurnActive ? "Stop voice dictation" : "Voice dictation"}
+                        aria-pressed={oneTurnActive}
+                        onClick={toggleOneTurnCapture}
+                        disabled={voiceActive || busy || Boolean(actionBusy)}
+                      >
+                        {oneTurnActive ? <Square className="size-4" /> : <Mic className="size-4" />}
+                      </Button>
+                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                        {oneTurnActive ? "Stop voice" : "Voice dictation"}
+                      </span>
+                    </div>
+                    <div className="group/btn relative flex items-center justify-center">
+                      <Button
+                        type="button"
+                        variant={voiceActive ? "destructive" : "ghost"}
+                        size="icon"
+                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${voiceActive ? "animate-pulse ring-2 ring-primary/40 text-primary" : ""}`}
+                        aria-label={voiceActive ? "Stop continuous voice mode" : "Continuous voice mode"}
+                        aria-pressed={voiceActive}
+                        onClick={toggleContinuousVoice}
+                        disabled={oneTurnActive || ((busy || Boolean(actionBusy)) && !voiceActive)}
+                      >
+                        {voiceActive ? <Square className="size-4" /> : <Radio className="size-4" />}
+                      </Button>
+                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                        {voiceActive ? "Stop voice mode" : "Continuous voice"}
+                      </span>
+                    </div>
+                  </div>
+                  <textarea
+                    aria-label="Message to the assistant"
+                    className="min-h-9 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-0"
+                    placeholder="Ask about appointments or slots…"
+                    value={input}
+                    rows={1}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void send();
+                      }
+                    }}
+                    disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                  />
+                  <div className="group/btn relative flex items-center justify-center">
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="size-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
+                      aria-label="Send message"
+                      onClick={() => void send()}
+                      disabled={busy || oneTurnActive || Boolean(actionBusy) || !input.trim()}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    </Button>
+                    <span className="pointer-events-none absolute -top-8 right-0 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                      Send (Enter)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Single Helper Subtitle & Voice Status Banner */}
+              <div className="mt-2 min-h-5 px-1 text-xs" role="status" aria-live="polite">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    Enter to send · Shift+Enter for a new line
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {oneTurnActive ? (
+                      <span className="flex items-center gap-1.5 font-medium text-destructive">
+                        <span className="size-2 animate-ping rounded-full bg-destructive" />
+                        Listening… speak now
+                      </span>
+                    ) : voiceState === "listening" ? (
+                      <span className="flex items-center gap-1.5 font-medium text-emerald-600">
+                        <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                        Continuous voice active
+                      </span>
+                    ) : voiceState === "processing" || busy ? (
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        Preparing response…
+                      </span>
+                    ) : voiceState === "speaking" ? (
+                      <span className="flex items-center gap-1.5 font-medium text-primary">
+                        <AudioLines className="size-3.5 animate-pulse" />
+                        Speaking…
+                        <button
+                          type="button"
+                          onClick={stopSpeaking}
+                          className="ml-1 text-[11px] text-muted-foreground underline hover:text-foreground"
+                        >
+                          Stop
+                        </button>
+                      </span>
+                    ) : voiceError ? (
+                      <span className="text-destructive">{voiceError}</span>
+                    ) : null}
+                  </div>
+                </div>
+                {oneTurnTranscript && (
+                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    Heard: &quot;{oneTurnTranscript}&quot;
+                  </span>
+                )}
+              </div>
             </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2" aria-label="Suggested prompts">
-          {prompts.map((prompt) => <Button key={prompt} type="button" size="sm" variant="outline" className="transition-transform hover:-translate-y-0.5" onClick={() => void send(prompt)} disabled={busy || oneTurnActive || Boolean(actionBusy)}>{prompt}</Button>)}
-        </div>
-        <div className="flex shrink-0 items-end gap-2 border-t pt-3">
-          <Button
-            type="button"
-            variant={oneTurnActive ? "destructive" : "outline"}
-            size="icon"
-            aria-label={oneTurnActive ? "Finish one-turn voice input" : "Start one-turn voice input"}
-            aria-pressed={oneTurnActive}
-            onClick={toggleOneTurnCapture}
-            disabled={voiceActive || busy || Boolean(actionBusy)}
-          >
-            {oneTurnActive ? <Square className="size-4" /> : <Mic className="size-4" />}
-          </Button>
-          <Button
-            type="button"
-            variant={voiceActive ? "destructive" : "outline"}
-            size="icon"
-            aria-label={voiceActive ? "Stop continuous voice mode" : "Start continuous voice mode"}
-            aria-pressed={voiceActive}
-            onClick={toggleContinuousVoice}
-            disabled={oneTurnActive || ((busy || Boolean(actionBusy)) && !voiceActive)}
-          >
-            {voiceActive ? <Square className="size-4" /> : <AudioLines className="size-4" />}
-          </Button>
-          <textarea
-            aria-label="Message to the assistant"
-            className="max-h-32 min-h-10 min-w-0 flex-1 resize-y rounded-md border bg-background px-3 py-2 text-sm"
-            placeholder="Ask about appointments or slots…"
-            value={input}
-            rows={1}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void send();
-              }
-            }}
-            disabled={busy || oneTurnActive || Boolean(actionBusy)}
-          />
-          <Button
-            type="button"
-            size="icon"
-            aria-label="Send message"
-            onClick={() => void send()}
-            disabled={busy || oneTurnActive || Boolean(actionBusy) || !input.trim()}
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          </Button>
-          {voiceState === "speaking" && (
-            <Button type="button" variant="outline" size="icon" aria-label="Stop speaking" onClick={stopSpeaking}>
-              <Volume2 className="size-4" />
-            </Button>
-          )}
-        </div>
-        <div className="min-h-5 shrink-0 text-xs text-muted-foreground" role="status" aria-live="polite">
-          {busy
-            ? "Schedula is preparing a response…"
-            : oneTurnActive
-              ? "One-turn mic is listening · sends after 6 seconds of silence"
-              : voiceState === "listening"
-                ? "Continuous voice mode · listening"
-              : voiceState === "processing"
-                ? "Processing your request…"
-                : voiceState === "speaking"
-                  ? "Assistant is speaking · stop anytime"
-                  : !voiceError && "Enter to send · Shift+Enter for a new line"}
-          {voiceError && <span className="text-destructive">{voiceError}</span>}
-          {oneTurnTranscript && <span className="block break-words">Heard: {oneTurnTranscript}</span>}
-        </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
