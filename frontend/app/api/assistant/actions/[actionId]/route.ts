@@ -29,11 +29,9 @@ async function createDoctorAvailability(supabase: SupabaseClient, payload: Recor
       : { p_session_dates: value.sessionDates, p_start_time: value.startTime, p_end_time: value.endTime, p_timezone: value.timezone, ...scheduleArgs };
   const { data, error } = await supabase.rpc(rpcName, args);
   if (error || !data) throw new Error("AVAILABILITY_CREATION_FAILED");
-  if (value.schedulingType === "stream") {
-    const sessionIds = (Array.isArray(data) ? data : [data]).filter((item): item is string => typeof item === "string");
-    const { error: streamError } = await supabase.rpc("set_stream_min_patient_minutes", { p_session_ids: sessionIds, p_minutes: value.streamMinPatientMinutes ?? 10 });
-    if (streamError) throw new Error("AVAILABILITY_CREATION_FAILED");
-  }
+  const sessionIds = (Array.isArray(data) ? data : [data]).filter((item): item is string => typeof item === "string");
+  const { error: minutesError } = await supabase.rpc("set_minimum_patient_minutes", { p_session_ids: sessionIds, p_minutes: value.minimumPatientMinutes ?? 10 });
+  if (minutesError) throw new Error("AVAILABILITY_CREATION_FAILED");
   return { created: Array.isArray(data) ? data.length : 1 };
 }
 
@@ -147,14 +145,15 @@ export async function POST(request: Request, context: { params: Promise<{ action
           || currentPreview.new_end_at !== savedPreview.new_end_at
           || JSON.stringify(currentAppointments) !== JSON.stringify(savedAppointments)
           || JSON.stringify(currentCandidates) !== JSON.stringify(savedCandidates)
-          || JSON.stringify(capacityTuple(currentPreview.stream_capacity)) !== JSON.stringify(capacityTuple(savedPreview.stream_capacity));
+          || JSON.stringify(capacityTuple(currentPreview.stream_capacity)) !== JSON.stringify(capacityTuple(savedPreview.stream_capacity))
+          || JSON.stringify(capacityTuple(currentPreview.wave_capacity)) !== JSON.stringify(capacityTuple(savedPreview.wave_capacity));
         if (stale) throw new Error("ASSISTANT_ACTION_STALE");
         const { data, error } = await access.supabase.rpc("apply_doctor_occurrence_adjustment", {
           p_session_id: String(payload.sessionId),
           p_occurrence_date: String(payload.occurrenceDate),
           p_start_time: String(payload.startTime),
           p_end_time: String(payload.endTime),
-          p_assignments: [],
+          p_assignments: { expected_preview: payload.expectedPreview },
         });
         if (error) throw new Error(error.message);
         result = data;
@@ -162,11 +161,16 @@ export async function POST(request: Request, context: { params: Promise<{ action
         result = await createDoctorAvailability(access.supabase, payload);
       } else if (claimed.action_type === "doctor_leave") {
         const leaveArgs = { p_session_id: String(payload.sessionId), p_occurrence_date: String(payload.occurrenceDate) };
-        const { error } = await access.supabase.rpc("cancel_doctor_session_occurrence", leaveArgs);
+        const { data: currentPreview, error: previewError } = await access.supabase.rpc("preview_doctor_occurrence_closure", leaveArgs);
+        if (previewError || !currentPreview || typeof currentPreview !== "object") throw new Error("ASSISTANT_ACTION_STALE");
+        const preview = currentPreview as { appointments?: Array<{ appointment_id: string }>; candidates?: Array<{ slot_id: string; remaining_capacity: number }> };
+        const fingerprint = JSON.stringify({ appointments: (preview.appointments ?? []).map((item) => item.appointment_id), candidates: (preview.candidates ?? []).map((item) => [item.slot_id, item.remaining_capacity]) });
+        if (fingerprint !== payload.closureFingerprint) throw new Error("ASSISTANT_ACTION_STALE");
+        const { error } = await access.supabase.rpc("apply_doctor_occurrence_closure", { ...leaveArgs, p_expected_preview: payload.expectedPreview });
         if (error) throw new Error(error.message);
         const { error: auditError } = await access.supabase.rpc("record_doctor_leave", leaveArgs);
         if (auditError) console.error("Doctor leave audit record failed", { code: auditError.code ?? null });
-        result = { status: "cancelled_as_leave" };
+        result = { status: "closed_with_patient_decisions" };
       } else if (claimed.action_type === "elastic_proposal_decision") {
         const rpcName = payload.decision === "approve" ? "approve_elastic_booking_proposal" : payload.decision === "choose_slot" ? "choose_elastic_booking_slot" : "reject_elastic_booking_proposal";
         const rpcArgs = payload.decision === "choose_slot"

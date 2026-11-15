@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   uniqueIndex,
@@ -10,7 +11,6 @@ import {
   timestamp,
   time,
   uuid,
-  boolean,
   jsonb,
 } from "drizzle-orm/pg-core";
 
@@ -108,6 +108,7 @@ export const availabilitySessions = pgTable("availability_sessions", {
   timezone: text("timezone").notNull(),
   intervalMinutes: integer("interval_minutes"),
   streamMinPatientMinutes: integer("stream_min_patient_minutes"),
+  minimumPatientMinutes: integer("minimum_patient_minutes"),
   capacity: integer("capacity").notNull().default(3),
   status: availabilitySessionStatus("status").notNull().default("active"),
   sessionStartAt: timestamp("session_start_at", { withTimezone: true }),
@@ -123,6 +124,8 @@ export const availabilityOccurrenceOverrides = pgTable("availability_occurrence_
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
   streamMinPatientMinutes: integer("stream_min_patient_minutes"),
+  minimumPatientMinutes: integer("minimum_patient_minutes"),
+  closed: boolean("closed").notNull().default(false),
   capacity: integer("capacity"),
   ...auditColumns(),
 }, (table) => ({ uniqueOccurrence: uniqueIndex("availability_occurrence_override_unique").on(table.availabilitySessionId, table.occurrenceDate) }));

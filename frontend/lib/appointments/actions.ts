@@ -74,7 +74,12 @@ export async function cancelDoctorSessionOccurrenceAction(_: CancellationActionS
   try { await requireVerifiedUser(); } catch (error) { if (error instanceof Error && error.message === "EMAIL_NOT_VERIFIED") return { error: "Verify your email before managing appointments.", values: formValues(formData) }; throw error; }
   const supabase = await createClient();
   const { error } = await supabase.rpc("cancel_doctor_session_occurrence", { p_session_id: sessionId, p_occurrence_date: occurrenceDate });
-  if (error) return { error: error.message.includes("future") ? "Leave must be scheduled for a future date." : "We could not cancel this session. Please try again." };
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("bookings") || message.includes("patient decision")) return { error: "This session has bookings. Use Edit window to request patient rescheduling or cancellation before closing it." };
+    if (message.includes("payment hold")) return { error: "An active payment hold is using this session. Wait for checkout to finish or expire, then try again." };
+    return { error: message.includes("future") ? "Leave must be scheduled for a future date." : "We could not cancel this session. Please try again." };
+  }
   const { error: leaveRecordError } = await supabase.rpc("record_doctor_leave", { p_session_id: sessionId, p_occurrence_date: occurrenceDate });
   if (leaveRecordError) console.error("Doctor leave audit record failed", { code: leaveRecordError.code ?? null });
   revalidatePath("/doctor/schedule", "page");
