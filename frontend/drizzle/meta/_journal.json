@@ -169,6 +169,20 @@
       "when": 1794570000000,
       "tag": "0045-assistant-workflow-parity",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794650000000,
+      "tag": "0046-persist-assistant-conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794700000000,
+      "tag": "0047-wave-minimum-patient-capacity",
+      "breakpoints": true
     }
   ]
 }

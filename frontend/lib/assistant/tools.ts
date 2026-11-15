@@ -21,8 +21,8 @@ export const assistantFunctionDeclarations = [
   { type: "function" as const, name: "prepare_doctor_completion", description: "Prepare to mark an eligible appointment completed. Requires explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" } }, required: ["appointmentId"] } },
   { type: "function" as const, name: "prepare_doctor_prescription", description: "Prepare a prescription using only medication details explicitly supplied by the doctor. Never invent or recommend medication. Requires explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" }, medicationName: { type: "string" }, dosage: { type: "string" }, frequency: { type: "string" }, duration: { type: "string" }, instructions: { type: "string" }, notes: { type: "string" } }, required: ["appointmentId", "medicationName", "dosage", "frequency", "duration"] } },
   { type: "function" as const, name: "prepare_elastic_adjustment", description: "Preview and prepare a doctor-owned occurrence expansion or shrink. Requires explicit confirmation before applying and notifying affected patients.", parameters: { type: "object", properties: { sessionId: { type: "string" }, occurrenceDate: { type: "string" }, startTime: { type: "string" }, endTime: { type: "string" } }, required: ["sessionId", "occurrenceDate", "startTime", "endTime"] } },
-  { type: "function" as const, name: "prepare_availability_creation", description: "Prepare doctor availability creation from explicit schedule details. Requires confirmation.", parameters: { type: "object", properties: { sessionType: { type: "string", enum: ["recurring", "specific_date"] }, recurrenceMethod: { type: "string", enum: ["day", "date"] }, schedulingType: { type: "string", enum: ["wave", "stream"] }, sessionDates: { type: "array", items: { type: "string" } }, recurrenceStartDate: { type: "string" }, recurrenceDuration: { type: "string" }, monthlyDays: { type: "array", items: { type: "number" } }, consultingDays: { type: "array", items: { type: "number" } }, startTime: { type: "string" }, endTime: { type: "string" }, timezone: { type: "string" }, intervalMinutes: { type: "number" }, streamMinPatientMinutes: { type: "number" }, capacity: { type: "number" } }, required: ["sessionType", "schedulingType", "startTime", "endTime", "timezone", "capacity"] } },
-  { type: "function" as const, name: "prepare_doctor_leave", description: "Prepare to cancel a doctor's availability occurrence as leave. Requires explicit confirmation and patient notifications.", parameters: { type: "object", properties: { sessionId: { type: "string" }, occurrenceDate: { type: "string" } }, required: ["sessionId", "occurrenceDate"] } },
+  { type: "function" as const, name: "prepare_availability_creation", description: "Prepare doctor availability creation from explicit schedule details. Requires confirmation.", parameters: { type: "object", properties: { sessionType: { type: "string", enum: ["recurring", "specific_date"] }, recurrenceMethod: { type: "string", enum: ["day", "date"] }, schedulingType: { type: "string", enum: ["wave", "stream"] }, sessionDates: { type: "array", items: { type: "string" } }, recurrenceStartDate: { type: "string" }, recurrenceDuration: { type: "string" }, monthlyDays: { type: "array", items: { type: "number" } }, consultingDays: { type: "array", items: { type: "number" } }, startTime: { type: "string" }, endTime: { type: "string" }, timezone: { type: "string" }, intervalMinutes: { type: "number" }, minimumPatientMinutes: { type: "number" }, capacity: { type: "number" } }, required: ["sessionType", "schedulingType", "startTime", "endTime", "timezone", "capacity"] } },
+  { type: "function" as const, name: "prepare_doctor_leave", description: "Prepare to close a doctor's availability occurrence. Booked patients receive reschedule or refund choices and are never silently cancelled. Requires explicit confirmation.", parameters: { type: "object", properties: { sessionId: { type: "string" }, occurrenceDate: { type: "string" } }, required: ["sessionId", "occurrenceDate"] } },
   { type: "function" as const, name: "patient_appointments", description: "Read the signed-in patient's appointments.", parameters: { type: "object", properties: { tab: { type: "string", enum: ["upcoming", "past", "cancelled"] } } } },
   { type: "function" as const, name: "search_doctors", description: "Search real, email-confirmed bookable doctors by name or specialty.", parameters: { type: "object", properties: { search: { type: "string" }, specialty: { type: "string" } } } },
   { type: "function" as const, name: "doctor_slots", description: "Read real available slots for an email-confirmed doctor, optionally filtered to a local date.", parameters: { type: "object", properties: { doctorId: { type: "string" }, date: { type: "string" } }, required: ["doctorId"] } },
@@ -286,7 +286,7 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
       return { appointment_id: appointment.appointment_id, patient_name: appointment.patient_name, current_start_at: appointment.start_at, current_end_at: appointment.end_at };
     }) : [];
     const assignments = affectedAppointments.length;
-    return prepareAction(supabase, userId, role, "elastic_adjustment", { sessionId, occurrenceDate, startTime, endTime }, {
+    return prepareAction(supabase, userId, role, "elastic_adjustment", { sessionId, occurrenceDate, startTime, endTime, expectedPreview: preview }, {
       operation: "elastic_adjustment",
       classification: preview.classification,
       scheduling_type: preview.scheduling_type,
@@ -298,6 +298,7 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
       affected_appointments: affectedAppointments,
       available_candidates: preview.candidates,
       stream_capacity: preview.stream_capacity,
+      wave_capacity: preview.wave_capacity,
       impact: `${assignments} patients require a decision. Confirming updates availability and notifies affected patients; patient appointments remain pending until they respond.`,
     });
   }
@@ -318,7 +319,7 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
       end_time: parsed.data.endTime,
       timezone: parsed.data.timezone,
       interval_minutes: parsed.data.intervalMinutes,
-      stream_min_patient_minutes: parsed.data.streamMinPatientMinutes,
+      minimum_patient_minutes: parsed.data.minimumPatientMinutes ?? 10,
       capacity: parsed.data.capacity,
     });
   }
@@ -329,16 +330,19 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
     const { data: session, error } = await supabase.from("availability_sessions").select("id, start_time, end_time, timezone, scheduling_type").eq("id", sessionId).eq("doctor_id", userId).eq("status", "active").maybeSingle();
     if (error || !session) throw new Error("AVAILABILITY_SESSION_NOT_FOUND");
     if (occurrenceDate <= new Intl.DateTimeFormat("en-CA", { timeZone: session.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())) throw new Error("INVALID_LEAVE_DATE");
-    const occurrenceSlots = await getDoctorSlotsForAssistant(supabase, userId, false);
-    const affectedBookedSlots = occurrenceSlots.filter((slot) => slot.availability_session_id === sessionId && slot.allocated_count > 0 && dateInTimezone(slot.slot_start_at, session.timezone) === occurrenceDate).length;
-    return prepareAction(supabase, userId, role, "doctor_leave", { sessionId, occurrenceDate }, {
+    const { data: preview, error: previewError } = await supabase.rpc("preview_doctor_occurrence_closure", { p_session_id: sessionId, p_occurrence_date: occurrenceDate });
+    if (previewError || !preview || typeof preview !== "object") throw new Error("SESSION_CLOSURE_PREVIEW_FAILED");
+    const closurePreview = preview as { appointments?: Array<{ appointment_id: string; patient_name?: string | null; start_at: string; end_at: string }>; candidates?: Array<{ slot_id: string; start_at: string; end_at: string; remaining_capacity: number }> };
+    const fingerprint = JSON.stringify({ appointments: (closurePreview.appointments ?? []).map((item) => item.appointment_id), candidates: (closurePreview.candidates ?? []).map((item) => [item.slot_id, item.remaining_capacity]) });
+    return prepareAction(supabase, userId, role, "doctor_leave", { sessionId, occurrenceDate, closureFingerprint: fingerprint, expectedPreview: preview }, {
       operation: "doctor_leave",
       date: occurrenceDate,
       start_time: session.start_time,
       end_time: session.end_time,
       timezone: session.timezone,
-      affected_booked_slots: affectedBookedSlots,
-      impact: "This occurrence will be cancelled and affected patients will be notified.",
+      affected_appointments: closurePreview.appointments ?? [],
+      available_candidates: closurePreview.candidates ?? [],
+      impact: "This occurrence will close. Each booked patient can approve a replacement, choose another available time, or request a full refund. Appointments remain pending until patients respond.",
     });
   }
   if (name === "patient_appointments") {

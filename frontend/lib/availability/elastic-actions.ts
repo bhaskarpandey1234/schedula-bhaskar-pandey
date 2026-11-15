@@ -21,11 +21,24 @@ export async function previewElasticAvailabilityAction(input: { sessionId: strin
     return { error: userFacingAvailabilityError(error) };
   }
 }
-export async function applyElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string }) {
+export async function previewElasticClosureAction(input: { sessionId: string; occurrenceDate: string }): Promise<ElasticPreviewActionResult> {
+  await requireCompleteProfile("doctor");
+  await requireVerifiedUser();
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("preview_doctor_occurrence_closure", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate });
+    if (error) return { error: userFacingAvailabilityError(error) };
+    if (!data || typeof data !== "object") return { error: "We could not read the closure preview. Refresh the schedule and try again." };
+    return { preview: data as ElasticPreview };
+  } catch (error) {
+    return { error: userFacingAvailabilityError(error) };
+  }
+}
+export async function applyElasticAvailabilityAction(input: { sessionId: string; occurrenceDate: string; startTime: string; endTime: string; expectedPreview: ElasticPreview }) {
   await requireCompleteProfile("doctor");
   await requireVerifiedUser();
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("apply_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime, p_assignments: [] });
+  const { data, error } = await supabase.rpc("apply_doctor_occurrence_adjustment", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_start_time: input.startTime, p_end_time: input.endTime, p_assignments: { expected_preview: input.expectedPreview } });
   if (error) throw new Error(userFacingAvailabilityError(error));
   revalidatePath("/doctor/schedule", "page");
   revalidatePath("/doctor/appointments", "page");
@@ -34,4 +47,15 @@ export async function applyElasticAvailabilityAction(input: { sessionId: string;
   revalidatePath("/patient/notifications", "page");
   revalidatePath("/patient/payments", "page");
   return data as { adjustment_id: string; classification: string; moved: number; cancelled: number };
+}
+export async function applyElasticClosureAction(input: { sessionId: string; occurrenceDate: string; expectedPreview: ElasticPreview }) {
+  await requireCompleteProfile("doctor");
+  await requireVerifiedUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("apply_doctor_occurrence_closure", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate, p_expected_preview: input.expectedPreview });
+  if (error) throw new Error(userFacingAvailabilityError(error));
+  const { error: leaveError } = await supabase.rpc("record_doctor_leave", { p_session_id: input.sessionId, p_occurrence_date: input.occurrenceDate });
+  if (leaveError) console.error("Doctor leave audit record failed", { code: leaveError.code ?? null });
+  for (const path of ["/doctor/schedule", "/doctor/appointments", "/doctor/notifications", "/patient/appointments", "/patient/notifications", "/patient/payments"]) revalidatePath(path, "page");
+  return data as { adjustment_id: string; pending: number };
 }
