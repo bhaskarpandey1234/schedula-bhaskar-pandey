@@ -28,8 +28,13 @@ describe("Phase 4 validation", () => {
   });
   it("accepts Stream windows without a duration and rejects a Stream duration", () => {
     expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
-    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", streamMinPatientMinutes: 15, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
-    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", streamMinPatientMinutes: 12, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", minimumPatientMinutes: 15, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", minimumPatientMinutes: 12, sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", capacity: 3 }).success).toBe(false);
+  });
+  it("enforces Wave minimum minutes and capacity at creation", () => {
+    expect(availabilitySessionSchema.safeParse({ ...base, intervalMinutes: 60, capacity: 4, minimumPatientMinutes: 10, sessionType: "specific_date", sessionDates: ["2099-04-20"] }).success).toBe(true);
+    expect(availabilitySessionSchema.safeParse({ ...base, intervalMinutes: 60, capacity: 4, minimumPatientMinutes: 5, sessionType: "specific_date", sessionDates: ["2099-04-20"] }).success).toBe(false);
+    expect(availabilitySessionSchema.safeParse({ ...base, intervalMinutes: 30, capacity: 4, minimumPatientMinutes: 10, sessionType: "specific_date", sessionDates: ["2099-04-20"] }).success).toBe(false);
     expect(availabilitySessionSchema.safeParse({ schedulingType: "stream", sessionType: "specific_date", sessionDates: ["2099-04-20"], startTime: "10:00", endTime: "12:00", timezone: "Asia/Kolkata", intervalMinutes: 30, capacity: 3 }).success).toBe(false);
   });
   it("rejects invalid intervals, capacity, dates, and time order", () => {
