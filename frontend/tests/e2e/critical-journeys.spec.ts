@@ -69,12 +69,41 @@ async function signInAs(page: Page, user: TestUser) {
   await expect(page).toHaveURL(/\/doctor$/, { timeout: 15000 });
 }
 
+async function signInAsPatient(page: Page, user: TestUser) {
+  await page.context().clearCookies();
+  await page.goto("/");
+  await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+  await page.context().clearCookies();
+  await page.goto("/auth/login");
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/patient$/, { timeout: 15000 });
+}
+
 test.afterEach(async () => { await deleteTestUsers(createdUsers.splice(0)); });
+
+test("patient confirmation page loads for a local pending booking", async ({ page }) => {
+  const doctor = await seedDoctorWithAvailability("confirmation-rpc-doctor");
+  const patient = await createTestUser("patient", "confirmation-rpc-patient");
+  createdUsers.push(patient);
+  await onboardTestUser(patient);
+  const { data: slots, error: slotsError } = await doctor.client.from("appointment_slots").select("id").eq("doctor_id", doctor.id).order("slot_start_at").limit(1);
+  if (slotsError || !slots?.[0]) throw new Error(slotsError?.message ?? "Could not find a local confirmation test slot.");
+  const { data: appointmentId, error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: slots[0].id, p_reason: "Confirmation page RPC check" });
+  if (bookingError || !appointmentId) throw new Error(bookingError?.message ?? "Could not create the local confirmation test booking.");
+
+  await signInAsPatient(page, patient);
+  await page.goto(`/patient/appointments/${appointmentId}/confirmation`);
+  await expect(page.getByRole("heading", { name: "Your appointment is confirmed." })).toBeVisible();
+});
 
 test("patient can register, onboard, book, and cancel", async ({ page }) => {
   const doctor = await seedDoctorWithAvailability("browser-doctor");
   await signUpAndConfirm(page, "patient", "browser-patient");
   await page.getByLabel("Full name").fill("Phase 8 browser patient");
+  await page.getByRole("combobox").first().click();
+  await page.getByRole("option", { name: "India +91", exact: true }).click();
   await page.getByLabel("Phone number").fill("9876543210");
   await page.getByLabel("Date of birth").fill("1990-04-20");
   await page.getByRole("button", { name: "Continue to find doctors" }).click();
@@ -84,9 +113,9 @@ test("patient can register, onboard, book, and cancel", async ({ page }) => {
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("link", { name: /View more information/i }).first().click();
   await expect(page.getByRole("heading", { name: "Dr. Phase 8" }).first()).toBeVisible();
-  await page.getByRole("link", { name: /9:00\s*AM.*left/i }).click();
+  await page.getByRole("button", { name: /9:00\s*AM.*left/i }).click();
   await page.getByLabel(/Visit reason/).fill("Phase 8 patient booking");
-  await page.getByRole("button", { name: "Review appointment" }).click();
+  await page.getByRole("button", { name: "Continue to confirmation" }).click();
   await page.getByRole("button", { name: "Confirm appointment" }).click();
   await expect(page.getByRole("heading", { name: "Your appointment is booked." })).toBeVisible();
   await page.goto("/patient/appointments");
@@ -120,8 +149,8 @@ test("doctor can register and create availability with keyboard-select controls"
   await expect(page.getByRole("dialog")).toContainText("Current window");
   await expect(page.getByRole("button", { name: "Close dialog" })).toBeVisible();
   await page.getByRole("button", { name: "Shrink availability" }).click();
-  await expect(page.getByLabel("New availability start time")).toBeVisible();
-  await expect(page.getByLabel("New availability end time")).toBeVisible();
+  await expect(page.getByLabel("Start time", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("End time", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.getByRole("columnheader", { name: "Booked Patients" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Schedule type" })).toBeVisible();
@@ -134,55 +163,102 @@ test("doctor can register and create availability with keyboard-select controls"
   await expect(page.getByRole("navigation", { name: "Dashboard navigation" })).toBeVisible();
 });
 
-test("doctor can guide an affected Wave booking to another available date and slot", async ({ page }) => {
+test("doctor can shrink a booked Wave slot by capacity and request patient decisions", async ({ page }) => {
+  test.setTimeout(90000);
   const doctor = await createTestUser("doctor", "elastic-browser-doctor");
-  const patient = await createTestUser("patient", "elastic-browser-patient");
-  const secondPatient = await createTestUser("patient", "elastic-browser-patient-two");
-  createdUsers.push(doctor, patient, secondPatient);
+  const patients = await Promise.all(Array.from({ length: 4 }, (_, index) => createTestUser("patient", `elastic-browser-patient-${index + 1}`)));
+  createdUsers.push(doctor, ...patients);
   await onboardTestUser(doctor);
-  await onboardTestUser(patient);
-  await onboardTestUser(secondPatient);
+  await Promise.all(patients.map(onboardTestUser));
   const sourceDate = futureDate();
-  const firstAlternativeDate = futureDate(22);
-  const secondAlternativeDate = futureDate(23);
-  const unavailableDate = futureDate(24);
-  const source = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "11:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 2 });
-  const firstAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: firstAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
-  const secondAlternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: secondAlternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 1 });
-  if (source.error || firstAlternative.error || secondAlternative.error || !source.data) throw new Error(source.error?.message ?? firstAlternative.error?.message ?? secondAlternative.error?.message ?? "Could not create elastic scheduling test availability.");
+  const alternativeDate = futureDate(22);
+  const source = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: sourceDate, p_start_time: "09:00", p_end_time: "11:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 4 });
+  const alternative = await doctor.client.rpc("create_availability_session_with_slots", { p_session_date: alternativeDate, p_start_time: "09:00", p_end_time: "10:00", p_timezone: "Asia/Kolkata", p_interval_minutes: 60, p_capacity: 2 });
+  if (source.error || alternative.error || !source.data) throw new Error(source.error?.message ?? alternative.error?.message ?? "Could not create elastic scheduling test availability.");
   const { data: sourceSlots, error: sourceSlotsError } = await doctor.client.from("appointment_slots").select("id, slot_start_at").eq("availability_session_id", source.data).order("slot_start_at");
-  if (sourceSlotsError || !sourceSlots?.[1]) throw new Error(sourceSlotsError?.message ?? "Could not find the affected Wave slot.");
-  const { error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: sourceSlots[1].id, p_reason: "Elastic browser test" });
-  if (bookingError) throw new Error(bookingError.message);
-  const { error: secondBookingError } = await secondPatient.client.rpc("book_appointment", { p_slot_id: sourceSlots[1].id, p_reason: "Elastic browser test two" });
-  if (secondBookingError) throw new Error(secondBookingError.message);
+  if (sourceSlotsError || !sourceSlots?.[0]) throw new Error(sourceSlotsError?.message ?? "Could not find the partially shortened Wave slot.");
+  const appointmentIds: string[] = [];
+  for (const [index, patient] of patients.entries()) {
+    const { data, error } = await patient.client.rpc("book_appointment", { p_slot_id: sourceSlots[0].id, p_reason: `Elastic browser test ${index + 1}` });
+    if (error) throw new Error(error.message);
+    appointmentIds.push(data as string);
+  }
 
   await signInAs(page, doctor);
   await page.goto(`/doctor/schedule?date=${sourceDate}`);
   await page.getByRole("button", { name: "Edit window" }).first().click();
   await page.getByRole("button", { name: "Shrink availability" }).click();
-  await page.getByLabel("New availability end time").fill("10:00");
+  await page.getByLabel("End time", { exact: true }).fill("09:30");
   await page.getByRole("button", { name: "Preview change" }).click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Choose an outcome for each booking")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /Move booking/ })).toHaveCount(2);
-  await expect(dialog.getByText("Choose a new date")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: /Move booking/ }).first()).toContainText("Recommended");
+  await expect(dialog.getByText(/4 patients per slot becomes 2/)).toBeVisible();
+  await expect(dialog.getByText(/2 can keep the shortened window and 2 need patient approval/)).toBeVisible();
+  await expect(dialog.getByText("Affected bookings")).toBeVisible();
+  await expect(dialog.getByText("Recommended:", { exact: false }).first()).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Confirm and notify patients" })).toBeEnabled();
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await dialog.getByRole("button", { name: /Move booking/ }).first().click();
-  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
-  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
-  await expect(dialog.getByRole("button", { name: unavailableDate, exact: true })).toBeDisabled();
-  await dialog.getByRole("button", { name: secondAlternativeDate, exact: true }).click();
-  await expect(dialog.getByText(`Available slots on ${new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "Asia/Kolkata" }).format(new Date(`${secondAlternativeDate}T12:00:00.000Z`))}`)).toBeVisible();
-  await dialog.getByRole("button", { name: /9:00 AM.*10:00 AM.*place available/ }).first().click();
-  await expect(dialog.getByText("Choose a new date")).toHaveCount(0);
-  await expect(dialog.getByText(/Moved to:/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Cancel + full refund" }).last().click();
-  await expect(dialog.getByText("Cancel + full refund selected")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Confirm change" })).toBeEnabled();
-  await dialog.getByRole("button", { name: "Change selection" }).first().click();
-  await dialog.getByRole("button", { name: /Move booking/ }).first().click();
-  await expect(dialog.getByText("Choose a new date")).toHaveCount(1);
+  await dialog.getByRole("button", { name: "Confirm and notify patients" }).click();
+  await expect(dialog).toBeHidden();
+
+  const { data: shortenedSlot } = await doctor.client.from("appointment_slots").select("slot_end_at, capacity, allocated_count").eq("id", sourceSlots[0].id).single();
+  expect(shortenedSlot?.capacity).toBe(2);
+  expect(shortenedSlot?.allocated_count).toBe(4);
+  expect(Date.parse(shortenedSlot!.slot_end_at) - Date.parse(sourceSlots[0].slot_start_at)).toBe(30 * 60 * 1000);
+
+  await signInAsPatient(page, patients[0]);
+  await page.goto(`/patient/appointments/${appointmentIds[0]}/confirmation`);
+  await expect(page.getByText("Appointment change needs your decision")).toBeVisible();
+  await page.getByRole("button", { name: "Approve recommended slot" }).click();
+  await expect(page.getByText("Appointment change needs your decision")).toHaveCount(0);
+
+  await signInAsPatient(page, patients[2]);
+  await page.goto(`/patient/appointments/${appointmentIds[2]}/confirmation`);
+  await page.getByRole("button", { name: "Approve recommended slot" }).click();
+  await expect(page.getByText("Appointment change needs your decision")).toHaveCount(0);
+  const { data: movedAppointment } = await doctor.client.from("appointments").select("slot_id, status").eq("id", appointmentIds[2]).single();
+  expect(movedAppointment?.status).toBe("confirmed");
+  expect(movedAppointment?.slot_id).not.toBe(sourceSlots[0].id);
+
+  await signInAsPatient(page, patients[3]);
+  await page.goto(`/patient/appointments/${appointmentIds[3]}/confirmation`);
+  await page.getByRole("button", { name: "Cancel + full refund" }).click();
+  await expect(page.getByText("Appointment change needs your decision")).toHaveCount(0);
+  const { data: cancelledAppointment } = await doctor.client.from("appointments").select("status").eq("id", appointmentIds[3]).single();
+  expect(cancelledAppointment?.status).toBe("cancelled");
+
+  await signInAs(page, doctor);
+  await page.goto(`/doctor/schedule?date=${sourceDate}`);
+  await page.getByRole("button", { name: "Cancel session" }).first().click();
+  await page.getByRole("button", { name: "Cancel session", exact: true }).last().click();
+  await expect(page.getByRole("alert")).toContainText("Use Edit window");
+  expect(alternative.data).toBeTruthy();
+});
+
+test("doctor can preview and close a session occurrence through Edit window", async ({ page }) => {
+  const doctor = await createTestUser("doctor", "close-occurrence-browser-doctor");
+  createdUsers.push(doctor);
+  await onboardTestUser(doctor);
+  const date = futureDate(12);
+  const { data: sessionId, error } = await doctor.client.rpc("create_availability_session_with_slots", {
+    p_session_date: date,
+    p_start_time: "09:00",
+    p_end_time: "10:00",
+    p_timezone: "Asia/Kolkata",
+    p_interval_minutes: 60,
+    p_capacity: 1,
+  });
+  if (error || !sessionId) throw new Error(error?.message ?? "Could not create the close-session test availability.");
+
+  await signInAs(page, doctor);
+  await page.goto(`/doctor/schedule?date=${date}`);
+  await page.getByRole("button", { name: "Edit window" }).first().click();
+  await page.getByRole("button", { name: "Close occurrence" }).click();
+  await page.getByRole("button", { name: "Preview change" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("No booked patients need a decision for this change.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Close occurrence and notify patients" }).click();
+  await expect(dialog).toBeHidden();
+  const { data: closedSession } = await doctor.client.from("availability_sessions").select("status").eq("id", sessionId).single();
+  expect(closedSession?.status).toBe("cancelled");
 });

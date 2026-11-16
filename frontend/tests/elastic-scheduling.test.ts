@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableElasticCandidateDates, availableElasticCandidates, elasticCandidatesForDate, partitionStreamAppointments, reducedStreamCapacity, suggestElasticAssignments, validateElasticWindow, type ElasticPreview } from "../lib/availability/elastic";
+import { availableElasticCandidateDates, availableElasticCandidates, elasticCandidatesForDate, partitionStreamAppointments, reducedStreamCapacity, reducedWaveCapacity, suggestElasticAssignments, validateElasticWindow, type ElasticPreview } from "../lib/availability/elastic";
 
 const base: ElasticPreview = {
   session_id: "session",
@@ -23,6 +23,21 @@ describe("elastic scheduling suggestions", () => {
     expect(reducedStreamCapacity(6, "2099-05-01T04:30:00.000Z", "2099-05-01T05:00:00.000Z", 10)).toBe(3);
     expect(reducedStreamCapacity(4, "2099-05-01T04:30:00.000Z", "2099-05-01T05:20:00.000Z", 10)).toBe(4);
     expect(reducedStreamCapacity(4, "2099-05-01T04:30:00.000Z", "2099-05-01T04:39:00.000Z", 10)).toBe(0);
+  });
+
+  it("preserves Wave patient pace and enforces the 10-minute minimum", () => {
+    expect(reducedWaveCapacity(4, "2099-05-01T04:00:00.000Z", "2099-05-01T05:00:00.000Z", "2099-05-01T04:00:00.000Z", "2099-05-01T04:30:00.000Z", 10)).toBe(2);
+    expect(reducedWaveCapacity(4, "2099-05-01T04:00:00.000Z", "2099-05-01T05:00:00.000Z", "2099-05-01T04:00:00.000Z", "2099-05-01T04:30:00.000Z", 20)).toBe(1);
+    expect(reducedWaveCapacity(4, "2099-05-01T04:00:00.000Z", "2099-05-01T05:00:00.000Z", "2099-05-01T04:00:00.000Z", "2099-05-01T04:09:00.000Z", 10)).toBe(0);
+  });
+
+  it("keeps retained Wave bookings in the edited shared window and routes overflow", () => {
+    const preview: ElasticPreview = { ...base, wave_capacity: { minimum_patient_minutes: 10, patient_minutes: 15, original_capacity: 4, reduced_capacity: 2, booked_count: 4, retained_count: 2, overflow_count: 2 }, wave_retained_appointments: [{ appointment_id: "a", source_slot_id: "wave", patient_id: "pa", start_at: base.old_start_at, end_at: base.old_end_at }, { appointment_id: "b", source_slot_id: "wave", patient_id: "pb", start_at: base.old_start_at, end_at: base.old_end_at }], wave_overflow_appointments: [{ appointment_id: "c", source_slot_id: "wave", patient_id: "pc", start_at: base.old_start_at, end_at: base.old_end_at }], appointments: [{ appointment_id: "a", source_slot_id: "wave", patient_id: "pa", start_at: base.old_start_at, end_at: base.old_end_at }, { appointment_id: "b", source_slot_id: "wave", patient_id: "pb", start_at: base.old_start_at, end_at: base.old_end_at }, { appointment_id: "c", source_slot_id: "wave", patient_id: "pc", start_at: base.old_start_at, end_at: base.old_end_at }], candidates: [{ slot_id: "later", start_at: "2099-05-02T06:00:00.000Z", end_at: "2099-05-02T07:00:00.000Z", remaining_capacity: 1 }] };
+    expect(suggestElasticAssignments(preview)).toEqual([
+      { appointment_id: "a", source_slot_id: "wave", target_slot_id: "wave", action: "moved" },
+      { appointment_id: "b", source_slot_id: "wave", target_slot_id: "wave", action: "moved" },
+      { appointment_id: "c", source_slot_id: "wave", target_slot_id: "later", action: "moved" },
+    ]);
   });
 
   it("retains earliest confirmed Stream bookings and marks later bookings as overflow", () => {
