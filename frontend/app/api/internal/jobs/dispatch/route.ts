@@ -237,11 +237,11 @@ export async function POST(request: Request) {
   const claimed = (await db.execute(sql`select * from public.claim_notification_deliveries(50)`)) as unknown as Array<{ id: string; recipient_id: string; appointment_id: string; channel: string; template: string; dedupe_key: string; attempts: number }>;
   let delivered = 0;
   for (const delivery of claimed) {
-    let details: Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string } | null }> = [];
+    let details: Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string; token?: string } | null }> = [];
     try {
       details = (await db.execute(sql`
         SELECT * FROM public.notification_delivery_context(${delivery.id}::uuid)
-      `)) as unknown as Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string } | null }>;
+      `)) as unknown as Array<{ recipient_id: string; patient_id: string; doctor_id: string; email: string | null; phone: string | null; recipient_name: string; recipient_role: string; patient_name: string; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_metadata: { old_start_at?: string; old_end_at?: string; recommended_start_at?: string; recommended_end_at?: string; decision_deadline?: string; token?: string } | null }>;
     } catch {
       await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'delivery_context_lookup_failed')`);
       await finalizeDeliveryFailure(db, delivery, "internal", "delivery_context_lookup_failed", true);
@@ -254,6 +254,21 @@ export async function POST(request: Request) {
       continue;
     }
     try {
+      let tokenContext: { clinic_name: string; token: string } | undefined;
+      if (delivery.template === "checkin_token") {
+        const current = (await db.execute(sql`SELECT c.name AS clinic_name, 'T' || lpad(e.token_number::text, 3, '0') AS token
+          FROM public.queue_entries e
+          JOIN public.appointments a ON a.id = e.appointment_id
+          JOIN public.queue_sessions s ON s.id = e.session_id
+          JOIN public.clinics c ON c.id = s.clinic_id
+          WHERE a.id = ${delivery.appointment_id}::uuid AND a.status = 'confirmed'
+            AND e.status IN ('waiting','called','in_consultation','skipped') LIMIT 1`)) as unknown as Array<{ clinic_name: string; token: string }>;
+        tokenContext = current[0];
+        if (!tokenContext) {
+          await db.execute(sql`UPDATE public.notification_deliveries SET status = 'cancelled'::notification_delivery_status, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+          continue;
+        }
+      }
       const recipientRole = row.recipient_role === "doctor" || row.recipient_role === "patient" ? row.recipient_role : null;
       const expectedRecipientId = recipientRole === "doctor" ? row.doctor_id : recipientRole === "patient" ? row.patient_id : null;
       if (!recipientRole || !expectedRecipientId || row.recipient_id !== delivery.recipient_id || expectedRecipientId !== delivery.recipient_id) {
@@ -261,7 +276,7 @@ export async function POST(request: Request) {
         await finalizeDeliveryFailure(db, delivery, "internal", "recipient_mismatch", false);
         continue;
       }
-      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at, schedulingType: row.scheduling_type, previousSlotStartAt: row.notification_metadata?.old_start_at, previousSlotEndAt: row.notification_metadata?.old_end_at, recommendedSlotStartAt: row.notification_metadata?.recommended_start_at, recommendedSlotEndAt: row.notification_metadata?.recommended_end_at, decisionDeadline: row.notification_metadata?.decision_deadline }, delivery.channel === "sms" ? "sms" : delivery.channel === "whatsapp" ? "whatsapp" : "email");
+      const content = renderNotificationTemplate({ template: delivery.template, recipientName: row.recipient_name, recipientRole, patientName: row.patient_name, doctorName: row.doctor_name, clinicName: tokenContext?.clinic_name ?? row.clinic_name, timezone: row.timezone, slotStartAt: row.slot_start_at, slotEndAt: row.slot_end_at, schedulingType: row.scheduling_type, previousSlotStartAt: row.notification_metadata?.old_start_at, previousSlotEndAt: row.notification_metadata?.old_end_at, recommendedSlotStartAt: row.notification_metadata?.recommended_start_at, recommendedSlotEndAt: row.notification_metadata?.recommended_end_at, decisionDeadline: row.notification_metadata?.decision_deadline, token: tokenContext?.token ?? row.notification_metadata?.token }, delivery.channel === "sms" ? "sms" : delivery.channel === "whatsapp" ? "whatsapp" : "email");
       const result = delivery.channel === "sms"
         ? (row.phone ? await sendSms({ to: row.phone, text: content.text, idempotencyKey: delivery.id }) : { status: "skipped" as const, provider: process.env.SMS_PROVIDER?.trim().toLowerCase() === "vonage" ? "vonage" : "twilio", errorCode: "phone_missing" })
         : delivery.channel === "whatsapp"

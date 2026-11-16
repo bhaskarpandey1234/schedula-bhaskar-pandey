@@ -20,7 +20,7 @@ const authUsers = auth.table("users", {
   id: uuid("id").primaryKey(),
 });
 
-export const userRole = pgEnum("user_role", ["patient", "doctor"]);
+export const userRole = pgEnum("user_role", ["patient", "doctor", "staff", "admin"]);
 
 function auditColumns() {
   return {
@@ -52,12 +52,26 @@ export const patients = pgTable("patients", {
   ...auditColumns(),
 });
 
+export const clinics = pgTable("clinics", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  timezone: text("timezone").notNull(),
+  ...auditColumns(),
+});
+
+export const staffClinicMemberships = pgTable("staff_clinic_memberships", {
+  staffId: uuid("staff_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  clinicId: uuid("clinic_id").notNull().references(() => clinics.id),
+  ...auditColumns(),
+});
+
 export const doctors = pgTable("doctors", {
   id: uuid("id")
     .primaryKey()
     .references(() => profiles.id, { onDelete: "cascade" }),
   specialty: text("specialty").notNull(),
   clinicName: text("clinic_name").notNull(),
+  clinicId: uuid("clinic_id").references(() => clinics.id),
   experienceYears: integer("experience_years").notNull(),
   biography: text("biography").notNull(),
   timezone: text("timezone").notNull(),
@@ -72,7 +86,7 @@ export const availabilitySessionKind = pgEnum("availability_session_kind", ["wee
 export const availabilitySchedulingType = pgEnum("availability_scheduling_type", ["wave", "stream"]);
 export const appointmentSlotStatus = pgEnum("appointment_slot_status", ["available", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["payment_pending", "confirmed", "reschedule_pending", "cancelled", "expired", "completed"]);
-export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled", "payment_confirmed", "payment_failed", "refund_pending", "refund_processed", "refund_failed", "appointment_rescheduled", "elastic_reschedule_proposed", "appointment_reminder"]);
+export const notificationType = pgEnum("notification_type", ["appointment_booked", "appointment_cancelled", "payment_confirmed", "payment_failed", "refund_pending", "refund_processed", "refund_failed", "appointment_rescheduled", "elastic_reschedule_proposed", "appointment_reminder", "checkin_token"]);
 export const reservationStatus = pgEnum("reservation_status", ["active", "converted", "released", "expired"]);
 export const reservationPurpose = pgEnum("reservation_purpose", ["booking", "reschedule"]);
 export const paymentStatus = pgEnum("payment_status", ["creating", "pending", "captured", "failed", "abandoned", "expired", "captured_unallocated"]);
@@ -82,6 +96,8 @@ export const rescheduleStatus = pgEnum("reschedule_status", ["pending", "complet
 export const notificationChannel = pgEnum("notification_channel", ["email", "sms", "whatsapp"]);
 export const deliveryStatus = pgEnum("delivery_status", ["pending", "processing", "sent", "failed", "cancelled"]);
 export const notificationDeliveryStatus = pgEnum("notification_delivery_status", ["pending", "processing", "sent", "delivered", "failed", "undeliverable", "cancelled"]);
+export const attendanceStatus = pgEnum("attendance_status", ["eligible", "checked_in", "no_show"]);
+export const queueEntryStatus = pgEnum("queue_entry_status", ["waiting", "called", "in_consultation", "skipped", "completed", "cancelled"]);
 
 export const refundPolicies = pgTable("refund_policies", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -157,6 +173,50 @@ export const appointments = pgTable("appointments", {
   patientIdx: index("appointments_patient_idx").on(table.patientId, table.createdAt),
   doctorIdx: index("appointments_doctor_idx").on(table.doctorId, table.createdAt),
 }));
+
+export const appointmentAttendance = pgTable("appointment_attendance", {
+  appointmentId: uuid("appointment_id").primaryKey().references(() => appointments.id, { onDelete: "cascade" }),
+  status: attendanceStatus("status").notNull(),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+  checkedInBy: uuid("checked_in_by").references(() => profiles.id, { onDelete: "set null" }),
+  noShowAt: timestamp("no_show_at", { withTimezone: true }),
+  noShowBy: uuid("no_show_by").references(() => profiles.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const queueSessions = pgTable("queue_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clinicId: uuid("clinic_id").notNull().references(() => clinics.id),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  serviceDate: date("service_date").notNull(),
+  timezone: text("timezone").notNull(),
+  lastToken: integer("last_token").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ doctorDate: uniqueIndex("queue_sessions_doctor_id_service_date_key").on(table.doctorId, table.serviceDate) }));
+
+export const queueEntries = pgTable("queue_entries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => queueSessions.id, { onDelete: "cascade" }),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  tokenNumber: integer("token_number").notNull(),
+  status: queueEntryStatus("status").notNull().default("waiting"),
+  priorityAt: timestamp("priority_at", { withTimezone: true }).notNull(),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }).notNull(),
+  calledAt: timestamp("called_at", { withTimezone: true }),
+  consultationStartedAt: timestamp("consultation_started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ appointmentUnique: uniqueIndex("queue_entries_appointment_id_key").on(table.appointmentId), tokenUnique: uniqueIndex("queue_entries_session_id_token_number_key").on(table.sessionId, table.tokenNumber) }));
+
+export const queueEvents = pgTable("queue_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  entryId: uuid("entry_id").references(() => queueEntries.id, { onDelete: "set null" }),
+  actorId: uuid("actor_id").references(() => profiles.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ appointmentIdx: index("queue_events_appointment_idx").on(table.appointmentId, table.createdAt) }));
 
 export const slotReservations = pgTable("slot_reservations", {
   id: uuid("id").defaultRandom().primaryKey(),

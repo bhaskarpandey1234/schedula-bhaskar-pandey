@@ -25,4 +25,13 @@ describe("notification templates", () => {
     expect(rendered.text).toContain("appointment with Aman");
     expect(rendered.text).not.toContain("Raj booked a slot");
   });
+
+  it("emails the issued check-in token with the clinic and doctor", () => {
+    const rendered = renderNotificationTemplate({ ...input, template: "checkin_token", token: "T007" }, "email");
+    expect(rendered.subject).toContain("T007");
+    expect(rendered.text).toContain("T007");
+    expect(rendered.text).toContain("River Clinic");
+    expect(rendered.text).toContain("Dr. Rao");
+    expect(rendered.text).toContain("Asia/Kolkata");
+  });
 });

@@ -15,8 +15,10 @@ export async function getCurrentAccount() {
   if (!profile) return { user: userData.user, profile: null, onboardingComplete: false, emailVerified };
   const detailsQuery = profile.role === "patient"
     ? supabase.from("patients").select("phone, date_of_birth").eq("id", userData.user.id).maybeSingle()
-    : supabase.from("doctors").select("phone, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor, consultation_currency").eq("id", userData.user.id).maybeSingle();
-  const { data: rawDetails } = await detailsQuery;
+    : profile.role === "doctor"
+      ? supabase.from("doctors").select("phone, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor, consultation_currency").eq("id", userData.user.id).maybeSingle()
+      : null;
+  const { data: rawDetails } = detailsQuery ? await detailsQuery : { data: {} };
   const details = rawDetails ? { ...(rawDetails as Record<string, unknown>), full_name: profile.full_name } : null;
   const completion: ProfileCompletion = evaluateProfileCompletion(profile.role, userData.user.email, details);
   return { user: userData.user, profile, onboardingComplete: completion.complete, completion, emailVerified };

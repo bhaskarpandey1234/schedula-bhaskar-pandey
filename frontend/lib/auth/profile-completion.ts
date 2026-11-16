@@ -58,7 +58,7 @@ export function evaluateProfileCompletion(role: Role, email: string | null | und
   if (role === "patient") {
     if (!phonePattern.test(String(details?.phone ?? ""))) missing.push("phone");
     if (!validDateOfBirth(details?.date_of_birth)) missing.push("dateOfBirth");
-  } else {
+  } else if (role === "doctor") {
     if (!phonePattern.test(String(details?.phone ?? ""))) missing.push("phone");
     if (!String(details?.specialty ?? "").trim()) missing.push("specialty");
     if (!String(details?.clinic_name ?? "").trim()) missing.push("clinicName");
