@@ -18,12 +18,14 @@ This document records the production deployment evidence for the Schedula MVP. I
 - [x] Create the hosted Supabase production project (`schedula-healthcare`, ref `eqckoayhycvbkxqudocw`).
 - [x] Apply the ordered migrations in `frontend/drizzle/` using the secure IPv4 session pooler; the temporary database credential was not added to Vercel or Git.
 - [x] Confirm the migrated public schema contains seven tables; provider dashboard is healthy.
-- [x] Enable Supabase email/password sign-up and email confirmation (default provider configuration).
+- [x] Enable Supabase email/password sign-up and email confirmation.
+- [ ] Configure Supabase Auth custom SMTP before inviting external production recipients; the default Supabase sender is limited to the project team's authorized addresses.
 - [x] Set the production Site URL to the deployed HTTPS URL.
 - [x] Add exact production redirects for `/auth/confirm?next=/onboarding` and `/auth/confirm?next=/auth/update-password`.
 - [ ] Configure confirmation and recovery email templates with `{{ .TokenHash }}` and the matching `email` or `recovery` OTP type.
 - [x] Configure Vercel with `frontend/` as the project root, Next.js preset, and Node 22.
-- [x] Add only `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` to Vercel production.
+- [x] Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` to Vercel production.
+- [ ] Add `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel secret in every environment that enables admin or staff invitations. Do not expose it through `NEXT_PUBLIC_` or record its value here.
 - [x] Keep `RESEND_*` unset for this release.
 - [ ] Create a future demo doctor availability through the application without recording credentials here.
 
