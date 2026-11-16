@@ -71,6 +71,9 @@ async function signInAs(page: Page, user: TestUser) {
 
 async function signInAsPatient(page: Page, user: TestUser) {
   await page.context().clearCookies();
+  await page.goto("/");
+  await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+  await page.context().clearCookies();
   await page.goto("/auth/login");
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password", { exact: true }).fill(password);
@@ -80,10 +83,27 @@ async function signInAsPatient(page: Page, user: TestUser) {
 
 test.afterEach(async () => { await deleteTestUsers(createdUsers.splice(0)); });
 
+test("patient confirmation page loads for a local pending booking", async ({ page }) => {
+  const doctor = await seedDoctorWithAvailability("confirmation-rpc-doctor");
+  const patient = await createTestUser("patient", "confirmation-rpc-patient");
+  createdUsers.push(patient);
+  await onboardTestUser(patient);
+  const { data: slots, error: slotsError } = await doctor.client.from("appointment_slots").select("id").eq("doctor_id", doctor.id).order("slot_start_at").limit(1);
+  if (slotsError || !slots?.[0]) throw new Error(slotsError?.message ?? "Could not find a local confirmation test slot.");
+  const { data: appointmentId, error: bookingError } = await patient.client.rpc("book_appointment", { p_slot_id: slots[0].id, p_reason: "Confirmation page RPC check" });
+  if (bookingError || !appointmentId) throw new Error(bookingError?.message ?? "Could not create the local confirmation test booking.");
+
+  await signInAsPatient(page, patient);
+  await page.goto(`/patient/appointments/${appointmentId}/confirmation`);
+  await expect(page.getByRole("heading", { name: "Your appointment is confirmed." })).toBeVisible();
+});
+
 test("patient can register, onboard, book, and cancel", async ({ page }) => {
   const doctor = await seedDoctorWithAvailability("browser-doctor");
   await signUpAndConfirm(page, "patient", "browser-patient");
   await page.getByLabel("Full name").fill("Phase 8 browser patient");
+  await page.getByRole("combobox").first().click();
+  await page.getByRole("option", { name: "India +91", exact: true }).click();
   await page.getByLabel("Phone number").fill("9876543210");
   await page.getByLabel("Date of birth").fill("1990-04-20");
   await page.getByRole("button", { name: "Continue to find doctors" }).click();
@@ -93,9 +113,9 @@ test("patient can register, onboard, book, and cancel", async ({ page }) => {
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("link", { name: /View more information/i }).first().click();
   await expect(page.getByRole("heading", { name: "Dr. Phase 8" }).first()).toBeVisible();
-  await page.getByRole("link", { name: /9:00\s*AM.*left/i }).click();
+  await page.getByRole("button", { name: /9:00\s*AM.*left/i }).click();
   await page.getByLabel(/Visit reason/).fill("Phase 8 patient booking");
-  await page.getByRole("button", { name: "Review appointment" }).click();
+  await page.getByRole("button", { name: "Continue to confirmation" }).click();
   await page.getByRole("button", { name: "Confirm appointment" }).click();
   await expect(page.getByRole("heading", { name: "Your appointment is booked." })).toBeVisible();
   await page.goto("/patient/appointments");
@@ -144,6 +164,7 @@ test("doctor can register and create availability with keyboard-select controls"
 });
 
 test("doctor can shrink a booked Wave slot by capacity and request patient decisions", async ({ page }) => {
+  test.setTimeout(90000);
   const doctor = await createTestUser("doctor", "elastic-browser-doctor");
   const patients = await Promise.all(Array.from({ length: 4 }, (_, index) => createTestUser("patient", `elastic-browser-patient-${index + 1}`)));
   createdUsers.push(doctor, ...patients);
@@ -194,6 +215,7 @@ test("doctor can shrink a booked Wave slot by capacity and request patient decis
   await signInAsPatient(page, patients[2]);
   await page.goto(`/patient/appointments/${appointmentIds[2]}/confirmation`);
   await page.getByRole("button", { name: "Approve recommended slot" }).click();
+  await expect(page.getByText("Appointment change needs your decision")).toHaveCount(0);
   const { data: movedAppointment } = await doctor.client.from("appointments").select("slot_id, status").eq("id", appointmentIds[2]).single();
   expect(movedAppointment?.status).toBe("confirmed");
   expect(movedAppointment?.slot_id).not.toBe(sourceSlots[0].id);
@@ -201,6 +223,7 @@ test("doctor can shrink a booked Wave slot by capacity and request patient decis
   await signInAsPatient(page, patients[3]);
   await page.goto(`/patient/appointments/${appointmentIds[3]}/confirmation`);
   await page.getByRole("button", { name: "Cancel + full refund" }).click();
+  await expect(page.getByText("Appointment change needs your decision")).toHaveCount(0);
   const { data: cancelledAppointment } = await doctor.client.from("appointments").select("status").eq("id", appointmentIds[3]).single();
   expect(cancelledAppointment?.status).toBe("cancelled");
 

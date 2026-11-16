@@ -9,6 +9,13 @@ ALTER TABLE public.availability_occurrence_overrides
   ADD COLUMN IF NOT EXISTS minimum_patient_minutes integer,
   ADD COLUMN IF NOT EXISTS closed boolean NOT NULL DEFAULT false;
 
+-- A shrink can temporarily leave confirmed appointments over the revised capacity
+-- while their patients decide whether to move or cancel.
+ALTER TABLE public.appointment_slots
+  DROP CONSTRAINT IF EXISTS appointment_slots_allocated_count,
+  DROP CONSTRAINT IF EXISTS appointment_slots_allocated_count_nonnegative,
+  ADD CONSTRAINT appointment_slots_allocated_count_nonnegative CHECK (allocated_count >= 0);
+
 UPDATE public.availability_occurrence_overrides o
 SET minimum_patient_minutes = COALESCE(o.stream_min_patient_minutes, a.minimum_patient_minutes, 10)
 FROM public.availability_sessions a
@@ -438,18 +445,12 @@ BEGIN
     'IF target.status <> ''available'' OR (target.allocated_count >= target.capacity AND target.id <> p.source_slot_id) THEN');
   IF position('target.id <> p.source_slot_id' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch elastic recommendation capacity guard'; END IF;
   v_definition := replace(v_definition,
-    'IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;
-  UPDATE appointment_slots SET allocated_count = allocated_count + 1 WHERE id = target.id;
-  INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');
-  UPDATE appointments SET slot_id = target.id, status = ''confirmed'', updated_at = now() WHERE id = p.appointment_id;',
-    'IF target.id <> p.source_slot_id THEN
-    IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;
-    UPDATE appointment_slots SET allocated_count = allocated_count + 1 WHERE id = target.id;
-    INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');
-  END IF;
-  UPDATE appointments SET slot_id = target.id, status = ''confirmed'', updated_at = now() WHERE id = p.appointment_id;');
-  IF position('IF target.id <> p.source_slot_id THEN
-    IF NOT p.source_allocation_held THEN' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch same-window approval allocation handling'; END IF;
+    'IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;',
+    'IF target.id <> p.source_slot_id THEN IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;');
+  v_definition := replace(v_definition,
+    'INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');',
+    'INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years''); END IF;');
+  IF position('IF target.id <> p.source_slot_id THEN IF NOT p.source_allocation_held THEN' IN v_definition)=0 OR position('now() + interval ''100 years''); END IF;' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch same-window approval allocation handling'; END IF;
   EXECUTE v_definition;
 
   SELECT pg_get_functiondef('public.choose_elastic_booking_slot(uuid,uuid)'::regprocedure) INTO v_definition;
@@ -458,18 +459,12 @@ BEGIN
     'target.status <> ''available'' OR (target.allocated_count >= target.capacity AND target.id <> p.source_slot_id) OR target.scheduling_type <> p.scheduling_type');
   IF position('target.id <> p.source_slot_id' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch alternate-slot capacity guard'; END IF;
   v_definition := replace(v_definition,
-    'IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;
-  UPDATE appointment_slots SET allocated_count = allocated_count + 1 WHERE id = target.id;
-  INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');
-  UPDATE appointments SET slot_id = target.id, status = ''confirmed'', updated_at = now() WHERE id = p.appointment_id;',
-    'IF target.id <> p.source_slot_id THEN
-    IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;
-    UPDATE appointment_slots SET allocated_count = allocated_count + 1 WHERE id = target.id;
-    INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');
-  END IF;
-  UPDATE appointments SET slot_id = target.id, status = ''confirmed'', updated_at = now() WHERE id = p.appointment_id;');
-  IF position('IF target.id <> p.source_slot_id THEN
-    IF NOT p.source_allocation_held THEN' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch same-window alternate allocation handling'; END IF;
+    'IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;',
+    'IF target.id <> p.source_slot_id THEN IF NOT p.source_allocation_held THEN UPDATE appointment_slots SET allocated_count = GREATEST(0, allocated_count - 1) WHERE id = p.source_slot_id; END IF;');
+  v_definition := replace(v_definition,
+    'INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years'');',
+    'INSERT INTO slot_reservations(appointment_id, patient_id, doctor_id, slot_id, purpose, status, expires_at) VALUES (p.appointment_id, p.patient_id, p.doctor_id, target.id, ''reschedule'', ''converted'', now() + interval ''100 years''); END IF;');
+  IF position('IF target.id <> p.source_slot_id THEN IF NOT p.source_allocation_held THEN' IN v_definition)=0 OR position('now() + interval ''100 years''); END IF;' IN v_definition)=0 THEN RAISE EXCEPTION 'Could not patch same-window alternate allocation handling'; END IF;
   EXECUTE v_definition;
 END;
 $migration$;

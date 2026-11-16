@@ -41,7 +41,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.apply_doctor_occurrence_adjustment(
-  p_session_id uuid, p_occurrence_date date, p_start_time time, p_end_time time, p_assignments jsonb
+  p_session_id uuid, p_occurrence_date date, p_start_time time, p_end_time time, p_assignments jsonb DEFAULT '[]'::jsonb
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_doctor uuid := auth.uid(); v_session record; v_timezone text; v_old_start time; v_old_end time;
@@ -191,7 +191,7 @@ BEGIN
     FOR v_date IN SELECT series_date::date FROM generate_series(v_rule.recurrence_start_date, v_rule.recurrence_end_date, interval '1 day') dates(series_date)
       WHERE series_date::date >= v_today
         AND ((v_rule.kind = 'weekly' AND extract(isodow FROM series_date) = v_rule.day_of_week)
-          OR (v_rule.kind = 'monthly' AND ((v_rule.monthly_days IS NOT NULL AND extract(day FROM series_date)::integer = ANY(v_rule.monthly_days)) OR (v_rule.monthly_days IS NULL AND extract(day FROM series_date) BETWEEN extract(day FROM v_rule.recurrence_start_date) AND v_rule.monthly_range_end_day)))
+          OR (v_rule.kind = 'monthly' AND ((v_rule.monthly_days IS NOT NULL AND extract(day FROM series_date)::integer = ANY(v_rule.monthly_days)) OR (v_rule.monthly_days IS NULL AND extract(day FROM series_date) BETWEEN extract(day FROM v_rule.recurrence_start_date) AND v_rule.monthly_range_end_day))))
         AND NOT EXISTS (SELECT 1 FROM availability_sessions custom WHERE custom.doctor_id = p_doctor_id AND custom.kind = 'custom' AND custom.status = 'active' AND custom.session_date = series_date::date)
         LOOP
       v_override_start := NULL; v_override_end := NULL; v_override_capacity := NULL;

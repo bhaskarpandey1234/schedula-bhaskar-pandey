@@ -143,6 +143,7 @@ $$;--> statement-breakpoint
 DROP FUNCTION IF EXISTS public.create_availability_session_with_slots(date, time, time, text, integer, integer, availability_scheduling_type);
 CREATE OR REPLACE FUNCTION public.create_availability_session_with_slots(p_session_date date, p_start_time time, p_end_time time, p_timezone text, p_interval_minutes integer DEFAULT 30, p_capacity integer DEFAULT 3, p_scheduling_type public.availability_scheduling_type DEFAULT 'wave') RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN RETURN public.create_custom_availability_with_slots(p_session_date, p_start_time, p_end_time, p_timezone, p_interval_minutes, p_capacity, p_scheduling_type); END; $$;--> statement-breakpoint
 
+DROP FUNCTION IF EXISTS public.public_doctor_directory(text, text);
 CREATE OR REPLACE FUNCTION public.public_doctor_directory(p_search text DEFAULT NULL, p_specialty text DEFAULT NULL)
 RETURNS TABLE(doctor_id uuid, full_name text, specialty text, clinic_name text, experience_years integer, available_dates date[])
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
