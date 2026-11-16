@@ -22,3 +22,14 @@ export async function resendPendingStaffInvitation(
   });
   return !error;
 }
+
+export function isExistingAuthUserError(error: { code?: string; message?: string } | null): boolean {
+  const code = error?.code?.toLowerCase() ?? "";
+  const message = error?.message?.toLowerCase() ?? "";
+  return code === "email_exists"
+    || code === "user_already_exists"
+    || code === "email_address_not_authorized"
+    || message.includes("already been registered")
+    || message.includes("already exists")
+    || message.includes("already registered");
+}

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { getCurrentAccount } from "@/lib/auth/guards";
-import { resendPendingStaffInvitation } from "@/lib/auth/staff-invitations";
+import { isExistingAuthUserError, resendPendingStaffInvitation } from "@/lib/auth/staff-invitations";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
 
@@ -54,9 +54,12 @@ export async function clinicAdminAction(_: AdminActionState, formData: FormData)
       // pending invite is still unconfirmed, so re-send its standard signup
       // confirmation email instead. This deliberately makes no profile or
       // clinic-assignment changes for an already-existing account.
-      if (error?.code === "email_exists") {
+      if (isExistingAuthUserError(error)) {
         const resent = await resendPendingStaffInvitation(service, email, getAuthConfirmRedirect("/auth/update-password"));
-        if (resent) return { success: "If this staff member has a pending invitation, a fresh account setup email was sent." };
+        if (resent) {
+          revalidatePath("/admin");
+          return { success: "A fresh account setup email was sent. If the email is already confirmed, ask the staff member to sign in." };
+        }
       }
       return { error: "The invitation could not be sent. Check whether this email already has an account." };
     }
