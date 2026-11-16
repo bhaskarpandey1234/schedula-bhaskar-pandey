@@ -17,6 +17,13 @@ export type ProfileCompletion = {
   missingFields: ProfileMissingField[];
 };
 
+export function profileCompletionDetails(
+  profileFullName: string | null,
+  roleDetails: Record<string, unknown> | null | undefined,
+) {
+  return { ...(roleDetails ?? {}), full_name: profileFullName };
+}
+
 export const profileFieldLabels: Record<ProfileMissingField, string> = {
   email: "a verified email address",
   fullName: "your full name",

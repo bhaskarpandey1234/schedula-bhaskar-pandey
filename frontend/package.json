@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "invite:admin": "node scripts/invite-admin.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs",
     "seed:assistant-pilot": "node scripts/assistant-pilot-seed.mjs"
   },
   "dependencies": {

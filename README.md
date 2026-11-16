@@ -50,6 +50,20 @@ pnpm --filter frontend invite:admin admin@example.com "Clinic Administrator"
 
 The command sends a password setup invitation; public sign-up cannot choose admin or staff. Admins invite staff from `/admin`. Keep the service-role key server-only, and configure the Auth confirmation redirect for the deployed site. This branch has not been deployed to a hosted project.
 
+### One-time production admin seed
+
+For a synthetic admin that signs in directly with a password, run the manual seed only after queue migrations are applied. It is hard-pinned to production project `eqckoayhycvbkxqudocw`, refuses CI/Vercel and refuses an existing generated email. It does not load `.env` files. The random login email is printed on success; the password is read from `ADMIN_SEED_PASSWORD` and is never printed or stored by the script.
+
+Run this from PowerShell in the repository:
+
+```powershell
+.\frontend\scripts\seed-admin-production.ps1
+```
+
+The script prompts privately for the service-role key and password, then clears its temporary environment values.
+
+The generated address uses the public `@mailinator.com` domain as requested. Anyone can read that inbox, including future password-reset messages; use this account only with that exposure understood. The seeded account is email-confirmed directly and no invitation email is sent.
+
 ## Free-tier assistant pilot
 
 The assistant is available at `/doctor/assistant` and `/patient/assistant` after migration `frontend/drizzle/0042-ai-assistant-pilot.sql` is applied. It is deliberately disabled unless `ASSISTANT_PILOT_MODE=true`, `GROQ_API_KEY` is configured, and the signed-in synthetic account exists in `assistant_pilot_access`.
