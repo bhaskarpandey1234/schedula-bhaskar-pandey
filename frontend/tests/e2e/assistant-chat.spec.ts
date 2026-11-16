@@ -54,6 +54,10 @@ test("doctor assistant renders verified appointment cards without patient names 
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/doctor$/);
   await page.goto("/doctor/assistant");
+  await expect(page.getByRole("heading", { name: "AI Scheduling Assistant" })).toBeVisible();
+  await expect(page.getByText("Doctor Workspace")).toBeVisible();
+  await expect(page.getByText("Doctor scheduling · No medical advice")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show today's appointments" })).toBeVisible();
   const conversation = page.getByRole("log", { name: "Assistant conversation" });
   await page.getByPlaceholder("Ask about appointments or slots…").fill("show my upcoming appointments");
   await page.getByPlaceholder("Ask about appointments or slots…").press("Enter");
@@ -66,6 +70,125 @@ test("doctor assistant renders verified appointment cards without patient names 
   await expect(conversation.getByText("Visit reason: Consultation")).toBeVisible();
   await expect(conversation.getByText("Raj Pandey", { exact: true })).toHaveCount(0);
   await expect(conversation.getByText(/appointment_id|idempotency key/i)).toHaveCount(0);
+});
+
+test("assistant history navigation, naming, rename, and deletion update locally", async ({ page }) => {
+  const doctor = await createTestUser("doctor", "assistant-history-ux");
+  users.push(doctor);
+  await onboardTestUser(doctor);
+  const firstId = "11111111-1111-4111-8111-111111111111";
+  const secondId = "22222222-2222-4222-8222-222222222222";
+  const newId = "33333333-3333-4333-8333-333333333333";
+  const conversations = [
+    { id: firstId, title: "New chat 3", role: "doctor", created_at: "2026-11-15T10:00:00.000Z", updated_at: "2026-11-15T10:00:00.000Z" },
+    { id: secondId, title: "Previous visit", role: "doctor", created_at: "2026-11-14T10:00:00.000Z", updated_at: "2026-11-14T10:00:00.000Z" },
+  ];
+  let listRequests = 0;
+  let createdTitle = "";
+
+  await page.route("**/api/assistant/conversations**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const conversationId = url.pathname.split("/").at(-1);
+    if (request.method() === "GET" && url.pathname === "/api/assistant/conversations") {
+      listRequests += 1;
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ conversations }) });
+      return;
+    }
+    if (request.method() === "GET" && conversationId === firstId) {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ messages: [{ role: "assistant", text: "First saved answer.", timestamp: "10:00 AM" }] }) });
+      return;
+    }
+    if (request.method() === "GET" && conversationId === secondId) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ messages: [{ role: "assistant", text: "Second saved answer.", timestamp: "9:00 AM" }] }) });
+      return;
+    }
+    if (request.method() === "POST" && url.pathname === "/api/assistant/conversations") {
+      const body = request.postDataJSON() as { role: string; title: string };
+      createdTitle = body.title;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const created = { id: newId, title: body.title, role: body.role, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      conversations.unshift(created);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ conversation: created }) });
+      return;
+    }
+    if (request.method() === "PATCH" && conversationId === secondId) {
+      const body = request.postDataJSON() as { title: string };
+      const updated = { ...conversations.find((item) => item.id === secondId)!, title: body.title };
+      conversations[1] = updated;
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ conversation: updated }) });
+      return;
+    }
+    if (request.method() === "DELETE" && conversationId === firstId) {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+    await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not found" }) });
+  });
+  await page.route("**/api/assistant/chat", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ text: "Found three dermatologists.", displays: [], conversationId: newId }) });
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "SpeechRecognition", { value: undefined, configurable: true });
+    Object.defineProperty(window, "webkitSpeechRecognition", { value: undefined, configurable: true });
+  });
+
+  await page.goto("/auth/login");
+  await page.getByLabel("Email").fill(doctor.email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/doctor$/);
+  await page.goto("/doctor/assistant");
+  const conversation = page.getByRole("log", { name: "Assistant conversation" });
+  await expect(conversation.getByText("First saved answer.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Chat history" }).click();
+  const history = page.getByRole("list", { name: "Past conversations" });
+  await history.getByRole("button", { name: "Previous visit" }).click();
+  await expect(page.getByText("Opening conversation…", { exact: true })).toBeVisible();
+  await expect(conversation.getByText("First saved answer.")).toHaveCount(0);
+  await expect(conversation.getByText("Second saved answer.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Chat history" }).click();
+  await history.getByRole("button", { name: "Rename Previous visit" }).click();
+  await page.getByRole("textbox", { name: "Chat name" }).fill("Clinic availability");
+  await page.getByRole("button", { name: "Save chat name" }).click();
+  await expect(history.getByRole("button", { name: "Clinic availability" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Start new chat" }).click();
+  await expect(page.getByText("Opening a new chat…", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Ask about appointments or slots…")).toBeVisible();
+  expect(createdTitle).toBe("New chat 4");
+  const input = page.getByPlaceholder("Ask about appointments or slots…");
+  await input.fill("Find a dermatologist");
+  await input.press("Enter");
+  await expect(conversation.getByText("Found three dermatologists.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Chat history" }).click();
+  await expect(history.getByRole("button", { name: "Find a dermatologist" })).toBeVisible();
+  await history.getByRole("button", { name: "Delete New chat 3" }).click();
+  const confirmation = page.getByRole("dialog", { name: "Delete this chat?" });
+  await expect(confirmation).toContainText("This permanently deletes");
+  await confirmation.getByRole("button", { name: "Delete chat" }).click();
+  await expect(history.getByRole("button", { name: "Delete New chat 3" })).toHaveCount(0);
+  expect(listRequests).toBe(1);
+  await page.getByRole("button", { name: "Back to chat" }).click();
+  await expect(conversation.getByText("Found three dermatologists.")).toBeVisible();
+
+  await page.goto("/doctor");
+  const openAssistant = page.getByRole("button", { name: "Open AI assistant" });
+  await expect(openAssistant).toBeVisible();
+  await openAssistant.click();
+  const drawer = page.getByRole("dialog", { name: "Schedula assistant" });
+  await expect(drawer).toBeVisible();
+  const drawerHeading = drawer.getByRole("heading", { name: /Assistant/ });
+  await expect(drawerHeading).toBeVisible();
+  await expect.poll(() => drawerHeading.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(drawer.getByText("Doctor scheduling · No medical advice", { exact: true })).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Show today's appointments" }).click();
+  await expect(drawer.getByText("Found three dermatologists.")).toBeVisible();
+  await expect(drawer.getByText("Suggestions:", { exact: true })).toHaveCount(0);
 });
 
 test("assistant shows success, retry, confirmation, and stale-action recovery states", async ({ page }) => {
@@ -93,7 +216,10 @@ test("assistant shows success, retry, confirmation, and stale-action recovery st
       return;
     }
     if (text === "wait") await new Promise((resolve) => setTimeout(resolve, 300));
-    const reply = text === "long response"
+    if (text === "slow") await new Promise((resolve) => setTimeout(resolve, 500));
+    const reply = text === "slow"
+      ? "Late response."
+      : text === "long response"
       ? "This schedule summary contains enough detail to verify independent conversation scrolling. ".repeat(16)
       : "Your schedule is clear.\n\n**Next slot:** Tuesday at 9:00 AM.";
     const displays = text === "long response"
@@ -121,6 +247,7 @@ test("assistant shows success, retry, confirmation, and stale-action recovery st
   await expect(page).toHaveURL(/\/doctor$/);
   await page.goto("/doctor/assistant");
 
+  await expect(page.getByText("Doctor scheduling · No medical advice", { exact: true })).toHaveCount(0);
   const heading = page.getByRole("heading", { name: "AI scheduling assistant" });
   const header = page.locator("header");
   await expect(heading).toBeInViewport();
@@ -132,6 +259,13 @@ test("assistant shows success, retry, confirmation, and stale-action recovery st
 
   const conversation = page.getByRole("log", { name: "Assistant conversation" });
   await expect(conversation).toBeVisible();
+  const quickActions = page.locator('[aria-label="Quick scheduling actions"]');
+  await expect(quickActions).toBeVisible();
+  const conversationBox = await conversation.boundingBox();
+  const quickActionsBox = await quickActions.boundingBox();
+  expect(conversationBox).not.toBeNull();
+  expect(quickActionsBox).not.toBeNull();
+  expect(quickActionsBox!.y).toBeGreaterThan(conversationBox!.y);
   const input = page.getByPlaceholder("Ask about appointments or slots…");
   await expect(input).toBeInViewport();
   await page.getByLabel("Assistant language").click();
@@ -157,11 +291,22 @@ test("assistant shows success, retry, confirmation, and stale-action recovery st
   await expect(page.getByRole("status")).toContainText("Schedula is preparing a response…");
   await expect(conversation.getByText("Your schedule is clear.")).toHaveCount(2);
 
+  await input.fill("slow");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "Stop assistant response" })).toBeEnabled();
+  await page.getByRole("button", { name: "Stop assistant response" }).click();
+  await expect(conversation.getByText("Response stopped.")).toBeVisible();
+  await page.waitForTimeout(600);
+  await expect(conversation.getByText("Late response.")).toHaveCount(0);
+
   await input.fill("long response");
   await input.press("Enter");
   await expect(conversation.getByText(/This schedule summary contains enough detail/)).toBeVisible();
   const scrollMetrics = await conversation.evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }));
   expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+  expect(await conversation.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe("none");
+  await conversation.hover();
+  expect(await conversation.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe("thin");
   await expect(input).toBeInViewport();
 
   await input.fill("fail");
@@ -204,12 +349,24 @@ test("patient assistant first-open layout and suggested prompts are available", 
   await expect(page).toHaveURL(/\/patient$/);
   await page.goto("/patient/assistant");
 
-  await expect(page.getByRole("heading", { name: "AI care assistant" })).toBeInViewport();
+  await expect(page.getByRole("heading", { name: "AI Care & Booking Assistant" })).toBeInViewport();
+  await expect(page.getByText("Patient Hub")).toBeVisible();
+  await expect(page.getByText("Appointment help · No medical advice")).toBeVisible();
   await expect(page.getByRole("log", { name: "Assistant conversation" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Show my upcoming appointments" })).toBeVisible();
   await page.getByRole("button", { name: "Find a cardiologist" }).click();
   await expect(page.getByText("I can help you find an appointment.")).toBeVisible();
   await expect(page.getByLabel("Message to the assistant")).toBeInViewport();
+
+  await page.goto("/patient");
+  const openAssistant = page.getByRole("button", { name: "Open AI assistant" });
+  await expect(openAssistant).toBeVisible();
+  await openAssistant.click();
+  const drawer = page.getByRole("dialog", { name: "Schedula assistant" });
+  await expect(drawer.getByRole("heading", { name: /Assistant/ })).toBeVisible();
+  await drawer.getByRole("button", { name: "Find a cardiologist" }).click();
+  await expect(drawer.getByText("I can help you find an appointment.")).toBeVisible();
+  await expect(drawer.getByText("Suggestions:", { exact: true })).toHaveCount(0);
 });
 
 test("patient assistant shows grounded doctor fees and selectable timezone-aware slots", async ({ page }) => {
@@ -476,26 +633,34 @@ test("one-turn mic submits after silence while continuous voice keeps listening"
   await page.getByRole("option", { name: "Hindi" }).click();
 
   await page.getByRole("button", { name: "Start one-turn voice input" }).click();
-  await expect(page.getByRole("status")).toContainText("One-turn mic is listening");
-  await expect(page.getByRole("button", { name: "Finish one-turn voice input" })).toBeEnabled();
+  await expect(page.getByRole("status")).toContainText("Listening… speak now");
+  const activeMic = page.getByRole("button", { name: "Stop one-turn voice input" });
+  await expect(activeMic).toBeEnabled();
+  await expect(activeMic.locator("..").getByText("Stop voice", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Microphone voice activity" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__assistantRecognition?.lang)).toBe("hi-IN");
   await expect.poll(() => page.evaluate(() => window.__assistantRecognition?.interimResults)).toBe(true);
   await page.evaluate(() => window.__assistantRecognition?.emit("Namaste"));
-  await expect(page.getByText("Heard: Namaste")).toBeVisible();
-  await page.clock.runFor(6_001);
+  await expect(page.getByLabel("Message to the assistant")).toHaveValue("Namaste");
+  await page.clock.runFor(3_501);
   await expect(page.getByText("Namaste", { exact: true })).toBeVisible();
   await expect(page.getByText("Assistant response.")).toBeVisible();
   expect(chatLanguages).toEqual(["hi-IN"]);
 
   await page.getByRole("button", { name: "Start one-turn voice input" }).click();
-  await expect(page.getByRole("button", { name: "Finish one-turn voice input" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Stop one-turn voice input" })).toBeEnabled();
   await page.clock.runFor(6_001);
+  await expect(page.getByRole("button", { name: "Stop one-turn voice input" })).toBeEnabled();
+  await page.getByRole("button", { name: "Stop one-turn voice input" }).click();
   await expect(page.getByRole("button", { name: "Start one-turn voice input" })).toBeEnabled();
   expect(chatLanguages).toHaveLength(1);
 
   await page.getByRole("button", { name: "Start continuous voice mode" }).click();
-  await expect(page.getByRole("button", { name: "Stop continuous voice mode" })).toBeEnabled();
-  await expect.poll(() => page.evaluate(() => window.__assistantRecognition?.interimResults)).toBe(false);
+  const activeContinuousVoice = page.getByRole("button", { name: "Stop continuous voice mode" });
+  await expect(activeContinuousVoice).toBeEnabled();
+  await expect(activeContinuousVoice.locator("..").getByText("Stop voice mode", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Microphone voice activity" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__assistantRecognition?.interimResults)).toBe(true);
   await page.clock.runFor(12_000);
   await expect(page.getByRole("button", { name: "Stop continuous voice mode" })).toBeEnabled();
 
@@ -503,6 +668,9 @@ test("one-turn mic submits after silence while continuous voice keeps listening"
   await page.getByRole("option", { name: "English" }).click();
   await expect.poll(() => page.evaluate(() => window.__assistantRecognition?.lang)).toBe("en-IN");
   await page.evaluate(() => window.__assistantRecognition?.emit("Check schedule"));
+  await expect(page.getByLabel("Message to the assistant")).toHaveValue("Check schedule");
+  await expect(page.getByText("Assistant response.")).toHaveCount(1);
+  await page.clock.runFor(3_501);
   await expect(page.getByText("Assistant response.")).toHaveCount(2);
   await expect.poll(() => page.evaluate(() => window.__assistantSpokenLanguage)).toBe("en-IN");
   expect(chatLanguages).toEqual(["hi-IN", "en-IN"]);
@@ -560,6 +728,10 @@ test("patient assistant supports rescheduling and elastic proposal decisions wit
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/patient$/);
   await page.goto("/patient/assistant");
+  await expect(page.getByRole("heading", { name: "AI Care & Booking Assistant" })).toBeVisible();
+  await expect(page.getByText("Patient Hub")).toBeVisible();
+  await expect(page.getByText("Appointment help · No medical advice")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find a cardiologist" })).toBeVisible();
   const conversation = page.getByRole("log", { name: "Assistant conversation" });
   const input = page.getByPlaceholder("Ask about appointments or slots…");
 

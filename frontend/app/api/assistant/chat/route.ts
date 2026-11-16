@@ -16,9 +16,11 @@ export async function POST(request: Request) {
     const access = await requireAssistantPilotAccess(role);
     try {
       let conversationId = parsed.data.conversationId;
+      let existingTitle = "New conversation";
       if (conversationId) {
         const conversation = await getConversation(access.supabase, access.user.id, role, conversationId);
         if (!conversation) throw new Error("ASSISTANT_CONVERSATION_NOT_FOUND");
+        existingTitle = conversation.title;
       } else {
         const { data, error } = await access.supabase.from("assistant_conversations").insert({ user_id: access.user.id, role }).select("id").single();
         if (error || !data) throw new Error("ASSISTANT_HISTORY_UNAVAILABLE");
@@ -29,7 +31,9 @@ export async function POST(request: Request) {
       const latestUserMessage = messages.filter((message) => message.role === "user").at(-1)?.text;
       if (!latestUserMessage) throw new Error("INVALID_ASSISTANT_REQUEST");
       await persistMessage(access.supabase, { conversationId: resolvedConversationId, role: "user", text: latestUserMessage });
-      await access.supabase.from("assistant_conversations").update({ title: conversationTitle(latestUserMessage) }).eq("id", resolvedConversationId).eq("title", "New conversation");
+      if (existingTitle === "New conversation" || /^New chat \d+$/.test(existingTitle)) {
+        await access.supabase.from("assistant_conversations").update({ title: conversationTitle(latestUserMessage) }).eq("id", resolvedConversationId).eq("title", existingTitle);
+      }
       const result = selectedSlotId
         ? await prepareAssistantSlotSelection({ slotId: selectedSlotId, language, userId: access.user.id, supabase: access.supabase })
         : selectedPatientAppointment?.action === "cancel"
@@ -43,8 +47,8 @@ export async function POST(request: Request) {
         : selectedDoctorId
           ? await getAssistantDoctorSlots({ doctorId: selectedDoctorId, language, userId: access.user.id, supabase: access.supabase })
         : (assistantConfig.geminiApiKey && (!assistantConfig.groqApiKey || assistantConfig.groqApiKey.includes("placeholder")))
-          ? await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language })
-          : await runGroqAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language });
+          ? await runGeminiAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language, signal: request.signal })
+          : await runGroqAssistant({ role, userId: access.user.id, supabase: access.supabase, messages, language, signal: request.signal });
       const { model, ...publicResult } = result;
       await persistMessage(access.supabase, { conversationId: resolvedConversationId, role: "assistant", text: publicResult.text ?? "I could not complete that request.", displays: publicResult.displays, pendingAction: publicResult.pendingAction });
       await access.supabase.from("assistant_audit_events").insert({ user_id: access.user.id, role, event_type: "chat_turn", outcome: "succeeded", model, language, duration_ms: Date.now() - started });

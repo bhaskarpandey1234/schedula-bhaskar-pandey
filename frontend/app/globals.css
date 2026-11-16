@@ -138,6 +138,48 @@
 .assistant-drawer-in { animation: drawer-slide-in-right 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes drawer-slide-in-right { from { transform: translateX(100%); opacity: 0.8; } to { transform: translateX(0); opacity: 1; } }
 
+.assistant-conversation-scroll {
+  scrollbar-width: none;
+}
+.assistant-conversation-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.assistant-conversation-scroll:hover,
+.assistant-conversation-scroll:focus-visible {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+}
+.assistant-conversation-scroll:hover::-webkit-scrollbar,
+.assistant-conversation-scroll:focus-visible::-webkit-scrollbar {
+  width: 6px;
+}
+.assistant-conversation-scroll:hover::-webkit-scrollbar-thumb,
+.assistant-conversation-scroll:focus-visible::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+.assistant-history-removing {
+  animation: assistant-history-remove 180ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes assistant-history-remove {
+  to { opacity: 0; transform: translateX(10px); }
+}
+.assistant-voice-bar {
+  display: block;
+  width: 2px;
+  height: 3px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+}
+.assistant-voice-bar.is-active {
+  animation: assistant-voice-wave 620ms ease-in-out infinite alternate;
+}
+@keyframes assistant-voice-wave {
+  to { height: 14px; }
+}
+
 @layer base {
   * {
     @apply border-border;

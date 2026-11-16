@@ -16,7 +16,8 @@ export type AssistantConversationSummary = { id: string; title: string; role: As
 
 export function conversationTitle(text: string) {
   const normalized = text.replace(/\s+/g, " ").trim();
-  return (normalized.slice(0, 72) || "New conversation").replace(/[.?!,:;]+$/, "");
+  const title = normalized.slice(0, 72).replace(/[.?!,:;]+$/, "");
+  return title || "New conversation";
 }
 
 export async function getConversation(supabase: Supabase, userId: string, role: AssistantRole, conversationId: string) {

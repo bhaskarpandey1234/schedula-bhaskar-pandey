@@ -8,6 +8,7 @@ describe("assistant conversation titles", () => {
 
   it("uses a safe default for an empty message and limits long titles", () => {
     expect(conversationTitle(" ")).toBe("New conversation");
+    expect(conversationTitle("?!")).toBe("New conversation");
     expect(conversationTitle("a".repeat(100))).toHaveLength(72);
   });
 });

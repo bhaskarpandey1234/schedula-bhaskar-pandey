@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertAssistantMutationOrigin, requireAssistantPilotAccess } from "@/lib/assistant/config";
+import { assistantConversationTitleSchema } from "@/lib/assistant/schemas";
 
 export async function GET(request: Request) {
   try {
@@ -17,10 +18,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertAssistantMutationOrigin(request);
-    const body = await request.json().catch(() => null) as { role?: "patient" | "doctor" } | null;
+    const body = await request.json().catch(() => null) as { role?: "patient" | "doctor"; title?: unknown } | null;
     if (!body || (body.role !== "patient" && body.role !== "doctor")) return NextResponse.json({ error: "INVALID_ASSISTANT_REQUEST" }, { status: 400 });
+    const title = body.title === undefined
+      ? "New conversation"
+      : assistantConversationTitleSchema.safeParse({ title: body.title });
+    if (typeof title !== "string" && !title.success) return NextResponse.json({ error: "INVALID_ASSISTANT_REQUEST" }, { status: 400 });
     const access = await requireAssistantPilotAccess(body.role);
-    const { data, error } = await access.supabase.from("assistant_conversations").insert({ user_id: access.user.id, role: body.role }).select("id, title, role, created_at, updated_at").single();
+    const conversationTitle = typeof title === "string" ? title : title.data.title;
+    const { data, error } = await access.supabase.from("assistant_conversations").insert({ user_id: access.user.id, role: body.role, title: conversationTitle }).select("id, title, role, created_at, updated_at").single();
     if (error) throw new Error("ASSISTANT_HISTORY_UNAVAILABLE");
     return NextResponse.json({ conversation: data }, { status: 201 });
   } catch (error) {
