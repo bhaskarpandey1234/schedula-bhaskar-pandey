@@ -67,6 +67,7 @@ export async function runGeminiAssistant(input: {
   supabase: SupabaseClient;
   messages: ChatMessage[];
   language?: string;
+  signal?: AbortSignal;
 }) {
   if (!assistantConfig.geminiApiKey) {
     throw new Error("ASSISTANT_CONFIGURATION_REQUIRED");
@@ -95,6 +96,7 @@ export async function runGeminiAssistant(input: {
   const displays: AssistantDisplayPayload[] = [];
 
   for (let iteration = 0; iteration < 4; iteration += 1) {
+    if (input.signal?.aborted) throw new Error("ASSISTANT_ABORTED");
     const body = {
       systemInstruction: {
         parts: [{ text: systemInstruction(input.role, input.language) }],
@@ -104,6 +106,8 @@ export async function runGeminiAssistant(input: {
     };
 
     const controller = new AbortController();
+    const abortRequest = () => controller.abort(input.signal?.reason);
+    input.signal?.addEventListener("abort", abortRequest, { once: true });
     const timeout = setTimeout(() => controller.abort(), 25_000);
 
     let response: Response;
@@ -115,13 +119,14 @@ export async function runGeminiAssistant(input: {
         signal: controller.signal,
       });
     } catch (error) {
-      clearTimeout(timeout);
       if (error instanceof Error && error.name === "AbortError") {
+        if (input.signal?.aborted) throw new Error("ASSISTANT_ABORTED");
         throw new Error("ASSISTANT_TIMEOUT");
       }
       throw new Error("ASSISTANT_NETWORK_ERROR");
     } finally {
       clearTimeout(timeout);
+      input.signal?.removeEventListener("abort", abortRequest);
     }
 
     if (!response.ok) {

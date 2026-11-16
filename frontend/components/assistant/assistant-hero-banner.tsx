@@ -174,14 +174,14 @@ export function AssistantHeroBanner({ role }: { role: AssistantRole }) {
   const isDoctor = role === "doctor";
 
   return (
-    <div className="relative shrink-0 overflow-hidden rounded-2xl border border-emerald-100/70 bg-gradient-to-r from-emerald-50/85 via-teal-50/60 to-cyan-50/45 px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-sm">
+    <div className="relative shrink-0 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-3.5 py-2 shadow-sm sm:px-4 sm:py-2.5">
       {/* Decorative organic background curves */}
       <div
-        className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-100/30 blur-2xl"
+        className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/10 blur-2xl"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -bottom-12 -left-12 size-36 rounded-full bg-teal-100/35 blur-xl"
+        className="pointer-events-none absolute -bottom-12 -left-12 size-36 rounded-full bg-primary/10 blur-xl"
         aria-hidden="true"
       />
 
@@ -190,24 +190,24 @@ export function AssistantHeroBanner({ role }: { role: AssistantRole }) {
           <AssistantHeroArt className="size-10 sm:size-11 shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-emerald-100/90 px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-emerald-800">
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary sm:text-xs">
                 {isDoctor ? "Doctor Workspace" : "Patient Hub"}
               </span>
-              <span className="hidden sm:inline-block text-[11px] text-slate-500">·</span>
-              <span className="hidden sm:inline-block text-[11px] text-slate-500 truncate">
+              <span className="hidden text-[11px] text-muted-foreground sm:inline-block">·</span>
+              <span className="hidden truncate text-[11px] text-muted-foreground sm:inline-block">
                 {isDoctor
                   ? "Today's appointments, availability & statistics"
                   : "Find doctors, slots & manage bookings"}
               </span>
             </div>
-            <h1 className="text-sm font-bold tracking-tight text-slate-900 sm:text-base lg:text-lg truncate">
+            <h1 className="truncate text-sm font-bold tracking-tight text-foreground sm:text-base lg:text-lg">
               {isDoctor ? "AI Scheduling Assistant" : "AI Care & Booking Assistant"}
             </h1>
           </div>
         </div>
 
         <div className="hidden shrink-0 md:block">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-card/90 px-3 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm">
             <Sparkles className="size-3 text-amber-500" aria-hidden="true" />
             <span>{isDoctor ? "Your smart scheduling helper" : "Your 24/7 care companion"}</span>
           </div>

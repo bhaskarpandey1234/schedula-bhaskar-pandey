@@ -18,7 +18,6 @@ import {
   Radio,
   RotateCcw,
   Send,
-  ShieldCheck,
   Sparkles,
   Square,
   Trash2,
@@ -26,10 +25,12 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assistantBookingPreviewRequiredText, assistantErrorCanRetry, assistantErrorMessage, assistantIsFreeformSlotPrompt, assistantIsUnstructuredBookingPreview, assistantLanguageOptions, assistantTypedSlotSelectionRequiredText, speechRecognitionLanguage, speechSynthesisLanguage } from "@/lib/assistant/presentation";
+import { conversationTitle } from "@/lib/assistant/history";
 import { formatLocalDate, formatLocalSlotRange, formatSchedulingWindow } from "@/lib/scheduling/time";
 import type { AssistantDisplayPayload, AssistantRole, BookingPreview, PendingAssistantAction } from "@/lib/assistant/types";
 
@@ -74,9 +75,20 @@ type CheckoutSession = { paymentId: string; orderId: string; keyId: string; amou
 declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on?: (event: string, handler: (response: { error?: { description?: string; reason?: string } }) => void) => void }; } }
 
 function getRecognition() { const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }; const Constructor = w.SpeechRecognition ?? w.webkitSpeechRecognition; return Constructor ? new Constructor() : null; }
-const VOICE_SILENCE_TIMEOUT_MS = 6_000;
+const VOICE_SILENCE_TIMEOUT_MS = 3_500;
+const HISTORY_REMOVE_ANIMATION = "assistant-history-remove";
 function confirmationDecision(text: string): "confirm" | "decline" | null { const normalized = text.trim().toLocaleLowerCase().replace(/[.!?,。！？]+$/g, ""); if (/^(yes|y|confirm|confirm it|go ahead|haan|han|हाँ|ठीक|ठीक है)$/.test(normalized)) return "confirm"; if (/^(no|n|decline|cancel|don't|do not|nahin|nahi|नहीं|नही)$/.test(normalized)) return "decline"; return null; }
 function formatValue(value: unknown) { if (value === null || value === undefined) return "—"; if (typeof value === "object") return JSON.stringify(value); return String(value); }
+function nextConversationTitle(conversations: Conversation[]) {
+  const sequence = conversations.reduce((highest, conversation) => {
+    const match = /^New chat (\d+)$/.exec(conversation.title);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `New chat ${sequence + 1}`;
+}
+function isUntitledConversation(title: string) {
+  return title === "New conversation" || /^New chat \d+$/.test(title);
+}
 function actionConfirmLabel(action: PendingAssistantAction) {
   if (action.actionType === "booking") return "Continue to payment";
   if (action.actionType === "cancellation") return "Confirm cancellation";
@@ -375,16 +387,71 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [historyBusy, setHistoryBusy] = useState(true);
+  const [conversationLoadingId, setConversationLoadingId] = useState<string>();
+  const [newChatBusy, setNewChatBusy] = useState(false);
   const [historyError, setHistoryError] = useState<string>();
   const [editingConversationId, setEditingConversationId] = useState<string>();
   const [editingTitle, setEditingTitle] = useState("");
+  const [renamingConversationId, setRenamingConversationId] = useState<string>();
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation>();
+  const [deletingConversationId, setDeletingConversationId] = useState<string>();
+  const [removingConversationId, setRemovingConversationId] = useState<string>();
   const [showHistory, setShowHistory] = useState(false);
-  const [input, setInput] = useState(""); const [language, setLanguage] = useState("en-IN"); const [busy, setBusy] = useState(false); const [voiceState, setVoiceState] = useState<VoiceState>("idle"); const [voiceActive, setVoiceActive] = useState(false); const [oneTurnActive, setOneTurnActive] = useState(false); const [oneTurnTranscript, setOneTurnTranscript] = useState(""); const [voiceError, setVoiceError] = useState<string>(); const [actionBusy, setActionBusy] = useState<string | null>(null);
-  const recognitionRef = useRef<Recognition | null>(null); const voiceEnabledRef = useRef(false); const oneTurnActiveRef = useRef(false); const oneTurnTranscriptRef = useRef(""); const oneTurnSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const speakingRef = useRef(false); const languageRef = useRef(language); const messagesRef = useRef(messages); const busyRef = useRef(false); const bottomRef = useRef<HTMLDivElement>(null); const sendRef = useRef<(value?: string, selection?: AssistantSelection) => Promise<void>>(async () => undefined);
+  const [input, setInput] = useState(""); const [language, setLanguage] = useState("en-IN"); const [busy, setBusy] = useState(false); const [voiceState, setVoiceState] = useState<VoiceState>("idle"); const [voiceActive, setVoiceActive] = useState(false); const [oneTurnActive, setOneTurnActive] = useState(false); const [voiceDetected, setVoiceDetected] = useState(false); const [voiceError, setVoiceError] = useState<string>(); const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const recognitionRef = useRef<Recognition | null>(null); const voiceEnabledRef = useRef(false); const oneTurnActiveRef = useRef(false); const oneTurnTranscriptRef = useRef(""); const continuousTranscriptRef = useRef(""); const oneTurnSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const voiceActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const speakingRef = useRef(false); const languageRef = useRef(language); const messagesRef = useRef(messages); const busyRef = useRef(false); const requestControllerRef = useRef<AbortController | null>(null); const conversationLoadVersionRef = useRef(0); const bottomRef = useRef<HTMLDivElement>(null); const sendRef = useRef<(value?: string, selection?: AssistantSelection) => Promise<void>>(async () => undefined);
   useEffect(() => { messagesRef.current = messages; bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   const greeting = role === "doctor" ? "I can check your schedule, appointments, conflicts, and availability." : "I can find doctors, check slots, and manage your appointments with confirmation.";
+  const startContinuousRecognition = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition || !voiceEnabledRef.current || busyRef.current || speakingRef.current) return;
+    recognition.lang = speechRecognitionLanguage(languageRef.current);
+    try { recognition.start(); setVoiceState("listening"); } catch { /* the browser may still be stopping the previous capture */ }
+  }, []);
+  const clearOneTurnSilenceTimer = useCallback(() => {
+    if (oneTurnSilenceTimerRef.current !== null) clearTimeout(oneTurnSilenceTimerRef.current);
+    oneTurnSilenceTimerRef.current = null;
+  }, []);
+  const clearVoiceActivityTimer = useCallback(() => {
+    if (voiceActivityTimerRef.current !== null) clearTimeout(voiceActivityTimerRef.current);
+    voiceActivityTimerRef.current = null;
+  }, []);
+  const markVoiceActivity = useCallback(() => {
+    setVoiceDetected(true);
+    clearVoiceActivityTimer();
+    voiceActivityTimerRef.current = setTimeout(() => setVoiceDetected(false), 350);
+  }, [clearVoiceActivityTimer]);
+  const stopVoiceForNavigation = useCallback(() => {
+    voiceEnabledRef.current = false;
+    oneTurnActiveRef.current = false;
+    speakingRef.current = false;
+    setVoiceActive(false);
+    setOneTurnActive(false);
+    setVoiceDetected(false);
+    clearOneTurnSilenceTimer();
+    clearVoiceActivityTimer();
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setVoiceState("idle");
+  }, [clearOneTurnSilenceTimer, clearVoiceActivityTimer]);
+  const stopActiveRequest = useCallback(() => {
+    const controller = requestControllerRef.current;
+    if (!controller) return;
+    requestControllerRef.current = null;
+    controller.abort();
+    busyRef.current = false;
+    setBusy(false);
+  }, []);
   const loadConversation = useCallback(async (id: string) => {
-    setHistoryBusy(true); setHistoryError(undefined);
+    const loadVersion = ++conversationLoadVersionRef.current;
+    stopActiveRequest();
+    stopVoiceForNavigation();
+    setConversationLoadingId(id);
+    setConversationId(undefined);
+    setInput("");
+    setMessages([]);
+    messagesRef.current = [];
+    setHistoryError(undefined);
     try {
       const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`);
       const payload = await response.json() as { messages?: Message[]; error?: string };
@@ -392,10 +459,18 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       const next = payload.messages?.length
         ? payload.messages.map((m) => ({ ...m, timestamp: formatTimestamp(m.timestamp) }))
         : [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }];
-      setConversationId(id); setMessages(next); messagesRef.current = next;
-    } catch { setHistoryError("Chat history could not be loaded. Please try again."); }
-    finally { setHistoryBusy(false); }
-  }, [greeting, role]);
+      if (conversationLoadVersionRef.current === loadVersion) {
+        setConversationId(id); setMessages(next); messagesRef.current = next;
+      }
+    } catch {
+      if (conversationLoadVersionRef.current === loadVersion) {
+        setHistoryError("Chat history could not be loaded. Please try again.");
+        setShowHistory(true);
+      }
+    } finally {
+      if (conversationLoadVersionRef.current === loadVersion) setConversationLoadingId(undefined);
+    }
+  }, [greeting, role, stopActiveRequest, stopVoiceForNavigation]);
   const loadConversations = useCallback(async () => {
     setHistoryBusy(true); setHistoryError(undefined);
     try {
@@ -403,45 +478,76 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       const payload = await response.json() as { conversations?: Conversation[]; error?: string };
       if (!response.ok) throw new Error(payload.error);
       const next = payload.conversations ?? []; setConversations(next);
-      if (next[0]) await loadConversation(next[0].id); else setMessages([{ role: "assistant", text: greeting, timestamp: formatTimestamp() }]);
+      if (next[0]) await loadConversation(next[0].id);
+      else {
+        const welcome = [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }];
+        setConversationId(undefined); setMessages(welcome); messagesRef.current = welcome;
+      }
     } catch { setHistoryError("Chat history could not be loaded. You can still start a new chat."); }
     finally { setHistoryBusy(false); }
   }, [greeting, loadConversation, role]);
   useEffect(() => { void loadConversations(); }, [loadConversations]);
   const newConversation = async () => {
-    setHistoryBusy(true); setHistoryError(undefined);
+    setNewChatBusy(true); setHistoryError(undefined);
+    setShowHistory(false);
+    conversationLoadVersionRef.current += 1;
+    setConversationLoadingId(undefined);
+    stopActiveRequest();
+    stopVoiceForNavigation();
+    setInput("");
     try {
-      const response = await fetch("/api/assistant/conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
+      const title = nextConversationTitle(conversations);
+      const response = await fetch("/api/assistant/conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role, title }) });
       const payload = await response.json() as { conversation?: Conversation; error?: string };
       if (!response.ok || !payload.conversation) throw new Error(payload.error);
       setConversations((current) => [payload.conversation!, ...current]); setConversationId(payload.conversation.id);
       const next = [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }]; setMessages(next); messagesRef.current = next;
-    } catch { setHistoryError("A new chat could not be created. Please try again."); }
-    finally { setHistoryBusy(false); }
+      setShowHistory(false);
+    } catch {
+      setHistoryError("A new chat could not be created. Please try again.");
+      setShowHistory(true);
+    } finally { setNewChatBusy(false); }
   };
   const renameConversation = async (id: string) => {
-    const title = editingTitle.trim(); if (!title) return;
-    const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
-    if (!response.ok) { setHistoryError("The chat name could not be updated."); return; }
-    setConversations((current) => current.map((item) => item.id === id ? { ...item, title } : item)); setEditingConversationId(undefined);
+    const title = editingTitle.trim();
+    if (!title || renamingConversationId) return;
+    setRenamingConversationId(id); setHistoryError(undefined);
+    try {
+      const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+      const payload = await response.json() as { conversation?: Conversation; error?: string };
+      if (!response.ok || !payload.conversation) throw new Error(payload.error);
+      setConversations((current) => current.map((item) => item.id === id ? payload.conversation! : item));
+      setEditingConversationId(undefined);
+    } catch { setHistoryError("The chat name could not be updated. Please try again."); }
+    finally { setRenamingConversationId(undefined); }
   };
-  const deleteConversation = async (id: string) => {
-    if (!window.confirm("Delete this chat and all of its messages? This cannot be undone.")) return;
-    const response = await fetch(`/api/assistant/conversations/${id}?role=${role}`, { method: "DELETE" });
-    if (!response.ok) { setHistoryError("The chat could not be deleted."); return; }
-    const remaining = conversations.filter((item) => item.id !== id); setConversations(remaining);
-    if (conversationId === id) { setConversationId(undefined); setMessages([{ role: "assistant", text: greeting }]); if (remaining[0]) void loadConversation(remaining[0].id); }
+  const deleteConversation = async () => {
+    const conversation = conversationToDelete;
+    if (!conversation || deletingConversationId) return;
+    setDeletingConversationId(conversation.id); setHistoryError(undefined);
+    try {
+      const response = await fetch(`/api/assistant/conversations/${conversation.id}?role=${role}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("ASSISTANT_HISTORY_UNAVAILABLE");
+      setConversationToDelete(undefined);
+      setRemovingConversationId(conversation.id);
+    } catch { setHistoryError("The chat could not be deleted. Please try again."); }
+    finally { setDeletingConversationId(undefined); }
+  };
+  const finishConversationRemoval = (id: string) => {
+    if (removingConversationId !== id) return;
+    const remaining = conversations.filter((item) => item.id !== id);
+    setConversations(remaining);
+    setRemovingConversationId(undefined);
+    if (conversationId === id) {
+      setConversationId(undefined);
+      const welcome = [{ role: "assistant" as const, text: greeting, timestamp: formatTimestamp() }];
+      setMessages(welcome); messagesRef.current = welcome;
+      if (remaining[0]) void loadConversation(remaining[0].id);
+    }
   };
   const persistActionReply = (text: string) => {
     if (!conversationId) return;
     void fetch(`/api/assistant/conversations/${conversationId}?role=${role}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
-  };
-  const clearOneTurnSilenceTimer = () => { if (oneTurnSilenceTimerRef.current !== null) clearTimeout(oneTurnSilenceTimerRef.current); oneTurnSilenceTimerRef.current = null; };
-  const startContinuousRecognition = () => {
-    const recognition = recognitionRef.current;
-    if (!recognition || !voiceEnabledRef.current || busyRef.current || speakingRef.current) return;
-    recognition.lang = speechRecognitionLanguage(languageRef.current);
-    try { recognition.start(); setVoiceState("listening"); } catch { /* the browser may still be stopping the previous capture */ }
   };
   const stopSpeaking = () => {
     speakingRef.current = false;
@@ -470,6 +576,17 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
   };
   const openCheckout = async (action: PendingAssistantAction, checkout: CheckoutSession) => { const launch = () => { if (!window.Razorpay) throw new Error("Payment checkout could not load."); let completed = false; const instance = new window.Razorpay({ key: checkout.keyId, amount: checkout.amountMinor, currency: checkout.currency, order_id: checkout.orderId, name: "Schedula Healthcare", description: "Online consultation", prefill: checkout.prefill, handler: async (payment: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => { completed = true; const response = await fetch(`/api/assistant/actions/${action.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: "payment_verified", paymentId: checkout.paymentId, orderId: payment.razorpay_order_id, providerPaymentId: payment.razorpay_payment_id, signature: payment.razorpay_signature }) }); const result = await response.json() as { error?: string }; const reply = response.ok ? "Payment verified and your appointment is confirmed." : assistantErrorMessage(result.error); setMessages((current) => [...current.map((message) => message.pendingAction?.id === action.id ? { ...message, pendingAction: undefined } : message), { role: "assistant", text: reply }]); speak(reply); }, modal: { ondismiss: () => { if (!completed) setMessages((current) => [...current, { role: "assistant", text: "Checkout was dismissed. The appointment is not confirmed; you can retry while the hold is active." }]); } } }); instance.on?.("payment.failed", () => setMessages((current) => [...current, { role: "assistant", text: "Payment failed safely. No appointment was confirmed." }])); instance.open(); }; if (window.Razorpay) launch(); else { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = launch; script.onerror = () => setMessages((current) => [...current, { role: "assistant", text: "Payment checkout could not load. No appointment was confirmed." }]); document.body.appendChild(script); } };
   const decideAction = async (action: PendingAssistantAction, decision: "confirm" | "decline") => { setActionBusy(action.id); try { const response = await fetch(`/api/assistant/actions/${action.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) }); const result = await response.json() as { error?: string; status?: string; result?: CheckoutSession }; if (response.ok && result.status === "payment_required" && result.result) { await openCheckout(action, result.result); return; } const reply = response.ok ? (decision === "confirm" ? actionSuccessText(action) : "Okay, I did not change anything.") : assistantErrorMessage(result.error); setMessages((current) => [...current.map((message) => message.pendingAction?.id === action.id ? { ...message, pendingAction: undefined } : message), { role: "assistant", text: reply }]); persistActionReply(reply); speak(reply); } catch { const reply = "The action could not be reached. No appointment was changed; please retry."; setMessages((current) => [...current, { role: "assistant", text: reply }]); persistActionReply(reply); } finally { setActionBusy(null); } };
+  const stopGeneration = () => {
+    const controller = requestControllerRef.current;
+    if (!controller) return;
+    requestControllerRef.current = null;
+    controller.abort();
+    busyRef.current = false;
+    setBusy(false);
+    setVoiceState(voiceEnabledRef.current ? "listening" : "idle");
+    setMessages((current) => [...current, { role: "assistant", text: "Response stopped." }]);
+    if (voiceEnabledRef.current && !speakingRef.current) startContinuousRecognition();
+  };
   const send = async (value = input, selection: AssistantSelection = {}) => {
     const text = value.trim();
     if (!text || busyRef.current || actionBusy) return;
@@ -510,10 +627,13 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
     setBusy(true);
     setVoiceState(voiceEnabledRef.current ? "processing" : "idle");
     recognitionRef.current?.stop();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     try {
       const response = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           conversationId,
           role,
@@ -524,29 +644,36 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
           selectedProposalDecision: selection.selectedProposalDecision,
         }),
       });
+      if (controller.signal.aborted) return;
       const payload = await response.json() as { text?: string; error?: string; displays?: AssistantDisplayPayload[]; pendingAction?: PendingAssistantAction; conversationId?: string };
+      if (controller.signal.aborted) return;
       const reply = response.ok ? (payload.text ?? "I could not complete that request.") : assistantErrorMessage(payload.error);
       const canRetry = !response.ok && assistantErrorCanRetry(payload.error);
       const botTimestamp = formatTimestamp();
       setMessages((current) => [...current, { role: "assistant", text: reply, displays: payload.displays, pendingAction: payload.pendingAction, retryText: canRetry ? text : undefined, retrySelection: canRetry ? selection : undefined, timestamp: botTimestamp }]);
       if (payload.conversationId) {
         setConversationId(payload.conversationId);
+        const title = conversationTitle(text);
         setConversations((current) => {
           const existing = current.find((item) => item.id === payload.conversationId);
-          if (existing) return [{ ...existing, updated_at: new Date().toISOString() }, ...current.filter((item) => item.id !== existing.id)];
-          return [{ id: payload.conversationId!, title: text.slice(0, 72), role, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...current];
+          if (existing) return [{ ...existing, title: isUntitledConversation(existing.title) ? title : existing.title, updated_at: new Date().toISOString() }, ...current.filter((item) => item.id !== existing.id)];
+          return [{ id: payload.conversationId!, title, role, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...current];
         });
       }
       speak(reply);
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return;
       const reply = assistantErrorMessage("ASSISTANT_NETWORK_ERROR");
       const botTimestamp = formatTimestamp();
       setMessages((current) => [...current, { role: "assistant", text: reply, retryText: text, retrySelection: selection, timestamp: botTimestamp }]);
       speak(reply);
     } finally {
-      busyRef.current = false;
-      setBusy(false);
-      if (voiceEnabledRef.current && !speakingRef.current) startContinuousRecognition();
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+        busyRef.current = false;
+        setBusy(false);
+        if (voiceEnabledRef.current && !speakingRef.current) startContinuousRecognition();
+      }
     }
   };
   useEffect(() => { sendRef.current = send; });
@@ -555,9 +682,10 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
     oneTurnActiveRef.current = false;
     setOneTurnActive(false);
     clearOneTurnSilenceTimer();
+    clearVoiceActivityTimer();
+    setVoiceDetected(false);
     const transcript = oneTurnTranscriptRef.current.trim();
     oneTurnTranscriptRef.current = "";
-    setOneTurnTranscript("");
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     recognition?.stop();
@@ -579,7 +707,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
     }
     oneTurnActiveRef.current = true;
     oneTurnTranscriptRef.current = "";
-    setOneTurnTranscript("");
+    setInput("");
     setOneTurnActive(true);
     setVoiceError(undefined);
     setVoiceState("listening");
@@ -591,7 +719,8 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       const transcript = Array.from({ length: event.results.length }, (_, index) => event.results[index]?.[0]?.transcript ?? "").join(" ").replace(/\s+/g, " ").trim();
       if (!transcript) return;
       oneTurnTranscriptRef.current = transcript;
-      setOneTurnTranscript(transcript);
+      setInput(transcript);
+      markVoiceActivity();
       scheduleOneTurnSilenceTimeout();
     };
     recognition.onend = () => {
@@ -606,7 +735,6 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       setVoiceState("error");
     };
     recognitionRef.current = recognition;
-    scheduleOneTurnSilenceTimeout();
     try { recognition.start(); } catch {
       finishOneTurnCapture(false);
       setVoiceError("Microphone access failed. Check browser permission and try again.");
@@ -621,11 +749,27 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
     voiceEnabledRef.current = false;
     setVoiceActive(false);
     speakingRef.current = false;
+    clearOneTurnSilenceTimer();
+    clearVoiceActivityTimer();
+    setVoiceDetected(false);
+    continuousTranscriptRef.current = "";
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     recognition?.stop();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     setVoiceState("idle");
+  };
+  const finishContinuousCapture = () => {
+    const transcript = continuousTranscriptRef.current.trim();
+    continuousTranscriptRef.current = "";
+    clearOneTurnSilenceTimer();
+    if (!transcript || !voiceEnabledRef.current) return;
+    setVoiceState("processing");
+    void sendRef.current(transcript);
+  };
+  const scheduleContinuousSilenceTimeout = () => {
+    clearOneTurnSilenceTimer();
+    oneTurnSilenceTimerRef.current = setTimeout(finishContinuousCapture, VOICE_SILENCE_TIMEOUT_MS);
   };
   const toggleContinuousVoice = () => {
     if (voiceEnabledRef.current) {
@@ -640,13 +784,16 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       return;
     }
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.lang = speechRecognitionLanguage(languageRef.current);
     recognition.onresult = (event) => {
       if (recognitionRef.current !== recognition || !voiceEnabledRef.current) return;
-      const last = event.results[event.results.length - 1];
-      const transcript = last?.[0]?.transcript ?? "";
-      if (transcript) void sendRef.current(transcript);
+      const transcript = Array.from({ length: event.results.length }, (_, index) => event.results[index]?.[0]?.transcript ?? "").join(" ").replace(/\s+/g, " ").trim();
+      if (!transcript) return;
+      continuousTranscriptRef.current = transcript;
+      setInput(transcript);
+      markVoiceActivity();
+      scheduleContinuousSilenceTimeout();
     };
     recognition.onend = () => {
       if (recognitionRef.current === recognition) startContinuousRecognition();
@@ -677,10 +824,13 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
     voiceEnabledRef.current = false;
     oneTurnActiveRef.current = false;
     clearOneTurnSilenceTimer();
+    clearVoiceActivityTimer();
+    setVoiceDetected(false);
+    requestControllerRef.current?.abort();
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  }, []);
+  }, [clearOneTurnSilenceTimer, clearVoiceActivityTimer]);
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const prompts = lastAssistant?.pendingAction
     ? ["What will change if I confirm?", "Show the details again"]
@@ -689,36 +839,30 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
       : ["Show my upcoming appointments", "Find a cardiologist", "Show available slots"];
   return (
     <Card className={`mx-auto flex ${compact ? "h-full w-full rounded-none border-0 shadow-none" : "flex-1 min-h-0 max-w-5xl rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-card"} w-full flex-col overflow-hidden`}>
-      <CardHeader className="shrink-0 border-b bg-card/60 px-4 py-2.5 sm:px-5 sm:py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100/90 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              <ShieldCheck className="size-5" />
+      <CardHeader className="shrink-0 border-b bg-card/60 px-3 py-2.5 sm:px-5 sm:py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:size-9">
+              <Bot className="size-5" />
             </div>
             <div className="min-w-0">
-              <CardTitle className="truncate text-sm sm:text-base font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                Schedule Assistant
+              <CardTitle className="min-w-0 truncate text-sm font-semibold leading-tight text-foreground sm:text-base">
+                Assistant
               </CardTitle>
-              <p className="truncate text-[11px] sm:text-xs text-muted-foreground">
-                Scheduling operations only · No medical advice
-              </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
             <div className="group/btn relative flex items-center justify-center">
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="size-8"
+                className="size-7 sm:size-8"
                 aria-label="Start new chat"
-                onClick={() => {
-                  void newConversation();
-                  setShowHistory(false);
-                }}
-                disabled={historyBusy || busy}
+                onClick={() => void newConversation()}
+                disabled={historyBusy || newChatBusy || Boolean(deletingConversationId) || Boolean(removingConversationId) || Boolean(renamingConversationId)}
               >
-                <Plus className="size-4" />
+                {newChatBusy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
               </Button>
               <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
                 New chat
@@ -729,18 +873,24 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                 type="button"
                 size="icon"
                 variant={showHistory ? "secondary" : "ghost"}
-                className="size-8"
+                className="size-7 sm:size-8"
                 aria-label="Chat history"
-                onClick={() => setShowHistory((prev) => !prev)}
-                disabled={historyBusy}
+                onClick={() => {
+                  setShowHistory((previous) => !previous);
+                  if (!showHistory) {
+                    stopActiveRequest();
+                    stopVoiceForNavigation();
+                  }
+                }}
+                disabled={historyBusy || Boolean(deletingConversationId) || Boolean(removingConversationId)}
               >
-                <History className="size-4" />
+                {historyBusy ? <Loader2 className="size-4 animate-spin" /> : <History className="size-4" />}
               </Button>
               <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-3 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
                 Chat history
               </span>
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background/80 px-2 py-0.5 text-xs shadow-xs">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border/80 bg-background/80 px-1.5 py-0.5 text-xs shadow-xs sm:gap-1 sm:px-2">
               <Globe className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <label className="sr-only" htmlFor="assistant-language">Assistant language</label>
               <CustomSelect
@@ -749,7 +899,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                 value={language}
                 onValueChange={handleLanguageChange}
                 options={assistantLanguageOptions.map(({ value, label }) => ({ value, label }))}
-                className="h-7 w-20 border-0 bg-transparent px-1 text-xs focus:ring-0"
+                className="h-7 w-[4.25rem] border-0 bg-transparent px-0.5 text-xs focus:ring-0 sm:w-20 sm:px-1"
               />
             </div>
             {onClose && (
@@ -758,7 +908,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="size-8 text-muted-foreground hover:text-foreground"
+                  className="size-7 text-muted-foreground hover:text-foreground sm:size-8"
                   aria-label="Close assistant"
                   onClick={onClose}
                 >
@@ -773,30 +923,6 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
         </div>
       </CardHeader>
 
-      {/* Top Quick Actions Pills (visible on full page, matching reference img1) */}
-      {!compact && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/30 px-4 py-2 sm:px-5" aria-label="Quick scheduling actions">
-          {prompts.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-all hover:border-primary/50 hover:bg-emerald-50/60 hover:text-primary dark:border-slate-800 dark:bg-card dark:text-slate-200"
-              onClick={() => void send(prompt)}
-              disabled={busy || oneTurnActive || Boolean(actionBusy)}
-            >
-              {prompt.includes("appointment") || prompt.includes("slot") ? (
-                <Calendar className="size-3.5 text-primary transition-transform group-hover:scale-110" />
-              ) : prompt.includes("available") || prompt.includes("time") ? (
-                <Clock className="size-3.5 text-teal-600 transition-transform group-hover:scale-110" />
-              ) : (
-                <Sparkles className="size-3.5 text-amber-500 transition-transform group-hover:scale-110" />
-              )}
-              <span>{prompt}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
         {showHistory ? (
           <div className="flex min-h-0 flex-1 flex-col">
@@ -810,14 +936,11 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs"
-                onClick={() => {
-                  void newConversation();
-                  setShowHistory(false);
-                }}
-                disabled={historyBusy || busy}
+                onClick={() => void newConversation()}
+                disabled={historyBusy || newChatBusy || Boolean(deletingConversationId) || Boolean(removingConversationId) || Boolean(renamingConversationId)}
               >
-                <Plus className="mr-1 size-3" />
-                New chat
+                {newChatBusy ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Plus className="mr-1 size-3" />}
+                {newChatBusy ? "Creating…" : "New chat"}
               </Button>
             </div>
 
@@ -837,16 +960,14 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                   size="sm"
                   variant="link"
                   className="mt-1 text-xs"
-                  onClick={() => {
-                    void newConversation();
-                    setShowHistory(false);
-                  }}
+                  onClick={() => void newConversation()}
+                  disabled={newChatBusy}
                 >
-                  Start a new chat
+                  {newChatBusy ? "Creating…" : "Start a new chat"}
                 </Button>
               </div>
             ) : (
-              <div className="flex-1 space-y-1.5 overflow-y-auto pr-1" role="list" aria-label="Past conversations">
+              <div className="assistant-conversation-scroll flex-1 space-y-1.5 overflow-y-auto pr-1" role="list" aria-label="Past conversations" tabIndex={0}>
                 {conversations.map((conversation) => (
                   editingConversationId === conversation.id ? (
                     <form
@@ -860,18 +981,25 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                       <input
                         aria-label="Chat name"
                         className="h-7 flex-1 rounded border bg-background px-2 text-xs"
+                        maxLength={120}
                         value={editingTitle}
                         onChange={(event) => setEditingTitle(event.target.value)}
                         autoFocus
                       />
-                      <Button type="submit" size="icon" variant="ghost" className="size-7" aria-label="Save chat name">
-                        <Check className="size-3" />
+                      <Button type="submit" size="icon" variant="ghost" className="size-7" aria-label="Save chat name" disabled={renamingConversationId === conversation.id || !editingTitle.trim()}>
+                        {renamingConversationId === conversation.id ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                       </Button>
                     </form>
                   ) : (
                     <div
                       key={conversation.id}
+                      role="listitem"
+                      onAnimationEnd={(event) => {
+                        if (event.animationName === HISTORY_REMOVE_ANIMATION) finishConversationRemoval(conversation.id);
+                      }}
                       className={`group flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+                        removingConversationId === conversation.id ? "assistant-history-removing" : ""
+                      } ${
                         conversationId === conversation.id
                           ? "border-primary/50 bg-primary/10 font-medium text-primary"
                           : "bg-card hover:bg-muted/60"
@@ -879,22 +1007,26 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                     >
                       <button
                         type="button"
-                        className="flex-1 truncate text-left pr-2"
+                        className="flex min-w-0 flex-1 items-center gap-2 truncate pr-2 text-left"
                         onClick={() => {
                           void loadConversation(conversation.id);
                           setShowHistory(false);
                         }}
+                        disabled={Boolean(conversationLoadingId) || historyBusy || Boolean(deletingConversationId) || Boolean(removingConversationId) || Boolean(renamingConversationId)}
                         aria-current={conversationId === conversation.id ? "true" : undefined}
                       >
-                        {conversation.title}
+                        {conversationLoadingId === conversation.id && <Loader2 className="size-3 shrink-0 animate-spin" />}
+                        <span className="truncate">{conversation.title}</span>
                       </button>
                       <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100">
                         <button
                           type="button"
                           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                           aria-label={`Rename ${conversation.title}`}
+                          disabled={Boolean(conversationLoadingId) || Boolean(renamingConversationId) || Boolean(deletingConversationId) || removingConversationId === conversation.id}
                           onClick={(e) => {
                             e.stopPropagation();
+                            setHistoryError(undefined);
                             setEditingConversationId(conversation.id);
                             setEditingTitle(conversation.title);
                           }}
@@ -905,9 +1037,11 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                           type="button"
                           className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           aria-label={`Delete ${conversation.title}`}
+                          disabled={Boolean(conversationLoadingId) || Boolean(renamingConversationId) || Boolean(deletingConversationId) || removingConversationId === conversation.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void deleteConversation(conversation.id);
+                            setHistoryError(undefined);
+                            setConversationToDelete(conversation);
                           }}
                         >
                           <Trash2 className="size-3" />
@@ -925,6 +1059,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
               size="sm"
               className="mt-3 w-full text-xs text-muted-foreground"
               onClick={() => setShowHistory(false)}
+              disabled={Boolean(deletingConversationId) || Boolean(removingConversationId) || Boolean(renamingConversationId)}
             >
               <ChevronLeft className="mr-1 size-3.5" /> Back to chat
             </Button>
@@ -932,10 +1067,23 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
         ) : (
           <>
             {/* Conversation Messages OR Welcome Empty State */}
-            {compact && messages.length <= 1 && !busy ? (
+            {historyError && !historyBusy && !conversationToDelete && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">
+                <span>{historyError}</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 text-xs" onClick={() => void loadConversations()}>
+                  Retry history
+                </Button>
+              </div>
+            )}
+            {historyBusy || conversationLoadingId || newChatBusy ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground" role="status">
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                {historyBusy ? "Loading your conversations…" : newChatBusy ? "Opening a new chat…" : "Opening conversation…"}
+              </div>
+            ) : compact && messages.length <= 1 && !busy ? (
               <div className="my-auto flex flex-col items-center justify-center px-2 py-6 text-center">
                 <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
-                  <Sparkles className="size-6" />
+                  <Bot className="size-6" />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">Welcome to Schedula Assistant</h3>
                 <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
@@ -945,9 +1093,6 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                 </p>
 
                 <div className="mt-6 w-full space-y-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                    Suggested prompts
-                  </p>
                   <div className="flex flex-col gap-1.5">
                     {prompts.map((prompt) => (
                       <button
@@ -966,7 +1111,8 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
               </div>
             ) : (
               <div
-                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1"
+                className="assistant-conversation-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1"
+                tabIndex={0}
                 role="log"
                 aria-label="Assistant conversation"
                 aria-live="polite"
@@ -976,7 +1122,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                   <div key={`${message.role}-${index}`}>
                     {message.role === "assistant" ? (
                       <div className="flex items-start gap-2.5 sm:gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100/90 text-emerald-700 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary shadow-sm">
                           <Bot className="size-4" />
                         </div>
                         <div className="min-w-0 max-w-[92%] sm:max-w-[85%]">
@@ -1112,7 +1258,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                 {/* Inline Typing Indicator */}
                 {(busy || voiceState === "processing") && (
                   <div className="flex items-start gap-2.5 sm:gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100/90 text-emerald-700 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary shadow-sm">
                       <Bot className="size-4" />
                     </div>
                     <div>
@@ -1135,10 +1281,32 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
               </div>
             )}
 
+            {!compact && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2 px-1 pt-1" aria-label="Quick scheduling actions">
+                {prompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                    onClick={() => void send(prompt)}
+                    disabled={busy || oneTurnActive || Boolean(actionBusy)}
+                  >
+                    {prompt.includes("appointment") || prompt.includes("slot") ? (
+                      <Calendar className="size-3.5 text-primary transition-transform group-hover:scale-110" />
+                    ) : prompt.includes("available") || prompt.includes("time") ? (
+                      <Clock className="size-3.5 text-teal-600 transition-transform group-hover:scale-110" />
+                    ) : (
+                      <Sparkles className="size-3.5 text-amber-500 transition-transform group-hover:scale-110" />
+                    )}
+                    <span>{prompt}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Quick prompt suggestions when conversation is active and in compact drawer */}
             {compact && messages.length > 1 && (
               <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto py-1 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Suggested prompts">
-                <span className="shrink-0 text-[10px] font-medium text-muted-foreground">Suggestions:</span>
                 {prompts.map((prompt) => (
                   <Button
                     key={prompt}
@@ -1158,41 +1326,56 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
             {/* Unified Composer Bar matching Reference img1 */}
             <div className="shrink-0 border-t pt-3">
               <div className="rounded-2xl border border-slate-200/90 bg-card p-1.5 sm:p-2 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 dark:border-slate-800">
+                {(oneTurnActive || voiceActive) && (
+                  <div className="flex items-center px-2 pb-1.5">
+                    <span
+                      className="assistant-voice-activity flex h-4 items-center gap-0.5"
+                      role="img"
+                      aria-label={voiceState === "speaking" ? "Assistant voice activity" : "Microphone voice activity"}
+                    >
+                      {Array.from({ length: 7 }, (_, index) => <span key={index} className={`assistant-voice-bar ${voiceDetected ? "is-active" : ""}`} style={{ animationDelay: `${index * 70}ms` }} />)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <div className="flex items-center gap-1 shrink-0">
                     <div className="group/btn relative flex items-center justify-center">
                       <Button
                         type="button"
-                        variant={oneTurnActive ? "destructive" : "ghost"}
+                        variant="ghost"
                         size="icon"
-                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${oneTurnActive ? "animate-pulse text-destructive" : ""}`}
-                        aria-label={oneTurnActive ? "Stop voice dictation" : "Voice dictation"}
+                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${oneTurnActive ? "bg-primary/10 text-primary" : ""}`}
+                        aria-label={oneTurnActive ? "Stop one-turn voice input" : "Start one-turn voice input"}
                         aria-pressed={oneTurnActive}
                         onClick={toggleOneTurnCapture}
                         disabled={voiceActive || busy || Boolean(actionBusy)}
                       >
-                        {oneTurnActive ? <Square className="size-4" /> : <Mic className="size-4" />}
+                        {oneTurnActive ? <AudioLines className="size-4" /> : <Mic className="size-4" />}
                       </Button>
-                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
-                        {oneTurnActive ? "Stop voice" : "Voice dictation"}
-                      </span>
+                      {!oneTurnActive && (
+                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                          Voice dictation
+                        </span>
+                      )}
                     </div>
                     <div className="group/btn relative flex items-center justify-center">
                       <Button
                         type="button"
-                        variant={voiceActive ? "destructive" : "ghost"}
+                        variant="ghost"
                         size="icon"
-                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${voiceActive ? "animate-pulse ring-2 ring-primary/40 text-primary" : ""}`}
-                        aria-label={voiceActive ? "Stop continuous voice mode" : "Continuous voice mode"}
+                        className={`size-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${voiceActive ? "bg-primary/10 text-primary" : ""}`}
+                        aria-label={voiceActive ? "Stop continuous voice mode" : "Start continuous voice mode"}
                         aria-pressed={voiceActive}
                         onClick={toggleContinuousVoice}
                         disabled={oneTurnActive || ((busy || Boolean(actionBusy)) && !voiceActive)}
                       >
-                        {voiceActive ? <Square className="size-4" /> : <Radio className="size-4" />}
+                        {voiceActive ? <AudioLines className="size-4" /> : <Radio className="size-4" />}
                       </Button>
-                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
-                        {voiceActive ? "Stop voice mode" : "Continuous voice"}
-                      </span>
+                      {!voiceActive && (
+                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
+                          Continuous voice
+                        </span>
+                      )}
                     </div>
                   </div>
                   <textarea
@@ -1201,7 +1384,15 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                     placeholder="Ask about appointments or slots…"
                     value={input}
                     rows={1}
-                    onChange={(event) => setInput(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setInput(value);
+                      if (voiceActive) {
+                        continuousTranscriptRef.current = value;
+                        if (value.trim()) scheduleContinuousSilenceTimeout();
+                        else clearOneTurnSilenceTimer();
+                      }
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
@@ -1214,15 +1405,16 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                     <Button
                       type="button"
                       size="icon"
-                      className="size-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
-                      aria-label="Send message"
-                      onClick={() => void send()}
-                      disabled={busy || oneTurnActive || Boolean(actionBusy) || !input.trim()}
+                      variant={busy ? "secondary" : "default"}
+                      className="size-10 shrink-0 rounded-full shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
+                      aria-label={busy ? "Stop assistant response" : "Send message"}
+                      onClick={() => busy ? stopGeneration() : void send()}
+                      disabled={oneTurnActive || Boolean(actionBusy) || (!busy && !input.trim())}
                     >
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                      {busy ? <Square className="size-3.5 fill-current" /> : <Send className="size-4" />}
                     </Button>
                     <span className="pointer-events-none absolute -top-8 right-0 z-50 whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-medium text-white shadow-xl border border-slate-700/60 opacity-0 transition-all duration-150 group-hover/btn:opacity-100 group-hover/btn:-translate-y-0.5 group-focus-within/btn:opacity-100 dark:bg-white dark:text-slate-900 dark:border-slate-200/80">
-                      Send (Enter)
+                      {busy ? "Stop response" : "Send (Enter)"}
                     </span>
                   </div>
                 </div>
@@ -1236,23 +1428,19 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                   </span>
                   <div className="flex items-center gap-2">
                     {oneTurnActive ? (
-                      <span className="flex items-center gap-1.5 font-medium text-destructive">
-                        <span className="size-2 animate-ping rounded-full bg-destructive" />
-                        Listening… speak now
-                      </span>
+                      <span className="font-medium text-primary">Listening… speak now</span>
                     ) : voiceState === "listening" ? (
-                      <span className="flex items-center gap-1.5 font-medium text-emerald-600">
-                        <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                      <span className="font-medium text-primary">
                         Continuous voice active
                       </span>
                     ) : voiceState === "processing" || busy ? (
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <Loader2 className="size-3 animate-spin" />
-                        Preparing response…
+                        Schedula is preparing a response…
                       </span>
                     ) : voiceState === "speaking" ? (
                       <span className="flex items-center gap-1.5 font-medium text-primary">
-                        <AudioLines className="size-3.5 animate-pulse" />
+                        <AudioLines className="size-3.5" />
                         Speaking…
                         <button
                           type="button"
@@ -1267,16 +1455,35 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                     ) : null}
                   </div>
                 </div>
-                {oneTurnTranscript && (
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                    Heard: &quot;{oneTurnTranscript}&quot;
-                  </span>
-                )}
               </div>
             </div>
           </>
         )}
       </CardContent>
+      <Dialog
+        open={Boolean(conversationToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deletingConversationId) setConversationToDelete(undefined);
+        }}
+      >
+        <DialogContent aria-labelledby="assistant-delete-title" aria-describedby="assistant-delete-description" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle id="assistant-delete-title">Delete this chat?</DialogTitle>
+            <DialogDescription id="assistant-delete-description">
+              This permanently deletes “{conversationToDelete?.title}” and its messages. This can’t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {historyError && <p className="text-sm text-destructive" role="alert">{historyError}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConversationToDelete(undefined)} disabled={Boolean(deletingConversationId)}>
+              Keep chat
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void deleteConversation()} disabled={Boolean(deletingConversationId)}>
+              {deletingConversationId ? <><Loader2 className="mr-2 size-4 animate-spin" />Deleting…</> : "Delete chat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

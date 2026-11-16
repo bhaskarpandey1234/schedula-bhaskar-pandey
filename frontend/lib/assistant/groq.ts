@@ -88,6 +88,7 @@ async function createCompletionWithRecovery(input: {
   messages: Array<Record<string, unknown>>;
   role: AssistantRole;
   deadlineAt: number;
+  signal?: AbortSignal;
   runtime: Required<Pick<Runtime, "now">>;
 }) {
   const models = [assistantConfig.textModel, assistantConfig.fallbackTextModel].filter((model, index, values) => Boolean(model) && values.indexOf(model) === index);
@@ -107,9 +108,10 @@ async function createCompletionWithRecovery(input: {
         max_completion_tokens: 1_600,
         reasoning_effort: model.startsWith("qwen/") ? "none" : "low",
         reasoning_format: "hidden",
-      }, { timeout: Math.min(GROQ_ATTEMPT_TIMEOUT_MS, remainingMs), maxRetries: 0 });
+      }, { timeout: Math.min(GROQ_ATTEMPT_TIMEOUT_MS, remainingMs), maxRetries: 0, signal: input.signal });
       return { completion, model: completion.model || model };
     } catch (error) {
+      if (input.signal?.aborted) throw new Error("ASSISTANT_ABORTED");
       lastFailure = classifyProviderError(error);
       console.warn("assistant_groq_attempt_failed", {
         durationMs: Math.max(0, input.runtime.now() - started),
@@ -147,7 +149,7 @@ async function executeAssistantCalls(input: { calls: FunctionCall[]; role: Assis
   return callsToExecute.map((call, index) => ({ call, result: results[index] as AssistantToolResult }));
 }
 
-async function runGroqRemote(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string }, runtime: Runtime) {
+async function runGroqRemote(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string; signal?: AbortSignal }, runtime: Runtime) {
   const now = runtime.now ?? Date.now;
   const resolvedRuntime = { now };
   const client = runtime.client ?? new Groq({ apiKey: assistantConfig.groqApiKey, maxRetries: 0 }) as unknown as ChatClient;
@@ -156,7 +158,8 @@ async function runGroqRemote(input: { role: AssistantRole; userId: string; supab
   const displays: AssistantDisplayPayload[] = [];
 
   for (let iteration = 0; iteration < GROQ_TOOL_ITERATION_LIMIT; iteration += 1) {
-    const { completion, model } = await createCompletionWithRecovery({ client, messages, role: input.role, deadlineAt, runtime: resolvedRuntime });
+    const { completion, model } = await createCompletionWithRecovery({ client, messages, role: input.role, deadlineAt, signal: input.signal, runtime: resolvedRuntime });
+    if (input.signal?.aborted) throw new Error("ASSISTANT_ABORTED");
     const message = completion.choices[0]?.message;
     if (!message) throw new Error("ASSISTANT_PROVIDER_REQUEST_FAILED");
     const calls = parseToolCalls(message);
@@ -199,7 +202,7 @@ async function runGroqRemote(input: { role: AssistantRole; userId: string; supab
   throw new Error("ASSISTANT_TOOL_LOOP_LIMIT");
 }
 
-export async function runGroqAssistant(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string }, runtime: Runtime = {}) {
+export async function runGroqAssistant(input: { role: AssistantRole; userId: string; supabase: SupabaseClient; messages: ChatMessage[]; language?: string; signal?: AbortSignal }, runtime: Runtime = {}) {
   if (!assistantConfig.groqApiKey) throw new Error("ASSISTANT_CONFIGURATION_REQUIRED");
   return runGroqRemote(input, runtime);
 }
