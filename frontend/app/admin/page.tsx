@@ -1,7 +1,6 @@
 import { connection } from "next/server";
-import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
-import { createDb } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
 import { ClinicAdminPanel } from "@/components/queue/clinic-admin-panel";
 
 export const instant = false;
@@ -9,13 +8,14 @@ export const instant = false;
 export default async function AdminPage() {
   await connection();
   await requireRole("admin");
-  const db = createDb();
+  const supabase = await createClient();
   const [clinics, doctors, staff] = await Promise.all([
-    db.execute(sql`SELECT id, name, timezone FROM public.clinics ORDER BY name, id`),
-    db.execute(sql`SELECT d.id, p.full_name AS name, d.clinic_id FROM public.doctors d JOIN public.profiles p ON p.id = d.id ORDER BY p.full_name, d.id`),
-    db.execute(sql`SELECT p.id, p.full_name AS name, m.clinic_id FROM public.profiles p LEFT JOIN public.staff_clinic_memberships m ON m.staff_id = p.id WHERE p.role = 'staff' ORDER BY p.full_name, p.id`),
+    supabase.rpc("admin_clinic_directory"),
+    supabase.rpc("admin_doctor_assignments"),
+    supabase.rpc("admin_staff_assignments"),
   ]);
-  return <ClinicAdminPanel clinics={clinics as unknown as Array<{ id: string; name: string; timezone: string }>}
-    doctors={doctors as unknown as Array<{ id: string; name: string; clinic_id: string | null }>}
-    staff={staff as unknown as Array<{ id: string; name: string; clinic_id: string | null }>} />;
+  if (clinics.error || doctors.error || staff.error) {
+    throw new Error("Admin clinic data could not be loaded. Refresh the page and try again.");
+  }
+  return <ClinicAdminPanel clinics={clinics.data ?? []} doctors={doctors.data ?? []} staff={staff.data ?? []} />;
 }
