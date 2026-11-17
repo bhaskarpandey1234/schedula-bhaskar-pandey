@@ -58,6 +58,35 @@ afterEach(async () => {
 });
 
 describe("patient check-in queue", () => {
+  it("exposes clinic assignment directories only to verified admins", async () => {
+    const admin = await privileged("admin");
+    const staff = await privileged("staff");
+    const doctor = await person("doctor", "queue-directory-doctor");
+    const patient = await person("patient", "queue-directory-patient");
+
+    const directories = await Promise.all([
+      admin.client.rpc("admin_clinic_directory"),
+      admin.client.rpc("admin_doctor_assignments"),
+      admin.client.rpc("admin_staff_assignments"),
+    ]);
+    expect(directories.every((result) => result.error === null)).toBe(true);
+    expect(directories[0].data?.every((row: { id: string; name: string; timezone: string }) =>
+      Object.keys(row).sort().join(",") === "id,name,timezone")).toBe(true);
+    expect(directories[1].data?.some((row: { id: string }) => row.id === doctor.id)).toBe(true);
+    expect(directories[2].data?.some((row: { id: string }) => row.id === staff.id)).toBe(true);
+
+    for (const client of [staff.client, doctor.client, patient.client]) {
+      for (const rpc of ["admin_clinic_directory", "admin_doctor_assignments", "admin_staff_assignments"] as const) {
+        expect((await client.rpc(rpc)).error).not.toBeNull();
+      }
+    }
+
+    const anonymous = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    expect((await anonymous.rpc("admin_clinic_directory")).error).not.toBeNull();
+  });
+
   it("issues one token under retries and concurrent check-in and keeps positions current", async () => {
     const doctor = await person("doctor", "queue-doctor");
     const first = await person("patient", "queue-first");
