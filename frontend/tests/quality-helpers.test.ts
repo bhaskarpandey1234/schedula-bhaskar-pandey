@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { destinationForRole, portalDestinationFor } from "../lib/auth/portal-destination";
+import { evaluateProfileCompletion, profileCompletionDetails } from "../lib/auth/profile-completion";
 import { safeReturnPath } from "../lib/auth/return-path";
 import { authErrorCategory, authErrorDiagnostic, authErrorMessage } from "../lib/auth/errors";
 import { parseDirectoryFilters } from "../lib/discovery/filters";
@@ -16,8 +17,17 @@ describe("portal destination rules", () => {
   it("routes complete roles to their own portals", () => {
     expect(portalDestinationFor({ profile: { role: "patient" }, onboardingComplete: true })).toBe("/patient");
     expect(portalDestinationFor({ profile: { role: "doctor" }, onboardingComplete: true })).toBe("/doctor");
+    expect(portalDestinationFor({ profile: { role: "admin" }, onboardingComplete: true })).toBe("/admin");
+    expect(portalDestinationFor({ profile: { role: "staff" }, onboardingComplete: true })).toBe("/staff");
     expect(destinationForRole("patient")).toBe("/patient");
     expect(destinationForRole("doctor")).toBe("/doctor");
+  });
+
+  it("completes seeded admin and staff profiles from the profile name", () => {
+    const details = profileCompletionDetails("Schedula Production Admin", null);
+    expect(details).toEqual({ full_name: "Schedula Production Admin" });
+    expect(evaluateProfileCompletion("admin", "admin@mailinator.com", details)).toEqual({ complete: true, missingFields: [] });
+    expect(evaluateProfileCompletion("staff", "staff@mailinator.com", profileCompletionDetails("Clinic Staff", {}))).toEqual({ complete: true, missingFields: [] });
   });
 });
 

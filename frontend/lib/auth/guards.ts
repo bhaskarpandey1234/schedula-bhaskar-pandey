@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/validation/auth";
 import { destinationForRole, portalDestinationFor, type PortalDestination } from "@/lib/auth/portal-destination";
-import { evaluateProfileCompletion, type ProfileCompletion } from "@/lib/auth/profile-completion";
+import { evaluateProfileCompletion, profileCompletionDetails, type ProfileCompletion } from "@/lib/auth/profile-completion";
 
 export type { PortalDestination } from "@/lib/auth/portal-destination";
 
@@ -19,7 +19,7 @@ export async function getCurrentAccount() {
       ? supabase.from("doctors").select("phone, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor, consultation_currency").eq("id", userData.user.id).maybeSingle()
       : null;
   const { data: rawDetails } = detailsQuery ? await detailsQuery : { data: {} };
-  const details = rawDetails ? { ...(rawDetails as Record<string, unknown>), full_name: profile.full_name } : null;
+  const details = profileCompletionDetails(profile.full_name, rawDetails as Record<string, unknown> | null);
   const completion: ProfileCompletion = evaluateProfileCompletion(profile.role, userData.user.email, details);
   return { user: userData.user, profile, onboardingComplete: completion.complete, completion, emailVerified };
 }
