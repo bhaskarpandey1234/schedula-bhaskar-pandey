@@ -150,9 +150,12 @@ describe("patient check-in queue", () => {
     const { error: preferenceError } = await patient.client.from("notification_preferences").upsert({ recipient_id: patient.id, operational_email: true });
     expect(preferenceError).toBeNull();
     expect((await doctor.client.rpc("check_in_appointment", { p_appointment_id: appointmentId })).error).toBeNull();
+    expect((await doctor.client.rpc("check_in_appointment", { p_appointment_id: appointmentId })).error).toBeNull();
     const { data: deliveries, error } = await localAdmin().from("notification_deliveries").select("channel, template").eq("appointment_id", appointmentId).eq("template", "checkin_token");
     expect(error).toBeNull();
     expect(deliveries).toEqual([{ channel: "email", template: "checkin_token" }]);
+    const { data: tokenNotification } = await localAdmin().from("notifications").select("metadata").eq("appointment_id", appointmentId).eq("type", "checkin_token").single();
+    expect(tokenNotification?.metadata).toMatchObject({ token: "T001" });
     const { data: patientStatus } = await patient.client.rpc("patient_queue_status");
     expect(patientStatus?.find((row: { appointment_id: string }) => row.appointment_id === appointmentId)?.token_number).toBe(1);
   });
