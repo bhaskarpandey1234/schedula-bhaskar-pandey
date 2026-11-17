@@ -25,7 +25,7 @@ This document records the production deployment evidence for the Schedula MVP. I
 - [ ] Configure confirmation and recovery email templates with `{{ .TokenHash }}` and the matching `email` or `recovery` OTP type.
 - [x] Configure Vercel with `frontend/` as the project root, Next.js preset, and Node 22.
 - [x] Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` to Vercel production.
-- [ ] Add `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel secret in every environment that enables admin or staff invitations. Do not expose it through `NEXT_PUBLIC_` or record its value here.
+- [ ] Add `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable in every environment that enables admin or staff invitations. Its value may be the current Supabase secret key or legacy `service_role` key. Do not expose it through `NEXT_PUBLIC_` or record its value here.
 - [x] Keep `RESEND_*` unset for this release.
 - [ ] Create a future demo doctor availability through the application without recording credentials here.
 
