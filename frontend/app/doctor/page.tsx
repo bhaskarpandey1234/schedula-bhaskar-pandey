@@ -19,6 +19,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { getDoctorSchedule } from "@/lib/availability/actions";
 import { formatLocalSlotRange } from "@/lib/scheduling/time";
 import { createClient } from "@/lib/supabase/server";
+import { getQueueBoard, tokenLabel } from "@/lib/queue/queries";
 
 export const instant = false;
 
@@ -50,12 +51,16 @@ export default async function DoctorPage() {
   }).format(new Date());
 
   const schedule = await getDoctorSchedule(today);
+  const queue = await getQueueBoard(undefined, account.user.id);
+  const currentPatient = queue.find((item) => item.queue_status === "called" || item.queue_status === "in_consultation");
+  const waitingPatients = queue.filter((item) => item.queue_status === "waiting").sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0));
   const booked = schedule.slots.reduce((total, slot) => total + slot.allocated_count, 0);
   const totalCapacity = schedule.slots.reduce((total, slot) => total + slot.capacity, 0);
 
   return (
     <>
       <div className="space-y-8 max-w-6xl">
+        <section className="rounded-2xl border bg-card p-5" aria-label="Today's patient queue"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Today’s patient queue</h2><Button asChild size="sm"><Link href="/doctor/queue">Manage check-in and queue</Link></Button></div><p className="mt-2 text-sm">Current: {currentPatient ? `${tokenLabel(currentPatient.token_number)} · ${currentPatient.patient_name} · ${currentPatient.queue_status?.replaceAll("_", " ")}` : "None"}</p><p className="mt-1 text-sm">Waiting: {waitingPatients.length}{waitingPatients[0] ? ` · Next ${tokenLabel(waitingPatients[0].token_number)} ${waitingPatients[0].patient_name}` : ""}</p></section>
         {/* Practice Header Banner */}
         <div className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-r from-teal-50/70 via-sky-50/40 to-white p-6 sm:p-8 shadow-xs">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
