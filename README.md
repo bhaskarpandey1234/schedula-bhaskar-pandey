@@ -34,6 +34,22 @@ Phase 8 quality gates are complete. Phase 9 adds deployment-safe authentication 
 
 Doctor-initiated appointment cancellation remains explicitly deferred. The deployed release validates patient cancellation and capacity restoration.
 
+## Patient check-in and queue
+
+After applying migrations `0048` through `0056`, doctors can check in today's confirmed appointments from `/doctor/queue`. Staff can manage arrivals and calls for their assigned clinic from `/staff`; admins can manage clinics and use `/admin/queue`. A new doctor gets a separate clinic record during onboarding. An admin can explicitly assign doctors and staff to a shared clinic from `/admin`.
+
+Check-in records the arrival time once, issues a stable doctor/day token, and shows live position and status in the patient portal. The board refreshes every 10 seconds. A doctor or staff member calls the next waiting patient, can call again, and can skip after five minutes; a skipped patient can return at the end with the same token. Doctors and admins start and complete consultations. No-show is available after the slot's grace period and can be reversed with an audit reason. Cancellation removes a patient from the active queue while preserving the issued token in history. Existing booked visits that predate this feature retain their earlier completion behavior.
+
+Token email uses the existing notification outbox and the patient's **operational email** preference. The token is always visible in the patient portal after check-in. Configure the existing email delivery worker and provider for actual delivery; check-in succeeds even if email delivery is unavailable.
+
+Create the first admin through a server environment with the Supabase service-role key after migrations are applied:
+
+```bash
+pnpm --filter frontend invite:admin admin@example.com "Clinic Administrator"
+```
+
+The command sends a password setup invitation; public sign-up cannot choose admin or staff. Admins invite staff from `/admin`. Keep the service-role key server-only, and configure the Auth confirmation redirect for the deployed site. This branch has not been deployed to a hosted project.
+
 ## Free-tier assistant pilot
 
 The assistant is available at `/doctor/assistant` and `/patient/assistant` after migration `frontend/drizzle/0042-ai-assistant-pilot.sql` is applied. It is deliberately disabled unless `ASSISTANT_PILOT_MODE=true`, `GROQ_API_KEY` is configured, and the signed-in synthetic account exists in `assistant_pilot_access`.

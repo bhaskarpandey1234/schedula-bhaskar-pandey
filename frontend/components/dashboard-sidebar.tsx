@@ -27,6 +27,7 @@ const doctorItems = [
   { href: "/doctor", label: "Overview", icon: Home },
   { href: "/doctor/schedule", label: "Availability", icon: CalendarDays },
   { href: "/doctor/appointments", label: "Appointments", icon: ClipboardList },
+  { href: "/doctor/queue", label: "Check-in & Queue", icon: ClipboardList },
   { href: "/doctor/assistant", label: "AI Assistant", icon: HeartPulse },
   { href: "/doctor/profile", label: "Doctor Profile", icon: UserRound },
 ];

@@ -63,4 +63,4 @@ export const doctorOnboardingSchema = z.object({
   consultationFee: z.coerce.number().finite().min(1, "Enter a consultation fee of at least ₹1.").max(100000, "Consultation fee cannot exceed ₹100,000.").default(1000),
 });
 
-export type Role = "patient" | "doctor";
+export type Role = "patient" | "doctor" | "staff" | "admin";
