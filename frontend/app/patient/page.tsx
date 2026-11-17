@@ -14,6 +14,8 @@ import {
 import { requireRole } from "@/lib/auth/guards";
 import { Button } from "@/components/ui/button";
 import { getPatientAppointments } from "@/lib/appointments/queries";
+import { getPatientQueueStatus } from "@/lib/queue/queries";
+import { PatientQueuePanel } from "@/components/queue/patient-queue-panel";
 import { formatLocalSlotRange } from "@/lib/scheduling/time";
 
 export const instant = false;
@@ -22,6 +24,7 @@ export default async function PatientPage() {
   await connection();
   const account = await requireRole("patient");
   const appointments = await getPatientAppointments("upcoming");
+  const queueStatus = await getPatientQueueStatus();
   const next = appointments[0];
 
   const firstName = account.profile.full_name?.split(" ")[0] || "there";
@@ -29,6 +32,7 @@ export default async function PatientPage() {
   return (
     <>
       <div className="space-y-8 max-w-6xl">
+        <PatientQueuePanel rows={queueStatus} />
         {/* Welcome Gradient Banner */}
         <div className="relative overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-r from-sky-50 via-teal-50/40 to-white p-6 sm:p-8 shadow-xs">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">

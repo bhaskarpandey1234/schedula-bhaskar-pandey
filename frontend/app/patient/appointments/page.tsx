@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/guards";
 import { getPatientAppointments } from "@/lib/appointments/queries";
+import { getPatientQueueStatus } from "@/lib/queue/queries";
+import { PatientQueuePanel } from "@/components/queue/patient-queue-panel";
 import type { AppointmentTab } from "@/lib/validation/appointments";
 import { CancelAppointmentForm } from "@/components/cancel-appointment-form";
 import { PaymentStatusBadge, RefundStatusBadge } from "@/components/payment-status";
@@ -49,10 +51,12 @@ export default async function AppointmentsPage({
       ? requestedTab
       : "upcoming";
   const appointments = await getPatientAppointments(tab);
+  const queueStatus = await getPatientQueueStatus();
 
   return (
     <>
       <div className="space-y-6 max-w-6xl">
+        <PatientQueuePanel rows={queueStatus} />
         {/* Page Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
           <div>
