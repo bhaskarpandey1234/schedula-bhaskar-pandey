@@ -4,6 +4,7 @@ import { createDb } from "@/lib/db";
 import { paymentWebhookEvents } from "@/lib/db/schema";
 import { sendEmail, sendSms, sendWhatsApp } from "@/lib/notifications/providers";
 import { renderNotificationTemplate } from "@/lib/notifications/templates";
+import { resolveCheckinToken } from "@/lib/notifications/checkin-token";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentProviderError } from "@/lib/payments/provider";
 import { findMatchingProviderRefund, isRetryableRefundError, normalizeProviderRefundState, safeRefundFailureReason } from "@/lib/payments/refund-state";
@@ -256,18 +257,24 @@ export async function POST(request: Request) {
     try {
       let tokenContext: { clinic_name: string; token: string } | undefined;
       if (delivery.template === "checkin_token") {
-        const current = (await db.execute(sql`SELECT c.name AS clinic_name, 'T' || lpad(e.token_number::text, 3, '0') AS token
-          FROM public.queue_entries e
-          JOIN public.appointments a ON a.id = e.appointment_id
-          JOIN public.queue_sessions s ON s.id = e.session_id
-          JOIN public.clinics c ON c.id = s.clinic_id
-          WHERE a.id = ${delivery.appointment_id}::uuid AND a.status = 'confirmed'
-            AND e.status IN ('waiting','called','in_consultation','skipped') LIMIT 1`)) as unknown as Array<{ clinic_name: string; token: string }>;
-        tokenContext = current[0];
-        if (!tokenContext) {
-          await db.execute(sql`UPDATE public.notification_deliveries SET status = 'cancelled'::notification_delivery_status, updated_at = now() WHERE id = ${delivery.id}::uuid`);
+        const storedToken = resolveCheckinToken(row.notification_metadata?.token, null);
+        let queueContext: { clinic_name: string; token: string } | undefined;
+        if (!storedToken) {
+          const current = (await db.execute(sql`SELECT c.name AS clinic_name, 'T' || lpad(e.token_number::text, 3, '0') AS token
+            FROM public.queue_entries e
+            JOIN public.queue_sessions s ON s.id = e.session_id
+            JOIN public.clinics c ON c.id = s.clinic_id
+            WHERE e.appointment_id = ${delivery.appointment_id}::uuid
+            LIMIT 1`)) as unknown as Array<{ clinic_name: string; token: string }>;
+          queueContext = current[0];
+        }
+        const token = resolveCheckinToken(storedToken, queueContext?.token);
+        if (!token) {
+          await db.execute(sql`SELECT public.record_notification_attempt(${delivery.id}::uuid, ${delivery.attempts}, 'internal', 'failed', NULL, 'checkin_token_missing')`);
+          await finalizeDeliveryFailure(db, delivery, "internal", "checkin_token_missing", false);
           continue;
         }
+        tokenContext = { clinic_name: queueContext?.clinic_name ?? row.clinic_name, token };
       }
       const recipientRole = row.recipient_role === "doctor" || row.recipient_role === "patient" ? row.recipient_role : null;
       const expectedRecipientId = recipientRole === "doctor" ? row.doctor_id : recipientRole === "patient" ? row.patient_id : null;
