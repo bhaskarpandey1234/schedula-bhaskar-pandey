@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { getCurrentAccount } from "@/lib/auth/guards";
+import { isExistingAuthUserError, resendPendingStaffInvitation } from "@/lib/auth/staff-invitations";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
 
@@ -48,7 +49,20 @@ export async function clinicAdminAction(_: AdminActionState, formData: FormData)
       data: { role: "patient", full_name: name },
       redirectTo: getAuthConfirmRedirect("/auth/update-password"),
     });
-    if (error || !data.user) return { error: "The invitation could not be sent. Check whether this email already has an account." };
+    if (error || !data.user) {
+      // Supabase does not send a second invite for an existing account. A
+      // pending invite is still unconfirmed, so re-send its standard signup
+      // confirmation email instead. This deliberately makes no profile or
+      // clinic-assignment changes for an already-existing account.
+      if (isExistingAuthUserError(error)) {
+        const resent = await resendPendingStaffInvitation(service, email, getAuthConfirmRedirect("/auth/update-password"));
+        if (resent) {
+          revalidatePath("/admin");
+          return { success: "A fresh account setup email was sent. If the email is already confirmed, ask the staff member to sign in." };
+        }
+      }
+      return { error: "The invitation could not be sent. Check whether this email already has an account." };
+    }
     const promoted = await service.from("profiles").update({ role: "staff" }).eq("id", data.user.id).eq("role", "patient").select("id").single();
     if (promoted.error) return { error: "Invitation sent, but staff provisioning failed. Contact the system operator.", stale: true };
     const metadata = await service.auth.admin.updateUserById(data.user.id, { user_metadata: { role: "staff", full_name: name } });

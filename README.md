@@ -174,7 +174,7 @@ The Drizzle generate command writes SQL under `frontend/drizzle/`. Start local S
 
 ## Phase 9 deployment handoff
 
-The Vercel project should use `frontend/` as its root directory and Node 22. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in Vercel. Keep `DATABASE_URL`, Supabase service-role keys, demo credentials, and any `RESEND_*` values out of Git and out of Vercel unless a future server-side feature requires them. Apply the ordered Drizzle migrations from a secure migration environment, then configure Supabase Auth’s production Site URL, exact confirmation/recovery redirects, and OTP-based email templates. See the handoff document for release evidence and limitations.
+The Vercel project should use `frontend/` as its root directory and Node 22. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in Vercel. Admin and staff invitation actions also require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel secret. Staff invitations and signup verification use Supabase Auth email; configure custom SMTP there before sending to external production recipients. Keep `DATABASE_URL`, Supabase service-role keys, demo credentials, and any `RESEND_*` values out of Git. Apply the ordered Drizzle migrations from a secure migration environment, then configure Supabase Auth’s production Site URL, exact confirmation/recovery redirects, and OTP-based email templates. See the handoff document for release evidence and limitations.
 
 ## Future roadmap
 
