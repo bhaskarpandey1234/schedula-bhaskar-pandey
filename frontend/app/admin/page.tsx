@@ -15,7 +15,15 @@ export default async function AdminPage() {
     supabase.rpc("admin_staff_assignments"),
   ]);
   if (clinics.error || doctors.error || staff.error) {
-    throw new Error("Admin clinic data could not be loaded. Refresh the page and try again.");
+    return (
+      <main className="mx-auto max-w-5xl space-y-4 p-6">
+        <h1 className="text-2xl font-semibold">Clinic management</h1>
+        <p role="alert">Clinic data could not be loaded. Please try again.</p>
+        <form action="/admin">
+          <button type="submit" className="rounded-md border px-4 py-2">Try again</button>
+        </form>
+      </main>
+    );
   }
   return <ClinicAdminPanel clinics={clinics.data ?? []} doctors={doctors.data ?? []} staff={staff.data ?? []} />;
 }

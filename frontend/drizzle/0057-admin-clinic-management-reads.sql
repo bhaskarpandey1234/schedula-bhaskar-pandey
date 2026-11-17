@@ -35,9 +35,19 @@ BEGIN
     WHERE p.role = 'staff' ORDER BY p.full_name, p.id;
 END $$;
 
-REVOKE ALL ON FUNCTION public.admin_clinic_directory() FROM PUBLIC, anon, service_role, schedula_production;
-REVOKE ALL ON FUNCTION public.admin_doctor_assignments() FROM PUBLIC, anon, service_role, schedula_production;
-REVOKE ALL ON FUNCTION public.admin_staff_assignments() FROM PUBLIC, anon, service_role, schedula_production;
+REVOKE ALL ON FUNCTION public.admin_clinic_directory() FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.admin_doctor_assignments() FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.admin_staff_assignments() FROM PUBLIC, anon, service_role;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'schedula_production') THEN
+    REVOKE ALL ON FUNCTION public.admin_clinic_directory() FROM schedula_production;
+    REVOKE ALL ON FUNCTION public.admin_doctor_assignments() FROM schedula_production;
+    REVOKE ALL ON FUNCTION public.admin_staff_assignments() FROM schedula_production;
+  END IF;
+END $$;
+
 GRANT EXECUTE ON FUNCTION public.admin_clinic_directory() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_doctor_assignments() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_staff_assignments() TO authenticated;

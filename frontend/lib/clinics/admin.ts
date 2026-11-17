@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { getCurrentAccount } from "@/lib/auth/guards";
-import { isExistingAuthUserError, resendPendingStaffInvitation } from "@/lib/auth/staff-invitations";
+import { sendEmail } from "@/lib/notifications/providers";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthConfirmRedirect } from "@/lib/auth/redirects";
 
@@ -44,33 +44,63 @@ export async function clinicAdminAction(_: AdminActionState, formData: FormData)
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!key || !url) return { error: "Staff invitations are not configured. Contact the system operator." };
-    const service = createServiceClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
-      data: { role: "patient", full_name: name },
-      redirectTo: getAuthConfirmRedirect("/auth/update-password"),
-    });
-    if (error || !data.user) {
-      // Supabase does not send a second invite for an existing account. A
-      // pending invite is still unconfirmed, so re-send its standard signup
-      // confirmation email instead. This deliberately makes no profile or
-      // clinic-assignment changes for an already-existing account.
-      if (isExistingAuthUserError(error)) {
-        const resent = await resendPendingStaffInvitation(service, email, getAuthConfirmRedirect("/auth/update-password"));
-        if (resent) {
-          revalidatePath("/admin");
-          return { success: "A fresh account setup email was sent. If the email is already confirmed, ask the staff member to sign in." };
-        }
-      }
-      return { error: "The invitation could not be sent. Check whether this email already has an account." };
+    if (!process.env.BREVO_API_KEY || !process.env.BREVO_FROM_EMAIL) {
+      return { error: "Staff invitation email is not configured. Ask the system operator to configure Brevo." };
     }
-    const promoted = await service.from("profiles").update({ role: "staff" }).eq("id", data.user.id).eq("role", "patient").select("id").single();
-    if (promoted.error) return { error: "Invitation sent, but staff provisioning failed. Contact the system operator.", stale: true };
-    const metadata = await service.auth.admin.updateUserById(data.user.id, { user_metadata: { role: "staff", full_name: name } });
-    if (metadata.error) return { error: "Staff account created, but its profile metadata needs repair. Contact the system operator.", stale: true };
-    const assigned = await supabase.rpc("admin_assign_staff_clinic", { p_staff_id: data.user.id, p_clinic_id: clinicId });
-    if (assigned.error) return { error: "Invitation sent, but clinic assignment failed. Assign this staff member from the list below.", stale: true };
+    const service = createServiceClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+    const { data: userPage, error: listError } = await service.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (listError) return { error: "We could not verify whether this email already has a staff account. Refresh and try again.", stale: true };
+    const existingUser = userPage.users.find((user) => user.email?.toLowerCase() === email);
+    if (existingUser) {
+      if (existingUser.email_confirmed_at) {
+        return { error: "This email already belongs to a verified account. Ask that user to sign in or use password recovery." };
+      }
+      const { data: profile, error: profileError } = await service.from("profiles").select("role").eq("id", existingUser.id).maybeSingle();
+      if (profileError) return { error: "We could not verify this account’s role. Refresh and try again.", stale: true };
+      if (profile?.role !== "staff") {
+        return { error: "This email already belongs to a non-staff account. Use another email or ask the system operator to review it." };
+      }
+    }
+
+    const { data: invite, error: inviteError } = await service.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: { role: "staff", full_name: name },
+        redirectTo: getAuthConfirmRedirect("/auth/update-password"),
+      },
+    });
+    if (inviteError || !invite.user || !invite.properties.action_link) {
+      const code = inviteError?.code?.toLowerCase() ?? "";
+      if (["over_email_send_rate_limit", "email_rate_limit_exceeded"].includes(code)) {
+        return { error: "Supabase rate limited this invitation. Wait a few minutes and try again." };
+      }
+      return { error: "Supabase could not create the staff setup link. Check the account status and try again." };
+    }
+
+    if (!existingUser) {
+      const { data: profile, error: profileError } = await service.from("profiles").select("role").eq("id", invite.user.id).maybeSingle();
+      if (profileError || profile?.role !== "staff") return { error: "The staff account was created, but role setup failed. Contact the system operator.", stale: true };
+      const assigned = await supabase.rpc("admin_assign_staff_clinic", { p_staff_id: invite.user.id, p_clinic_id: clinicId });
+      if (assigned.error) return { error: "The staff account was created, but clinic assignment failed. Assign it from the staff list.", stale: true };
+    }
+
+    const delivery = await sendEmail({
+      to: email,
+      subject: "Set up your Schedula staff account",
+      text: `Hello ${name},\n\nYou have been invited to Schedula as clinic staff. Use this one-time link to verify your email and choose a password:\n\n${invite.properties.action_link}\n\nIf you were not expecting this invitation, you can ignore this email.`,
+      idempotencyKey: `staff-invite/${invite.user.id}/${invite.user.confirmation_sent_at ?? invite.user.created_at}`,
+    });
+    if (delivery.status !== "sent") {
+      if (delivery.status === "skipped") return { error: "Brevo is not configured to send staff invitations. Contact the system operator." };
+      if (delivery.errorCode === "provider_rate_limited") return { error: "Brevo rate limited this email. Wait a few minutes and retry." };
+      return { error: "The setup link was created, but Brevo could not deliver it. Check Brevo delivery and retry." };
+    }
+    revalidatePath("/admin");
+    revalidatePath("/staff");
+    return { success: existingUser ? "A fresh staff setup email was sent." : "Staff invitation sent and clinic assigned." };
   } else return { error: "Unknown clinic action." };
   revalidatePath("/admin");
   revalidatePath("/staff");
-  return { success: operation === "invite_staff" ? "Staff invitation sent and clinic assigned." : "Clinic settings updated." };
+  return { success: "Clinic settings updated." };
 }
