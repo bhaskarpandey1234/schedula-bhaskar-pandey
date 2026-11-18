@@ -8,7 +8,7 @@ export type AssistantDisplayPayload = {
 
 export type PendingAssistantAction = {
   id: string;
-  actionType: "booking" | "reschedule" | "cancellation" | "doctor_cancellation" | "doctor_completion" | "doctor_prescription" | "elastic_adjustment" | "elastic_proposal_decision" | "availability_creation" | "doctor_leave" | "doctor_slot_cancellation";
+  actionType: "booking" | "reschedule" | "cancellation" | "doctor_cancellation" | "doctor_prescription" | "elastic_adjustment" | "elastic_proposal_decision" | "availability_creation" | "doctor_leave" | "doctor_slot_cancellation";
   preview: BookingPreview | CancellationPreview | ReschedulePreview | Record<string, unknown>;
   expiresAt: string;
 };

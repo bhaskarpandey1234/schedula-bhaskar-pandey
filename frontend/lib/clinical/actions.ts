@@ -6,17 +6,6 @@ import { requireCompleteProfile } from "@/lib/auth/guards";
 
 export type ClinicalActionState = { error?: string; success?: boolean };
 
-export async function completeDoctorAppointmentAction(_: ClinicalActionState, formData: FormData): Promise<ClinicalActionState> {
-  await requireCompleteProfile("doctor");
-  const appointmentId = String(formData.get("appointmentId") ?? "");
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("complete_doctor_appointment", { p_appointment_id: appointmentId });
-  if (error) return { error: "This appointment cannot be marked completed yet. Refresh and check its current status." };
-  revalidatePath(`/doctor/appointments/${appointmentId}`, "page");
-  revalidatePath("/doctor/appointments", "page");
-  return { success: true };
-}
-
 export async function publishPrescriptionAction(_: ClinicalActionState, formData: FormData): Promise<ClinicalActionState> {
   await requireCompleteProfile("doctor");
   const appointmentId = String(formData.get("appointmentId") ?? "");

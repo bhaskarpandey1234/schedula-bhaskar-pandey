@@ -18,7 +18,6 @@ export const assistantFunctionDeclarations = [
   { type: "function" as const, name: "doctor_pending_proposals", description: "Read patient responses still pending after this doctor's elastic schedule changes.", parameters: { type: "object", properties: {} } },
   { type: "function" as const, name: "prepare_doctor_cancellation", description: "Prepare a doctor appointment cancellation preview. Requires explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" } }, required: ["appointmentId"] } },
   { type: "function" as const, name: "prepare_doctor_slot_cancellation", description: "Prepare cancellation of an unbooked future doctor availability slot. Requires explicit confirmation.", parameters: { type: "object", properties: { slotId: { type: "string" } }, required: ["slotId"] } },
-  { type: "function" as const, name: "prepare_doctor_completion", description: "Prepare to mark an eligible appointment completed. Requires explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" } }, required: ["appointmentId"] } },
   { type: "function" as const, name: "prepare_doctor_prescription", description: "Prepare a prescription using only medication details explicitly supplied by the doctor. Never invent or recommend medication. Requires explicit confirmation.", parameters: { type: "object", properties: { appointmentId: { type: "string" }, medicationName: { type: "string" }, dosage: { type: "string" }, frequency: { type: "string" }, duration: { type: "string" }, instructions: { type: "string" }, notes: { type: "string" } }, required: ["appointmentId", "medicationName", "dosage", "frequency", "duration"] } },
   { type: "function" as const, name: "prepare_elastic_adjustment", description: "Preview and prepare a doctor-owned occurrence expansion or shrink. Requires explicit confirmation before applying and notifying affected patients.", parameters: { type: "object", properties: { sessionId: { type: "string" }, occurrenceDate: { type: "string" }, startTime: { type: "string" }, endTime: { type: "string" } }, required: ["sessionId", "occurrenceDate", "startTime", "endTime"] } },
   { type: "function" as const, name: "prepare_availability_creation", description: "Prepare doctor availability creation from explicit schedule details. Requires confirmation.", parameters: { type: "object", properties: { sessionType: { type: "string", enum: ["recurring", "specific_date"] }, recurrenceMethod: { type: "string", enum: ["day", "date"] }, schedulingType: { type: "string", enum: ["wave", "stream"] }, sessionDates: { type: "array", items: { type: "string" } }, recurrenceStartDate: { type: "string" }, recurrenceDuration: { type: "string" }, monthlyDays: { type: "array", items: { type: "number" } }, consultingDays: { type: "array", items: { type: "number" } }, startTime: { type: "string" }, endTime: { type: "string" }, timezone: { type: "string" }, intervalMinutes: { type: "number" }, minimumPatientMinutes: { type: "number" }, capacity: { type: "number" } }, required: ["sessionType", "schedulingType", "startTime", "endTime", "timezone", "capacity"] } },
@@ -35,7 +34,7 @@ export const assistantFunctionDeclarations = [
 
 export function assistantFunctionDeclarationsForRole(role: AssistantRole) {
   const allowed = role === "doctor"
-    ? new Set(["doctor_appointments", "doctor_schedule_stats", "doctor_availability", "doctor_leaves", "doctor_next_slot", "doctor_reschedule_slots", "doctor_pending_proposals", "prepare_doctor_cancellation", "prepare_doctor_slot_cancellation", "prepare_doctor_completion", "prepare_doctor_prescription", "prepare_elastic_adjustment", "prepare_availability_creation", "prepare_doctor_leave"])
+    ? new Set(["doctor_appointments", "doctor_schedule_stats", "doctor_availability", "doctor_leaves", "doctor_next_slot", "doctor_reschedule_slots", "doctor_pending_proposals", "prepare_doctor_cancellation", "prepare_doctor_slot_cancellation", "prepare_doctor_prescription", "prepare_elastic_adjustment", "prepare_availability_creation", "prepare_doctor_leave"])
     : new Set(["patient_appointments", "search_doctors", "doctor_slots", "patient_payments", "patient_prescriptions", "patient_elastic_proposals", "prepare_cancellation", "prepare_reschedule"]);
   return assistantFunctionDeclarations.filter((declaration) => allowed.has(declaration.name));
 }
@@ -219,15 +218,13 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
     if (error) throw new Error("DOCTOR_PROPOSALS_QUERY_FAILED");
     return textResult("Pending patient decisions", `There are ${data?.length ?? 0} pending patient decisions.`, "stats", data ?? []);
   }
-  if (name === "prepare_doctor_cancellation" || name === "prepare_doctor_completion") {
+  if (name === "prepare_doctor_cancellation") {
     const appointmentId = String(args.appointmentId ?? "");
     const appointment = await getDoctorAppointmentDetail(appointmentId);
     if (!appointment) throw new Error("APPOINTMENT_NOT_FOUND");
-    if (name === "prepare_doctor_cancellation" && !appointment.is_cancellable) throw new Error("APPOINTMENT_NOT_CANCELLABLE");
-    if (name === "prepare_doctor_completion" && (appointment.status !== "confirmed" || new Date(appointment.slot_start_at).getTime() > Date.now())) throw new Error("APPOINTMENT_NOT_COMPLETABLE");
-    const actionType = name === "prepare_doctor_cancellation" ? "doctor_cancellation" : "doctor_completion";
-    return prepareAction(supabase, userId, role, actionType, { appointmentId }, {
-      operation: actionType,
+    if (!appointment.is_cancellable) throw new Error("APPOINTMENT_NOT_CANCELLABLE");
+    return prepareAction(supabase, userId, role, "doctor_cancellation", { appointmentId }, {
+      operation: "doctor_cancellation",
       appointment_id: appointment.appointment_id,
       patient_name: appointment.patient_name,
       clinic_name: appointment.clinic_name,
@@ -235,7 +232,7 @@ export async function runAssistantTool(input: { name: string; args: Record<strin
       slot_start_at: appointment.slot_start_at,
       slot_end_at: appointment.slot_end_at,
       timezone: appointment.timezone,
-      impact: name === "prepare_doctor_cancellation" ? "The patient will be notified that this appointment is cancelled." : "The appointment will be marked completed.",
+      impact: "The patient will be notified that this appointment is cancelled.",
     });
   }
   if (name === "prepare_doctor_slot_cancellation") {

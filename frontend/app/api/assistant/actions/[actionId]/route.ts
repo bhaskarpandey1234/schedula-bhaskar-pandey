@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-const doctorActionTypes = new Set(["doctor_cancellation", "doctor_completion", "doctor_prescription", "elastic_adjustment", "availability_creation", "doctor_leave", "doctor_slot_cancellation"]);
+const doctorActionTypes = new Set(["doctor_cancellation", "doctor_prescription", "elastic_adjustment", "availability_creation", "doctor_leave", "doctor_slot_cancellation"]);
 
 async function createDoctorAvailability(supabase: SupabaseClient, payload: Record<string, unknown>) {
   const parsed = availabilitySessionSchema.safeParse(payload);
@@ -84,10 +84,6 @@ export async function POST(request: Request, context: { params: Promise<{ action
         const { error } = await access.supabase.rpc("cancel_doctor_appointment", { p_appointment_id: String(payload.appointmentId) });
         if (error) throw new Error(error.message);
         result = { status: "cancelled" };
-      } else if (claimed.action_type === "doctor_completion") {
-        const { error } = await access.supabase.rpc("complete_doctor_appointment", { p_appointment_id: String(payload.appointmentId) });
-        if (error) throw new Error(error.message);
-        result = { status: "completed" };
       } else if (claimed.action_type === "doctor_slot_cancellation") {
         const { error } = await access.supabase.rpc("cancel_doctor_slot", { p_slot_id: String(payload.slotId) });
         if (error) throw new Error(error.message);

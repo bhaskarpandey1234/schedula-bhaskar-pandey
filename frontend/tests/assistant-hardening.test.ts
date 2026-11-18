@@ -306,7 +306,8 @@ describe("assistant language, permissions, and validation", () => {
   it("keeps role-specific tools isolated and requires slot-button selection for bookings", async () => {
     const doctorTools = assistantFunctionDeclarationsForRole("doctor").map((tool) => tool.name);
     expect(doctorTools).not.toContain("patient_appointments");
-    expect(doctorTools).toEqual(expect.arrayContaining(["prepare_doctor_cancellation", "prepare_doctor_slot_cancellation", "prepare_doctor_completion", "prepare_doctor_prescription", "prepare_elastic_adjustment", "prepare_availability_creation", "prepare_doctor_leave"]));
+    expect(doctorTools).not.toContain("prepare_doctor_completion");
+    expect(doctorTools).toEqual(expect.arrayContaining(["prepare_doctor_cancellation", "prepare_doctor_slot_cancellation", "prepare_doctor_prescription", "prepare_elastic_adjustment", "prepare_availability_creation", "prepare_doctor_leave"]));
     const patientTools = assistantFunctionDeclarationsForRole("patient").map((tool) => tool.name);
     expect(patientTools).not.toContain("doctor_schedule_stats");
     expect(patientTools).not.toContain("prepare_booking");

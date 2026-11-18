@@ -95,7 +95,6 @@ function actionConfirmLabel(action: PendingAssistantAction) {
   if (action.actionType === "reschedule") return "Confirm rescheduling";
   if (action.actionType === "doctor_cancellation") return "Cancel appointment";
   if (action.actionType === "doctor_slot_cancellation") return "Cancel availability slot";
-  if (action.actionType === "doctor_completion") return "Mark appointment completed";
   if (action.actionType === "doctor_prescription") return "Publish prescription";
   if (action.actionType === "elastic_adjustment") return "Apply schedule change and notify patients";
   if (action.actionType === "availability_creation") return "Create availability";
@@ -106,7 +105,6 @@ function actionConfirmLabel(action: PendingAssistantAction) {
 function actionSuccessText(action: PendingAssistantAction) {
   if (action.actionType === "doctor_cancellation") return "The appointment was cancelled and the patient was notified.";
   if (action.actionType === "doctor_slot_cancellation") return "The availability slot was cancelled.";
-  if (action.actionType === "doctor_completion") return "The appointment was marked completed.";
   if (action.actionType === "doctor_prescription") return "The prescription was published to the patient.";
   if (action.actionType === "elastic_adjustment") return "The schedule change was applied and affected patients were notified.";
   if (action.actionType === "availability_creation") return "The availability was created.";
@@ -1224,7 +1222,7 @@ export function AssistantChat({ role, compact = false, onClose }: { role: Assist
                                   onClick={() => void decideAction(message.pendingAction!, "decline")}
                                   disabled={busy || oneTurnActive || actionBusy === message.pendingAction.id}
                                 >
-                                  {message.pendingAction.actionType === "doctor_cancellation" ? "Keep appointment" : message.pendingAction.actionType === "doctor_completion" ? "Do not mark completed" : "Don't apply"}
+                                  {message.pendingAction.actionType === "doctor_cancellation" ? "Keep appointment" : "Don't apply"}
                                 </Button>
                               </div>
                             </div>

@@ -764,8 +764,11 @@ test("doctor assistant confirms appointment, prescription, and elastic schedulin
   await page.route("**/api/assistant/chat", async (route) => {
     const body = route.request().postDataJSON() as { messages: Array<{ text: string }> };
     const text = body.messages.at(-1)?.text ?? "";
+    if (text.includes("completed")) {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ text: "Clinic reception staff manage check-in and queue completion.", displays: [] }) });
+      return;
+    }
     const action = text.includes("cancel") ? { actionType: "doctor_cancellation", preview: { operation: "doctor_cancellation", appointment_id: "11111111-1111-4111-8111-111111111111", patient_name: "Patient A", slot_start_at: "2026-11-20T05:30:00.000Z", timezone: "Asia/Kolkata" } }
-      : text.includes("completed") ? { actionType: "doctor_completion", preview: { operation: "doctor_completion", appointment_id: "11111111-1111-4111-8111-111111111111", patient_name: "Patient A" } }
       : text.includes("prescription") ? { actionType: "doctor_prescription", preview: { operation: "doctor_prescription", medication_name: "Doctor-entered medicine", dosage: "10 mg", frequency: "daily", duration: "5 days" } }
       : { actionType: "elastic_adjustment", preview: { operation: "elastic_adjustment", classification: "shrink", affected_appointments: 2 } };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ text: "Review this action.", displays: [], pendingAction: { id: `action-${action.actionType}`, ...action, expiresAt: new Date(Date.now() + 60_000).toISOString() } }) });
@@ -794,8 +797,8 @@ test("doctor assistant confirms appointment, prescription, and elastic schedulin
 
   await input.fill("mark the appointment completed");
   await input.press("Enter");
-  await conversation.getByRole("button", { name: "Mark appointment completed" }).click();
-  await expect(conversation.getByText("The appointment was marked completed.")).toBeVisible();
+  await expect(conversation.getByText("Clinic reception staff manage check-in and queue completion.")).toBeVisible();
+  await expect(conversation.getByRole("button", { name: "Mark appointment completed" })).toHaveCount(0);
 
   await input.fill("publish this prescription");
   await input.press("Enter");
@@ -807,5 +810,5 @@ test("doctor assistant confirms appointment, prescription, and elastic schedulin
   await input.press("Enter");
   await conversation.getByRole("button", { name: "Apply schedule change and notify patients" }).click();
   await expect(conversation.getByText("The schedule change was applied and affected patients were notified.")).toBeVisible();
-  expect(confirmedActions).toEqual(["action-doctor_cancellation", "action-doctor_completion", "action-doctor_prescription", "action-elastic_adjustment"]);
+  expect(confirmedActions).toEqual(["action-doctor_cancellation", "action-doctor_prescription", "action-elastic_adjustment"]);
 });
