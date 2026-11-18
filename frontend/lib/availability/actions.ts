@@ -114,11 +114,14 @@ export async function getDoctorSchedule(sessionDate: string | "all") {
   await requireVerifiedUser();
   const { supabase, user } = await currentDoctor();
   if (!user) redirect("/auth/login");
-  await supabase.rpc("materialize_recurring_availability_slots", { p_doctor_id: user.id });
-  const { data: slots } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status, availability_sessions!inner(scheduling_type)").eq("doctor_id", user.id).order("slot_start_at");
-  const { data: doctor } = await supabase.from("doctors").select("timezone").eq("id", user.id).single();
+  const { error: materializeError } = await supabase.rpc("materialize_recurring_availability_slots", { p_doctor_id: user.id });
+  if (materializeError) throw new Error("Recurring availability slots could not be refreshed.");
+  const { data: slots, error: slotsError } = await supabase.from("appointment_slots").select("id, availability_session_id, slot_start_at, slot_end_at, capacity, allocated_count, status, availability_sessions!inner(scheduling_type)").eq("doctor_id", user.id).order("slot_start_at");
+  if (slotsError) throw new Error("Doctor schedule slots could not be loaded.");
+  const { data: doctor, error: doctorError } = await supabase.from("doctors").select("timezone").eq("id", user.id).single();
+  if (doctorError || !doctor) throw new Error("Doctor timezone could not be loaded.");
   const rawSlots = (slots ?? []) as Array<Record<string, unknown> & { slot_start_at: string }>;
-  const selectedSlots = rawSlots.map((slot) => ({ ...slot, scheduling_type: ((Array.isArray(slot.availability_sessions) ? (slot.availability_sessions[0] as { scheduling_type?: string } | undefined)?.scheduling_type : (slot.availability_sessions as { scheduling_type?: string } | undefined)?.scheduling_type) ?? "wave") as "wave" | "stream" }) as unknown as DoctorScheduleSlot).filter((slot) => doctor && (sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate));
+  const selectedSlots = rawSlots.map((slot) => ({ ...slot, scheduling_type: ((Array.isArray(slot.availability_sessions) ? (slot.availability_sessions[0] as { scheduling_type?: string } | undefined)?.scheduling_type : (slot.availability_sessions as { scheduling_type?: string } | undefined)?.scheduling_type) ?? "wave") as "wave" | "stream" }) as unknown as DoctorScheduleSlot).filter((slot) => sessionDate === "all" || new Intl.DateTimeFormat("en-CA", { timeZone: doctor.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(slot.slot_start_at)) === sessionDate);
   const sessions: Array<never> = [];
   if (!selectedSlots.length) return { sessions, slots: [], appointments: [] };
   return { sessions, slots: selectedSlots };
