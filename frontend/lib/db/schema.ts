@@ -201,7 +201,7 @@ export const queueEntries = pgTable("queue_entries", {
   tokenNumber: integer("token_number").notNull(),
   status: queueEntryStatus("status").notNull().default("waiting"),
   priorityAt: timestamp("priority_at", { withTimezone: true }).notNull(),
-  checkedInAt: timestamp("checked_in_at", { withTimezone: true }).notNull(),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
   calledAt: timestamp("called_at", { withTimezone: true }),
   consultationStartedAt: timestamp("consultation_started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
