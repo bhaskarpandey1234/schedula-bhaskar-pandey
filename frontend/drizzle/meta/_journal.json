@@ -253,6 +253,62 @@
       "when": 1794859000000,
       "tag": "0057-admin-clinic-management-reads",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794930000000,
+      "tag": "0058-booking-queue-dashboard",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794931000000,
+      "tag": "0059-doctor-queue-summary-safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794933000001,
+      "tag": "0060-queue-call-skip-transitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794933000002,
+      "tag": "0061-fixed-queue-no-show-grace",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794933000003,
+      "tag": "0062-doctor-queue-slot-filters",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794933000004,
+      "tag": "0063-patient-appointment-queue-tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794934000000,
+      "tag": "0064-doctor-queue-all-slots-and-patients",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794935000000,
+      "tag": "0065-doctor-queue-actions-and-permissions",
+      "breakpoints": true
     }
   ]
 }
