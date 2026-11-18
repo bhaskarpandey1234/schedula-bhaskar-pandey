@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/guards";
 import { getPatientAppointments } from "@/lib/appointments/queries";
-import { getPatientQueueStatus } from "@/lib/queue/queries";
+import { getPatientQueueStatus, tokenLabel } from "@/lib/queue/queries";
 import { PatientQueuePanel } from "@/components/queue/patient-queue-panel";
 import type { AppointmentTab } from "@/lib/validation/appointments";
 import { CancelAppointmentForm } from "@/components/cancel-appointment-form";
@@ -175,6 +175,15 @@ export default async function AppointmentsPage({
                         </span>
                       </div>
                     </div>
+
+                    {appointment.status === "confirmed" && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                        <span className="text-xs font-semibold text-muted-foreground">Queue token</span>
+                        <Badge variant="outline" aria-label={`Queue token ${tokenLabel(appointment.token_number)}`}>
+                          {appointment.token_number === null ? "Not assigned" : tokenLabel(appointment.token_number)}
+                        </Badge>
+                      </div>
+                    )}
 
                     {/* Payment / Refund Status if applicable */}
                     {appointment.payment_amount_minor && (

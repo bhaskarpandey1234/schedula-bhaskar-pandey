@@ -38,7 +38,7 @@ export default async function AppointmentConfirmationPage({
     getElasticBookingProposal(appointmentId),
   ]);
   if (!confirmation) notFound();
-  const { appointment, doctor, slot, notification } = confirmation;
+  const { appointment, doctor, slot, notification, queueToken } = confirmation;
   const payment = payments.find((item) => item.appointment_id === appointmentId);
   const title =
     appointment.status === "confirmed"
@@ -125,6 +125,16 @@ export default async function AppointmentConfirmationPage({
                 <span>{doctor.clinic_name}</span>
               </div>
             </div>
+
+            {appointment.status === "confirmed" && queueToken !== null && (
+              <div role="status" className="rounded-2xl border border-primary/25 bg-primary/5 p-4 text-center">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Your queue token</p>
+                <p className="mt-1 text-3xl font-extrabold tracking-tight text-primary">
+                  T{String(queueToken).padStart(3, "0")}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Keep this number. Clinic staff will check you in when you arrive.</p>
+              </div>
+            )}
 
             {/* Visit Reason if provided */}
             {appointment.reason && (
