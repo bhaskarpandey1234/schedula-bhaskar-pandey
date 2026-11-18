@@ -8,7 +8,7 @@ $exitCode = 1
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 
 try {
-  $secureKey = Read-Host "Supabase production service-role key" -AsSecureString
+  $secureKey = Read-Host "Supabase production secret key (legacy service_role key also works)" -AsSecureString
   $securePassword = Read-Host "Choose the admin password (at least 12 characters)" -AsSecureString
   $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
   $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)

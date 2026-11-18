@@ -55,7 +55,7 @@ DATABASE_URL=<local-database-url>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Keep `frontend/.env.local` private. It is ignored by Git. Never commit database credentials, service-role keys, API keys, or personal data.
+Keep `frontend/.env.local` private. It is ignored by Git. Never commit database credentials, Supabase secret/service-role keys, API keys, or personal data.
 
 ## 4. Apply the repository migrations locally
 

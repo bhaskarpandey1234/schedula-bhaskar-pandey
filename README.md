@@ -42,13 +42,13 @@ Check-in records the arrival time once, issues a stable doctor/day token, and sh
 
 Token email uses the existing notification outbox and the patient's **operational email** preference. The token is always visible in the patient portal after check-in. Configure the existing email delivery worker and provider for actual delivery; check-in succeeds even if email delivery is unavailable.
 
-Create the first admin through a server environment with the Supabase service-role key after migrations are applied:
+Create the first admin through a server environment with the Supabase secret key (or legacy `service_role` key) after migrations are applied. The server currently reads the value from `SUPABASE_SERVICE_ROLE_KEY`:
 
 ```bash
 pnpm --filter frontend invite:admin admin@example.com "Clinic Administrator"
 ```
 
-The command sends a password setup invitation; public sign-up cannot choose admin or staff. Admins invite staff from `/admin`. Keep the service-role key server-only, and configure the Auth confirmation redirect for the deployed site. This branch has not been deployed to a hosted project.
+The command sends a password setup invitation; public sign-up cannot choose admin or staff. Admins invite staff from `/admin`. Keep the secret/service-role key server-only, and configure the Auth confirmation redirect for the deployed site. This branch has not been deployed to a hosted project.
 
 ### One-time production admin seed
 
@@ -60,9 +60,19 @@ Run this from PowerShell in the repository:
 .\frontend\scripts\seed-admin-production.ps1
 ```
 
-The script prompts privately for the service-role key and password, then clears its temporary environment values.
+The script prompts privately for the Supabase secret key (the legacy `service_role` key also works) and password, then clears its temporary environment values. It stores the supplied key in the existing `SUPABASE_SERVICE_ROLE_KEY` runtime variable; the key value is never written to the repository.
 
 The generated address uses the public `@mailinator.com` domain as requested. Anyone can read that inbox, including future password-reset messages; use this account only with that exposure understood. The seeded account is email-confirmed directly and no invitation email is sent.
+
+### Queue preview staff seed
+
+To create a synthetic staff login for the Vercel preview, run this manually from PowerShell at the repository root:
+
+```powershell
+.\frontend\scripts\seed-staff-preview.ps1
+```
+
+The script explicitly targets production Supabase because the preview uses that project. It prompts for the exact confirmation, Supabase secret key (legacy `service_role` key also works), and a password of at least 12 characters, then lets you choose an existing clinic. The generated Mailinator email is printed only after the staff profile and clinic assignment are verified. Sign in to the existing preview with that email and the password entered during seeding; the Mailinator inbox is not needed. No Vercel redeployment is required to create or use this account. The runtime variable is named `SUPABASE_SERVICE_ROLE_KEY` for compatibility with the current server code.
 
 ## Free-tier assistant pilot
 
@@ -174,7 +184,7 @@ The Drizzle generate command writes SQL under `frontend/drizzle/`. Start local S
 
 ## Phase 9 deployment handoff
 
-The Vercel project should use `frontend/` as its root directory and Node 22. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in Vercel. Admin and staff invitation actions also require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel secret. Staff invitations and signup verification use Supabase Auth email; configure custom SMTP there before sending to external production recipients. Keep `DATABASE_URL`, Supabase service-role keys, demo credentials, and any `RESEND_*` values out of Git. Apply the ordered Drizzle migrations from a secure migration environment, then configure Supabase Auth’s production Site URL, exact confirmation/recovery redirects, and OTP-based email templates. See the handoff document for release evidence and limitations.
+The Vercel project should use `frontend/` as its root directory and Node 22. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in Vercel. Admin and staff invitation actions require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable; its value can be the current Supabase secret key or the legacy `service_role` key. Keep the key private. Staff invitations and signup verification use Supabase Auth email; configure custom SMTP there before sending to external production recipients. Keep `DATABASE_URL`, Supabase secret/service-role keys, demo credentials, and any `RESEND_*` values out of Git. Apply the ordered Drizzle migrations from a secure migration environment, then configure Supabase Auth’s production Site URL, exact confirmation/recovery redirects, and OTP-based email templates. See the handoff document for release evidence and limitations.
 
 ## Future roadmap
 
@@ -182,7 +192,7 @@ The roadmap covers shared UI, authentication onboarding, doctor availability, pa
 
 ## Security
 
-Do not commit passwords, database URLs, service-role keys, API keys, access tokens, private keys, or patient/doctor personal data. Keep secrets in ignored `.env.local` files or hosting-provider settings. Do not use the service-role key in browser code.
+Do not commit passwords, database URLs, Supabase secret/service-role keys, API keys, access tokens, private keys, or patient/doctor personal data. Keep secrets in ignored `.env.local` files or hosting-provider settings. Never use a secret/service-role key in browser code.
 
 ## Branch workflow
 
