@@ -13,6 +13,30 @@ import {
   type ScheduleTypeFilter,
 } from "@/lib/scheduling/schedule-filters";
 
+function useSafeRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return null;
+  }
+}
+
+function useSafePathname() {
+  try {
+    return usePathname();
+  } catch {
+    return "";
+  }
+}
+
+function useSafeSearchParams() {
+  try {
+    return useSearchParams();
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
 export function ScheduleFilterForm({
   initialFilter,
   initialDate,
@@ -24,9 +48,9 @@ export function ScheduleFilterForm({
   initialWeekday?: number;
   initialScheduleType?: ScheduleTypeFilter;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const router = useSafeRouter();
+  const pathname = useSafePathname();
+  const searchParams = useSafeSearchParams();
   const [filter, setFilter] = useState<ScheduleFilter>(initialFilter);
   const [date, setDate] = useState(initialDate);
   const [weekday, setWeekday] = useState(initialWeekday ? String(initialWeekday) : "");
@@ -53,7 +77,7 @@ export function ScheduleFilterForm({
     if (nextScheduleType !== "all") params.set("scheduleType", nextScheduleType);
     else params.delete("scheduleType");
     const query = params.toString();
-    startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
+    startTransition(() => router?.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
   }
 
   function applyFilters() {

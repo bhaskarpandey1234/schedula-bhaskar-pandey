@@ -15,8 +15,7 @@ type NavigationLink = { href: string; label: string };
 function linksFor(role?: Role, assistantEnabled = false): NavigationLink[] {
   if (role === "patient")
     return [
-      { href: "/", label: "Home" },
-      { href: "/patient", label: "Dashboard" },
+      { href: "/patient", label: "Overview" },
       { href: "/doctors", label: "Find Doctors" },
       { href: "/patient/appointments", label: "Appointments" },
       ...(assistantEnabled ? [{ href: "/patient/assistant", label: "AI Assistant" }] : []),
@@ -24,20 +23,17 @@ function linksFor(role?: Role, assistantEnabled = false): NavigationLink[] {
     ];
   if (role === "doctor")
     return [
-      { href: "/", label: "Home" },
-      { href: "/doctor", label: "Dashboard" },
+      { href: "/doctor", label: "Overview" },
       { href: "/doctor/schedule", label: "Schedule" },
       { href: "/doctor/appointments", label: "Appointments" },
-      { href: "/doctor/queue", label: "Queue" },
+      { href: "/doctor/queue", label: "Queue overview" },
       ...(assistantEnabled ? [{ href: "/doctor/assistant", label: "AI Assistant" }] : []),
       { href: "/doctor/profile", label: "Profile" },
     ];
-  if (role === "staff") return [
-    { href: "/staff", label: "Check-in board" },
-  ];
+  if (role === "staff") return [{ href: "/staff", label: "Queue dashboard" }];
   if (role === "admin") return [
-    { href: "/admin", label: "Clinics" },
-    { href: "/admin/queue", label: "Queue board" },
+    { href: "/admin", label: "Clinic management" },
+    { href: "/admin/queue", label: "Queue dashboard" },
   ];
   return [
     { href: "/doctors", label: "Find Doctors" },
@@ -50,6 +46,7 @@ export function SiteHeader({ role, name, unreadCount = 0, assistantEnabled = fal
   const [open, setOpen] = useState(false);
   const links = linksFor(role, assistantEnabled);
   const home = "/";
+  const portalName = role === "patient" ? "Patient Portal" : role === "doctor" ? "Doctor Portal" : role === "staff" ? "Receptionist Portal" : role === "admin" ? "Clinic Admin Portal" : null;
   const navigation = (mobile = false) =>
     links.map((link) => (
       <PendingLink
@@ -66,15 +63,50 @@ export function SiteHeader({ role, name, unreadCount = 0, assistantEnabled = fal
       </PendingLink>
     ));
 
+  const displayName = name || "Signed-in account";
+  const initials = displayName
+    .replace(/^(Dr\.?)\s+/i, "")
+    .split(/\s+/)
+    .map((word) => word[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "SC";
+
   return <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
     <PageContainer className="flex h-16 items-center justify-between gap-4">
       <Link href={home} className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Stethoscope aria-hidden="true" className="size-5" /></span>
         <span className="text-lg">Schedula</span>
+        {portalName && <span className="ml-1 border-l border-border pl-3 text-xs font-semibold text-primary sm:text-sm">{portalName}</span>}
       </Link>
-      <nav aria-label="Primary navigation" className="hidden flex-1 items-center justify-center gap-7 md:flex">{navigation()}</nav>
+      {!role && <nav aria-label="Primary navigation" className="hidden flex-1 items-center justify-center gap-7 md:flex">{navigation()}</nav>}
+      {role === "staff" && <nav aria-label="Staff navigation" className="hidden flex-1 items-center gap-6 md:flex ml-4">{navigation()}</nav>}
       <div className="hidden items-center gap-2 md:flex">
-        {role ? <>{(role === "patient" || role === "doctor") && <Link href={`/${role}/notifications`} aria-label="Notifications" className="relative inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{unreadCount > 0 && <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">{unreadCount > 9 ? "9+" : unreadCount}</span>}<Bell className="size-4" aria-hidden="true" /></Link>}<span className="max-w-44 truncate text-sm text-muted-foreground">{name}</span><Phase3LogoutButton /></> : <><Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button><Button asChild size="sm"><Link href="/auth/sign-up">Create account</Link></Button></>}
+        {role ? (
+          <>
+            {role === "staff" && name && (
+              <div className="flex items-center gap-2 mr-2 border-r border-border pr-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {initials}
+                </div>
+                <span className="text-sm font-medium text-foreground truncate max-w-[180px]">{name}</span>
+              </div>
+            )}
+            {(role === "patient" || role === "doctor") && (
+              <Link href={`/${role}/notifications`} aria-label="Notifications" className="relative inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                {unreadCount > 0 && <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+                <Bell className="size-4" aria-hidden="true" />
+              </Link>
+            )}
+            <Phase3LogoutButton />
+          </>
+        ) : (
+          <>
+            <Button asChild variant="ghost" size="sm"><Link href="/auth/login">Sign in</Link></Button>
+            <Button asChild size="sm"><Link href="/auth/sign-up">Create account</Link></Button>
+          </>
+        )}
       </div>
       <Sheet open={open} onOpenChange={setOpen}><SheetTrigger className="inline-flex size-9 items-center justify-center rounded-md border border-input text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Open navigation"><Menu className="size-4" aria-hidden="true" /></SheetTrigger><SheetContent id="mobile-navigation"><div className="flex h-full flex-col"><div className="mb-5 flex items-center justify-between"><span className="font-semibold">Menu</span><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Button></div><nav aria-label="Mobile navigation" className="grid gap-1">{navigation(true)}</nav><div className="mt-auto grid gap-2 border-t pt-4">{role ? <><p className="px-3 text-sm text-muted-foreground">{name}</p><Phase3LogoutButton /></> : <><Button asChild variant="outline"><Link href="/auth/login">Sign in</Link></Button><Button asChild><Link href="/auth/sign-up">Create account</Link></Button></>}</div></div></SheetContent></Sheet>
     </PageContainer>
