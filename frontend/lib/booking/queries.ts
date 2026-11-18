@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getPatientAppointmentQueueToken } from "@/lib/queue/queries";
 
 export type BookableSlot = {
   slot_id: string;
@@ -29,10 +30,12 @@ export async function getAppointmentConfirmation(appointmentId: string) {
   if (error) throw new Error(`Appointment confirmation query failed: ${error.message}`);
   const row = ((data ?? []) as Array<{ appointment_id: string; status: "payment_pending" | "confirmed" | "reschedule_pending" | "cancelled" | "expired"; reason: string | null; doctor_name: string; clinic_name: string; timezone: string; slot_start_at: string; slot_end_at: string; scheduling_type: "wave" | "stream"; notification_title: string | null; notification_message: string | null }>)[0];
   if (!row) return null;
+  const queueToken = await getPatientAppointmentQueueToken(appointmentId);
   return {
     appointment: { id: row.appointment_id, status: row.status, reason: row.reason },
     doctor: { full_name: row.doctor_name, clinic_name: row.clinic_name, timezone: row.timezone },
     slot: { slot_start_at: row.slot_start_at, slot_end_at: row.slot_end_at, scheduling_type: row.scheduling_type },
+    queueToken,
     notification: row.notification_title ? { title: row.notification_title, message: row.notification_message } : null,
   };
 }

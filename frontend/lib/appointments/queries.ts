@@ -16,6 +16,7 @@ export type PatientAppointment = {
   payment_amount_minor: number | null;
   refund_status: "requested" | "pending" | "processed" | "failed" | null;
   refund_amount_minor: number | null;
+  token_number: number | null;
 };
 
 export async function getPatientAppointments(tab: AppointmentTab) {

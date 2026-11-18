@@ -15,6 +15,7 @@ export async function bookAppointmentAction(_: BookingActionState, formData: For
     return { checkout, values: formValues(formData) };
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("already has an active appointment")) return { error: "You already have an appointment with this doctor on that service date. Choose another date; cancelled or expired appointments do not block rebooking.", values: formValues(formData) };
     if (message.includes("already booked")) return { error: "You have already booked this slot.", values: formValues(formData) };
     if (message.includes("full") || message.includes("no longer available")) return { error: "This slot is no longer available. Please choose another time.", values: formValues(formData) };
     if (message.includes("profile_incomplete")) return { error: "Complete your patient profile before booking an appointment.", values: formValues(formData) };

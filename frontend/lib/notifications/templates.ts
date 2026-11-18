@@ -35,7 +35,7 @@ function previousAppointmentTime(input: NotificationTemplateInput) {
 export function renderNotificationTemplate(input: NotificationTemplateInput, channel: "email" | "sms" | "whatsapp") {
   if (input.template === "checkin_token") {
     const date = new Intl.DateTimeFormat("en-IN", { timeZone: input.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date(input.slotStartAt));
-    return { subject: `Schedula queue token ${input.token ?? ""}`.trim(), text: `Hello ${input.recipientName},\n\nYou have checked in for your appointment with ${input.doctorName} at ${input.clinicName} on ${date} (${input.timezone}).\nYour token is ${input.token ?? "unavailable"}. Your live queue position is in your Schedula patient dashboard.\n\nSchedula` };
+    return { subject: `Schedula queue token ${input.token ?? ""}`.trim(), text: `Hello ${input.recipientName},\n\nYour appointment with ${input.doctorName} at ${input.clinicName} on ${date} (${input.timezone}) is confirmed.\nYour queue token is ${input.token ?? "unavailable"}. Clinic staff will check you in when you arrive. Your live queue status is in your Schedula patient dashboard.\n\nSchedula` };
   }
   const time = appointmentTime(input);
   const previousTime = previousAppointmentTime(input);
