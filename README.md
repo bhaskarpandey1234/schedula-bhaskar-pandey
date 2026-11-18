@@ -89,17 +89,18 @@ Before hosted testing, enable Zero Data Retention in the Groq project's Data Con
 
 ### Seed local assistant pilot data
 
-The repository includes an idempotent synthetic-data seed for local Supabase only. It creates one doctor and one patient, availability and overlapping slots, completed/upcoming/cancelled appointments, leave, a published prescription, and sandbox-labelled payment/refund records. It never calls Razorpay and refuses non-local URLs.
+The repository includes an idempotent synthetic-data seed for local Supabase only. It creates one doctor, Arjun Pilot, and five additional synthetic queue patients with confirmed appointments for today's service date. The queue appointments begin unchecked in and receive stable booking tokens, so reception can demo check-in and queue actions. The seed also creates availability and overlapping slots, completed/upcoming/cancelled appointments, leave, a published prescription, and sandbox-labelled payment/refund records. It never calls Razorpay, queues outbound notifications, applies migrations, or accepts non-local URLs.
 
 Start local Supabase, apply migrations, and obtain the local service-role key from `supabase status -o env`. Then run the seed with a temporary password supplied at runtime:
 
 ```powershell
 $env:SUPABASE_SERVICE_ROLE_KEY = "<local-service-role-key>"
 $env:PILOT_SEED_PASSWORD = "<temporary-local-password>"
+$env:PILOT_QUEUE_DEMO_DATE = "2026-11-18" # Optional; defaults to today's date in Asia/Kolkata
 pnpm --filter frontend seed:assistant-pilot
 ```
 
-The fixed local login emails are `pilot.doctor@schedula.example` and `pilot.patient@schedula.example`; the password is never printed or stored by the seed. The script requires both `NEXT_PUBLIC_SUPABASE_URL` and `DATABASE_URL` to point to `localhost`, `127.0.0.1`, or `::1`. Never run it with production credentials or production URLs. To reset only local data, use the local Supabase reset workflow after confirming Docker and the local URLs are active.
+The pilot doctor and Arjun accounts use `PILOT_SEED_PASSWORD` only when the seed needs to create them; existing passwords are preserved. Five synthetic queue patients are added with profile records and confirmed appointments; their Auth identities are explicitly banned from sign-in and assigned unprinted random credentials. Set `PILOT_QUEUE_DEMO_DATE` to a valid current or future date when you need to seed a specific service date. The script requires both `NEXT_PUBLIC_SUPABASE_URL` and `DATABASE_URL` to point to `localhost`, `127.0.0.1`, or `::1`, and verifies the queue schema/RPCs needed by the current application before creating users or records. Apply the pending migrations to local Supabase yourself if the seed reports missing queue support. Never run it with production credentials or production URLs. To reset only local data, use the local Supabase reset workflow after confirming Docker and the local URLs are active.
 
 ## Architecture
 

@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/doctor/schedule",
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ScheduleFilterForm } from "../components/schedule-filter-form";
@@ -7,12 +14,6 @@ import {
   filterScheduleSlots,
   parseScheduleFilter,
 } from "../lib/scheduling/schedule-filters";
-
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/doctor/schedule",
-  useRouter: () => ({ replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
-}));
 
 const slots = [
   { id: "past", slot_start_at: "2026-10-29T08:00:00.000Z", slot_end_at: "2026-10-29T08:30:00.000Z" },
