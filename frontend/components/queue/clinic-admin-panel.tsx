@@ -6,6 +6,7 @@ import { clinicAdminAction, type AdminActionState } from "@/lib/clinics/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 type Clinic = { id: string; name: string; timezone: string };
 type Person = { id: string; name: string; clinic_id: string | null };
@@ -32,10 +33,10 @@ function AdminForm({ operation, clinics, doctors, staff }: { operation: Operatio
           <input type="hidden" name="operation" value={operation} />
           {(operation === "create_clinic" || operation === "invite_staff") && <label className="grid gap-1 font-medium">{operation === "create_clinic" ? "Clinic name" : "Staff full name"}<Input name="name" required minLength={2} maxLength={160} /></label>}
           {operation === "create_clinic" && <label className="grid gap-1 font-medium">IANA timezone<Input name="timezone" defaultValue="Asia/Kolkata" required /></label>}
-          {operation !== "create_clinic" && <label className="grid gap-1 font-medium">Clinic<select name="clinicId" className="rounded-md border bg-background p-2" required defaultValue=""><option value="">Choose clinic</option>{clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name} · {clinic.timezone}</option>)}</select></label>}
+          {operation !== "create_clinic" && <label htmlFor="clinic-id" className="grid gap-1 font-medium">Clinic<CustomSelect id="clinic-id" name="clinicId" required placeholder="Choose clinic" options={[{ value: "", label: "Choose clinic" }, ...clinics.map((clinic) => ({ value: clinic.id, label: `${clinic.name} · ${clinic.timezone}` }))]} /></label>}
           {operation === "invite_staff" && <label className="grid gap-1 font-medium">Staff email<Input name="email" type="email" required /></label>}
-          {operation === "assign_doctor" && <label className="grid gap-1 font-medium">Doctor<select name="doctorId" className="rounded-md border bg-background p-2" required defaultValue=""><option value="">Choose doctor</option>{doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.name}</option>)}</select></label>}
-          {operation === "assign_staff" && <label className="grid gap-1 font-medium">Staff member<select name="staffId" className="rounded-md border bg-background p-2" required defaultValue=""><option value="">Choose staff member</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
+          {operation === "assign_doctor" && <label htmlFor="doctor-id" className="grid gap-1 font-medium">Doctor<CustomSelect id="doctor-id" name="doctorId" required placeholder="Choose doctor" options={[{ value: "", label: "Choose doctor" }, ...doctors.map((doctor) => ({ value: doctor.id, label: doctor.name }))]} /></label>}
+          {operation === "assign_staff" && <label htmlFor="staff-id" className="grid gap-1 font-medium">Staff member<CustomSelect id="staff-id" name="staffId" required placeholder="Choose staff member" options={[{ value: "", label: "Choose staff member" }, ...staff.map((person) => ({ value: person.id, label: person.name }))]} /></label>}
           <div className="rounded-lg border bg-muted/30 p-3">Impact: {descriptions[operation]}</div>
           {state.error && <p role="alert" className="text-destructive">{state.error}</p>}
           {state.stale && <Button type="button" variant="outline" onClick={() => { router.refresh(); setOpen(false); }}>Refresh assignments</Button>}
