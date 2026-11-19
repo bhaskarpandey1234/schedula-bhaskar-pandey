@@ -155,18 +155,18 @@ function QueueActionDialog({
   }, [state.success, onClose, router]);
   const details = commandText[command];
   return (
-    <DialogContent className="max-w-md">
-      <DialogHeader>
+    <DialogContent className="max-w-md text-left whitespace-normal">
+      <DialogHeader className="text-left whitespace-normal">
         <DialogTitle>{details.label}?</DialogTitle>
-        <DialogDescription>
+        <DialogDescription className="text-left whitespace-normal">
           {command === "check_in" && (row.attendance_status === "no_show" || isGraceExpired(row, now))
             ? "Patient was marked unavailable. Confirming check-in will restore their availability and place their token into the active queue."
             : details.impact}
         </DialogDescription>
       </DialogHeader>
-      <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        <strong>{row.patient_name}</strong><br />
-        {token(row.token_number)} · {queueLabel(row, now)}
+      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-left whitespace-normal">
+        <strong className="block font-semibold text-foreground">{row.patient_name}</strong>
+        <span className="text-muted-foreground">{token(row.token_number)} · {queueLabel(row, now)}</span>
       </div>
       <form action={action} className="grid gap-3">
         <input type="hidden" name="action" value={command} />
@@ -296,11 +296,11 @@ function QueueLiveColumn({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b bg-muted/30 text-[11px] font-semibold text-muted-foreground sticky top-0 z-10 backdrop-blur-xs">
-                <th scope="col" className="w-20 px-3 py-2.5">Token</th>
-                <th scope="col" className="min-w-[130px] px-3 py-2.5">Patient</th>
-                <th scope="col" className="w-36 px-3 py-2.5">Slot & Time</th>
-                <th scope="col" className="w-28 px-3 py-2.5">Status</th>
-                <th scope="col" className="w-44 px-3 py-2.5 text-right">Actions</th>
+                <th scope="col" className="w-16 px-2.5 py-2">Token</th>
+                <th scope="col" className="min-w-[110px] px-2.5 py-2">Patient</th>
+                <th scope="col" className="w-32 px-2.5 py-2">Slot & Time</th>
+                <th scope="col" className="w-24 px-2.5 py-2">Status</th>
+                <th scope="col" className="w-40 px-2.5 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -530,11 +530,10 @@ function QueueActivityColumn({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b bg-muted/30 text-[11px] font-semibold text-muted-foreground sticky top-0 z-10 backdrop-blur-xs">
-                <th scope="col" className="w-16 px-2.5 py-2">Token</th>
-                <th scope="col" className="min-w-[110px] px-2.5 py-2">Patient</th>
-                <th scope="col" className="w-28 px-2.5 py-2">Slot</th>
-                <th scope="col" className="w-28 px-2.5 py-2">Status</th>
-                <th scope="col" className="w-24 px-2.5 py-2 text-right">Action</th>
+                <th scope="col" className="w-14 px-2 py-2">Token</th>
+                <th scope="col" className="min-w-[100px] px-2 py-2">Patient</th>
+                <th scope="col" className="w-24 px-2 py-2">Slot</th>
+                <th scope="col" className="w-36 sm:w-40 px-2 py-2 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -556,14 +555,14 @@ function QueueActivityColumn({
                     )}
                   >
                     {/* Token */}
-                    <td className="px-2.5 py-2 align-middle whitespace-nowrap">
+                    <td className="px-2 py-2 align-middle whitespace-nowrap">
                       <span className="font-mono text-xs font-bold rounded bg-muted/50 px-1.5 py-0.5">
                         {token(row.token_number)}
                       </span>
                     </td>
 
                     {/* Patient */}
-                    <td className="px-2.5 py-2 align-middle">
+                    <td className="px-2 py-2 align-middle">
                       <div className="font-semibold text-foreground truncate max-w-[130px]">{row.patient_name}</div>
                       {row.patient_phone && (
                         <div className="text-[10px] text-muted-foreground truncate max-w-[130px]">{row.patient_phone}</div>
@@ -571,31 +570,18 @@ function QueueActivityColumn({
                     </td>
 
                     {/* Slot */}
-                    <td className="px-2.5 py-2 align-middle text-[11px] text-muted-foreground whitespace-nowrap">
+                    <td className="px-2 py-2 align-middle text-[11px] text-muted-foreground whitespace-nowrap">
                       {timeRange(row)}
                     </td>
 
-                    {/* Status / Note */}
-                    <td className="px-2.5 py-2 align-middle whitespace-nowrap">
-                      {isUnavailable ? (
-                        <span className="text-[10px] font-medium text-destructive">Late arrival</span>
-                      ) : row.checked_in_at ? (
-                        <span className="text-[10px] text-muted-foreground">In: {time(row.checked_in_at, row.timezone)}</span>
-                      ) : isCompleted ? (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Completed</Badge>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground">Awaiting arrival</span>
-                      )}
-                    </td>
-
                     {/* Action */}
-                    <td className="px-2.5 py-2 align-middle text-right whitespace-nowrap">
+                    <td className="px-2 py-2 align-middle text-right whitespace-nowrap">
                       {commands.length > 0 ? (
                         <div className="inline-flex justify-end">
                           <QueueActionControls row={row} canCallNext={false} now={now} commands={commands} compact />
                         </div>
                       ) : isCompleted ? (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Finished</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Completed</Badge>
                       ) : null}
                     </td>
                   </tr>
@@ -839,8 +825,8 @@ export function QueueBoard({
 
               {/* Viewport 2-Column Asymmetric Grid */}
               <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 items-stretch">
-                {/* Column 1: Live Patient Queue (~67% width) */}
-                <div className={cn("flex flex-col min-w-0 lg:col-span-8 xl:col-span-8", mobileView !== "all" && mobileView !== "live" && "hidden lg:flex")}>
+                {/* Column 1: Live Patient Queue (~58% width) */}
+                <div className={cn("flex flex-col min-w-0 lg:col-span-7 xl:col-span-7", mobileView !== "all" && mobileView !== "live" && "hidden lg:flex")}>
                   <QueueLiveColumn
                     rows={liveQueueRows}
                     nextByDoctor={nextByDoctor}
@@ -849,8 +835,8 @@ export function QueueBoard({
                   />
                 </div>
 
-                {/* Column 2: Activity Panel (~33% width) with Tabs */}
-                <div className={cn("flex flex-col min-w-0 lg:col-span-4 xl:col-span-4", mobileView !== "all" && mobileView !== "activity" && "hidden lg:flex")}>
+                {/* Column 2: Activity Panel (~42% width) with Tabs */}
+                <div className={cn("flex flex-col min-w-0 lg:col-span-5 xl:col-span-5", mobileView !== "all" && mobileView !== "activity" && "hidden lg:flex")}>
                   <QueueActivityColumn
                     upcomingRows={upcomingRows}
                     completedRows={completedRows}

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,11 @@ function DialogTrigger({ children }: { children: React.ReactElement<{ onClick?: 
 function DialogContent({ className, children }: React.HTMLAttributes<HTMLDivElement>) {
   const context = React.useContext(DialogContext);
   const dialogRef = React.useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   React.useEffect(() => {
     if (!context?.open) return;
@@ -25,9 +31,10 @@ function DialogContent({ className, children }: React.HTMLAttributes<HTMLDivElem
   }, [context]);
 
   if (!context?.open) return null;
-  return (
+
+  const content = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/35 p-4 sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/35 p-4 sm:p-6 text-left whitespace-normal text-foreground"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) context.setOpen(false);
@@ -39,7 +46,7 @@ function DialogContent({ className, children }: React.HTMLAttributes<HTMLDivElem
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "relative my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-lg flex-col gap-5 overflow-y-auto rounded-2xl border border-border/80 bg-surface p-5 shadow-2xl sm:max-h-[calc(100svh-3rem)] sm:p-7",
+          "relative my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-lg flex-col gap-5 overflow-y-auto rounded-2xl border border-border/80 bg-surface p-5 text-left whitespace-normal text-foreground shadow-2xl sm:max-h-[calc(100svh-3rem)] sm:p-7",
           className,
         )}
       >
@@ -55,9 +62,14 @@ function DialogContent({ className, children }: React.HTMLAttributes<HTMLDivElem
       </div>
     </div>
   );
+
+  if (mounted && typeof document !== "undefined") {
+    return createPortal(content, document.body);
+  }
+  return content;
 }
-function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={cn("flex flex-col gap-2 pr-10 text-left", className)} {...props} />; }
-function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={cn("mt-2 flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end", className)} {...props} />; }
-const DialogTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className={cn("text-lg font-semibold", className)} {...props} />;
-const DialogDescription = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
+function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={cn("flex flex-col gap-2 pr-10 text-left whitespace-normal", className)} {...props} />; }
+function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={cn("mt-2 flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end text-left whitespace-normal", className)} {...props} />; }
+const DialogTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className={cn("text-lg font-semibold text-foreground text-left", className)} {...props} />;
+const DialogDescription = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => <p className={cn("text-sm text-muted-foreground text-left whitespace-normal", className)} {...props} />;
 export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription };
