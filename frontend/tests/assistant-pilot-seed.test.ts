@@ -2,8 +2,20 @@ import { describe, expect, it } from "vitest";
 
 const modulePath = "../scripts/assistant-pilot-seed.mjs";
 
+function futureQueueDemoDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+  return new Date(Date.UTC(part("year"), part("month") - 1, part("day") + 1)).toISOString().slice(0, 10);
+}
+
 describe("local assistant pilot seed guard", async () => {
   const { findDemoQueueStartMinute, pilotUsers, queueDemoPatients, validateLocalEnvironment } = await import(modulePath);
+  const queueDemoDate = futureQueueDemoDate();
 
   it("accepts local Supabase and database URLs", () => {
     expect(validateLocalEnvironment({
@@ -32,8 +44,8 @@ describe("local assistant pilot seed guard", async () => {
       NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:54322/postgres",
       SUPABASE_SERVICE_ROLE_KEY: "local-service-role",
-      PILOT_QUEUE_DEMO_DATE: "2026-11-18",
-    }).queueDemoDate).toBe("2026-11-18");
+      PILOT_QUEUE_DEMO_DATE: queueDemoDate,
+    }).queueDemoDate).toBe(queueDemoDate);
   });
 
   it("accepts a valid local queue demo service date override", () => {
@@ -42,8 +54,8 @@ describe("local assistant pilot seed guard", async () => {
       DATABASE_URL: "postgresql://postgres:postgres@localhost:54322/postgres",
       SUPABASE_SERVICE_ROLE_KEY: "local-service-role",
       PILOT_SEED_PASSWORD: "LocalPilotPassword!123",
-      PILOT_QUEUE_DEMO_DATE: "2026-11-18",
-    }).queueDemoDate).toBe("2026-11-18");
+      PILOT_QUEUE_DEMO_DATE: queueDemoDate,
+    }).queueDemoDate).toBe(queueDemoDate);
   });
 
   it("rejects invalid or past queue demo service dates", () => {
