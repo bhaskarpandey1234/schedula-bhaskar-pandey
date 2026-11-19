@@ -10,7 +10,8 @@ async function choose(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-async function signUpAndConfirm(page: Page, role: TestUser["role"], label: string) {
+async function signUpAndConfirm(page: Page, role: TestUser["role"], _label: string) {
+  void _label;
   const email = `phase8${Date.now()}${Math.floor(Math.random() * 100000)}@example.com`;
   await page.goto("/auth/sign-up");
   await page.getByLabel("Email").fill(email);
