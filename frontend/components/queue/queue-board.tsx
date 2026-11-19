@@ -647,17 +647,36 @@ export function QueueBoard({
   doctorId,
   slotId,
   allowAllDoctors = false,
+  role,
 }: {
   rows: QueueBoardRow[];
-  doctors: QueueDoctor[];
-  serviceDate: string;
-  doctorId: string;
-  slotId: string;
+  doctors?: QueueDoctor[];
+  serviceDate?: string;
+  doctorId?: string;
+  slotId?: string;
   allowAllDoctors?: boolean;
+  role?: "admin" | "doctor" | "staff";
 }) {
   const router = useRouter();
   const [now, setNow] = useState(0);
   const [mobileView, setMobileView] = useState<"all" | "live" | "activity">("all");
+  const resolvedDoctors = doctors?.length
+    ? doctors
+    : [...new Map(rows.map((row) => [row.doctor_id, {
+      doctor_id: row.doctor_id,
+      doctor_name: row.doctor_name,
+      clinic_id: "",
+      timezone: row.timezone,
+    }])).values()];
+  const resolvedDoctorId = doctorId ?? (role === "doctor" ? (rows[0]?.doctor_id ?? "") : "all");
+  const resolvedSlotId = slotId ?? "";
+  const resolvedServiceDate = serviceDate ?? new Intl.DateTimeFormat("en-CA", {
+    timeZone: rows[0]?.timezone ?? "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const resolvedAllowAllDoctors = allowAllDoctors || role === "admin" || role === "staff";
 
   useEffect(() => {
     setNow(Date.now());
@@ -665,7 +684,7 @@ export function QueueBoard({
     return () => window.clearInterval(timer);
   }, [router]);
 
-  const filtered = useMemo(() => slotId ? rows.filter((row) => row.slot_id === slotId) : rows, [rows, slotId]);
+  const filtered = useMemo(() => resolvedSlotId ? rows.filter((row) => row.slot_id === resolvedSlotId) : rows, [rows, resolvedSlotId]);
   const waiting = filtered.filter((row) => row.queue_status === "waiting" && row.checked_in_at !== null)
     .sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0));
   const completed = filtered.filter((row) => row.appointment_status === "completed" || row.queue_status === "completed");
@@ -682,7 +701,7 @@ export function QueueBoard({
   const slotOptions = [...new Map(rows.map((row) => [row.slot_id, row])).values()]
     .sort((a, b) => a.slot_start_at.localeCompare(b.slot_start_at));
 
-  const selectedDoctor = doctors.find((doctor) => doctor.doctor_id === doctorId);
+  const selectedDoctor = resolvedDoctors.find((doctor) => doctor.doctor_id === resolvedDoctorId);
 
   // Section 1: Live Patient Queue (In Consultation + Called + Waiting in order + Skipped)
   const liveQueueRows = useMemo(() => {
@@ -741,19 +760,19 @@ export function QueueBoard({
       <form method="get" className="grid gap-2.5 rounded-2xl border bg-card p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1.3fr_1.1fr_auto] lg:items-end">
         <label htmlFor="queue-service-date" className="grid gap-1 text-xs font-medium text-muted-foreground">
           Service date
-          <CustomDatePicker id="queue-service-date" name="date" defaultValue={serviceDate} required />
+          <CustomDatePicker id="queue-service-date" name="date" defaultValue={resolvedServiceDate} required />
         </label>
         <label htmlFor="queue-doctor" className="grid gap-1 text-xs font-medium text-muted-foreground">
           Doctor
-          <CustomSelect id="queue-doctor" name="doctorId" defaultValue={doctorId} required placeholder="Choose a doctor" options={[
+          <CustomSelect id="queue-doctor" name="doctorId" defaultValue={resolvedDoctorId} required placeholder="Choose a doctor" options={[
             { value: "", label: "Choose a doctor" },
-            ...(allowAllDoctors ? [{ value: "all", label: "All available doctors" }] : []),
-            ...doctors.map((doctor) => ({ value: doctor.doctor_id, label: doctor.doctor_name })),
+            ...(resolvedAllowAllDoctors ? [{ value: "all", label: "All available doctors" }] : []),
+            ...resolvedDoctors.map((doctor) => ({ value: doctor.doctor_id, label: doctor.doctor_name })),
           ]} />
         </label>
         <label htmlFor="queue-slot" className="grid gap-1 text-xs font-medium text-muted-foreground">
           Slot
-          <CustomSelect id="queue-slot" name="slotId" defaultValue={slotId} placeholder="All slots" options={[
+          <CustomSelect id="queue-slot" name="slotId" defaultValue={resolvedSlotId} placeholder="All slots" options={[
             { value: "", label: "All slots" },
             ...slotOptions.map((row) => ({ value: row.slot_id, label: timeRange(row) })),
           ]} />
@@ -761,7 +780,7 @@ export function QueueBoard({
         <Button type="submit" className="h-9">Show queue</Button>
       </form>
 
-      {!doctorId ? (
+      {!resolvedDoctorId ? (
         <section className="rounded-2xl border border-dashed bg-card p-8 text-center" aria-label="Queue filters required">
           <h2 className="font-semibold">Choose a doctor and date to load the queue</h2>
           <p className="mt-1 text-sm text-muted-foreground">Select one doctor or intentionally view all available doctors. The queue stays hidden until you submit the filters.</p>
