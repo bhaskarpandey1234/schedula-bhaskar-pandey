@@ -6,10 +6,19 @@ import type { Role } from "@/lib/validation/auth";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 import { assistantConfig } from "@/lib/assistant/config";
 import { FloatingAssistant } from "@/components/assistant/floating-assistant";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export async function PortalShell({ children, role, name }: { children: React.ReactNode; role?: Role; name?: string }) {
   const unreadCount = role === "patient" || role === "doctor" ? await getUnreadNotificationCount() : 0;
-  const accent = role === "patient" ? "[--primary:210_80%_45%] [--ring:210_80%_45%]" : role === "doctor" ? "[--primary:174_72%_31%] [--ring:174_72%_31%]" : "";
+  const accent = role === "patient"
+    ? "[--primary:210_80%_45%] [--ring:210_80%_45%]"
+    : role === "doctor"
+      ? "[--primary:174_72%_31%] [--ring:174_72%_31%]"
+      : role === "staff"
+        ? "[--primary:26_80%_44%] [--ring:26_80%_44%]"
+        : role === "admin"
+          ? "[--primary:257_60%_50%] [--ring:257_60%_50%]"
+          : "";
   if (!role) {
     return (
       <div className={`min-h-svh flex flex-col justify-between bg-background ${accent}`}>
@@ -24,15 +33,19 @@ export async function PortalShell({ children, role, name }: { children: React.Re
     );
   }
   return (
-    <div className={`min-h-svh bg-background ${accent}`}>
-      <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
-      <div className="flex min-h-[calc(100svh-4rem)]">
-        {(role === "patient" || role === "doctor") && <DashboardSidebar role={role} name={name} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />}
-        <main className="min-w-0 flex-1">
-          <PageContainer className="py-6 sm:py-8">{children}</PageContainer>
-        </main>
+    <TooltipProvider delayDuration={300}>
+      <div className={`min-h-svh bg-background ${accent}`}>
+        <SiteHeader role={role} name={name} unreadCount={unreadCount} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
+        <div className="flex min-h-[calc(100svh-4rem)]">
+          {role !== "staff" && (
+            <DashboardSidebar role={role} name={name} assistantEnabled={assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey)} />
+          )}
+          <main className="min-w-0 flex-1">
+            <PageContainer className={role === "staff" ? "py-4 sm:py-5" : "py-6 sm:py-8"}>{children}</PageContainer>
+          </main>
+        </div>
+        {(role === "patient" || role === "doctor") && assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey) && <FloatingAssistant role={role} />}
       </div>
-      {(role === "patient" || role === "doctor") && assistantConfig.enabled && Boolean(assistantConfig.groqApiKey || assistantConfig.geminiApiKey) && <FloatingAssistant role={role} />}
-    </div>
+    </TooltipProvider>
   );
 }
