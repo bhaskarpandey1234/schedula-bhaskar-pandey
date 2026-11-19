@@ -155,18 +155,18 @@ function QueueActionDialog({
   }, [state.success, onClose, router]);
   const details = commandText[command];
   return (
-    <DialogContent className="max-w-md">
-      <DialogHeader>
+    <DialogContent className="max-w-md text-left whitespace-normal">
+      <DialogHeader className="text-left whitespace-normal">
         <DialogTitle>{details.label}?</DialogTitle>
-        <DialogDescription>
+        <DialogDescription className="text-left whitespace-normal">
           {command === "check_in" && (row.attendance_status === "no_show" || isGraceExpired(row, now))
             ? "Patient was marked unavailable. Confirming check-in will restore their availability and place their token into the active queue."
             : details.impact}
         </DialogDescription>
       </DialogHeader>
-      <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        <strong>{row.patient_name}</strong><br />
-        {token(row.token_number)} · {queueLabel(row, now)}
+      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-left whitespace-normal">
+        <strong className="block font-semibold text-foreground">{row.patient_name}</strong>
+        <span className="text-muted-foreground">{token(row.token_number)} · {queueLabel(row, now)}</span>
       </div>
       <form action={action} className="grid gap-3">
         <input type="hidden" name="action" value={command} />
