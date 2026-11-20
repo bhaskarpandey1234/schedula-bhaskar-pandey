@@ -22,6 +22,7 @@ const itemsByRole = {
     { href: "/patient", label: "Overview", icon: Home },
     { href: "/doctors", label: "Find Doctors", icon: Search },
     { href: "/patient/appointments", label: "Appointments", icon: CalendarDays },
+    { href: "/patient/history", label: "Medical records", icon: ClipboardList },
     { href: "/patient/assistant", label: "AI Assistant", icon: HeartPulse },
     { href: "/patient/profile", label: "My Profile", icon: UserRound },
   ],

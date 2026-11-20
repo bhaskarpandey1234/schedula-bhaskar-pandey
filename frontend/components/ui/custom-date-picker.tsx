@@ -5,8 +5,8 @@ import { CalendarDays, ChevronDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
-function formatDateLabel(isoDate: string): string {
-  if (!isoDate) return "Select date";
+function formatDateLabel(isoDate: string, placeholder = "Select date"): string {
+  if (!isoDate) return placeholder;
   const [year, month, day] = isoDate.split("-").map(Number);
   if (!year || !month || !day) return isoDate;
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -28,6 +28,9 @@ export function CustomDatePicker({
   required,
   minDate,
   todayDate,
+  availableDates,
+  allowPastDates,
+  placeholder = "Select date",
   className,
 }: {
   id?: string;
@@ -38,6 +41,9 @@ export function CustomDatePicker({
   required?: boolean;
   minDate?: string;
   todayDate?: string;
+  availableDates?: string[];
+  allowPastDates?: boolean;
+  placeholder?: string;
   className?: string;
 }) {
   const [internalValue, setInternalValue] = useState(defaultValue || controlledValue || "");
@@ -94,7 +100,7 @@ export function CustomDatePicker({
         onClick={() => setOpen((prev) => !prev)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Select date, currently ${formatDateLabel(value)}`}
+        aria-label={`Select date, currently ${formatDateLabel(value, placeholder)}`}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm transition-[border-color,box-shadow] hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className
@@ -103,7 +109,7 @@ export function CustomDatePicker({
         <span className="flex items-center gap-2 truncate">
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className={cn(!value && "text-muted-foreground")}>
-            {formatDateLabel(value)}
+            {formatDateLabel(value, placeholder)}
           </span>
         </span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200" aria-hidden="true" />
@@ -118,8 +124,10 @@ export function CustomDatePicker({
           <Calendar
             value={value}
             onChange={handleSelectDate}
+            availableDates={availableDates}
             minDate={minDate}
             todayDate={todayDate}
+            allowPastDates={allowPastDates}
           />
         </div>
       )}

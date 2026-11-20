@@ -15,6 +15,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { Button } from "@/components/ui/button";
 import { getPatientAppointments } from "@/lib/appointments/queries";
 import { getPatientQueueStatus } from "@/lib/queue/queries";
+import { getPatientClinicalRecord } from "@/lib/clinical/queries";
 import { PatientQueuePanel } from "@/components/queue/patient-queue-panel";
 import { formatLocalSlotRange } from "@/lib/scheduling/time";
 
@@ -23,8 +24,11 @@ export const instant = false;
 export default async function PatientPage() {
   await connection();
   const account = await requireRole("patient");
-  const appointments = await getPatientAppointments("upcoming");
-  const queueStatus = await getPatientQueueStatus();
+  const [appointments, queueStatus, clinicalRecord] = await Promise.all([
+    getPatientAppointments("upcoming"),
+    getPatientQueueStatus(),
+    getPatientClinicalRecord(account.user.id),
+  ]);
   const next = appointments[0];
 
   const firstName = account.profile.full_name?.split(" ")[0] || "there";
@@ -62,6 +66,11 @@ export default async function PatientPage() {
             </Button>
           </div>
         </div>
+
+        <section aria-label="Appointment and visit history" className="grid gap-4 sm:grid-cols-2">
+          <Link href="/patient/appointments" className="rounded-2xl border bg-card p-5 shadow-xs transition-colors hover:border-primary/40"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Upcoming appointments</p><p className="mt-2 text-3xl font-bold text-foreground">{appointments.length}</p><p className="mt-1 text-sm text-muted-foreground">Review schedules, queue status, and booking details.</p></Link>
+          <Link href="/patient/history" className="rounded-2xl border bg-card p-5 shadow-xs transition-colors hover:border-primary/40"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Completed visits</p><p className="mt-2 text-3xl font-bold text-foreground">{clinicalRecord.visits.length}</p><p className="mt-1 text-sm text-muted-foreground">Review published summaries and your medical records.</p></Link>
+        </section>
 
         {/* Featured Next Appointment Ticket */}
         <section aria-labelledby="next-appointment-heading" className="space-y-3">
