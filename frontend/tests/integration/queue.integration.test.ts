@@ -413,4 +413,69 @@ describe("patient check-in queue", () => {
     const { data: board } = await staff.client.rpc("queue_appointment_board", { p_clinic_id: firstClinic!.clinic_id });
     expect(board.map((row: { appointment_id: string }) => row.appointment_id).sort()).toEqual([firstId, secondId].sort());
   });
+
+  it("keeps medical history versioned, exposes it only during consultation, and publishes completed visit summaries", async () => {
+    const doctor = await person("doctor", "clinical-record-doctor");
+    const otherDoctor = await person("doctor", "clinical-record-other-doctor");
+    const patient = await person("patient", "clinical-record-patient");
+    const operator = await staffForDoctor(doctor);
+    const appointmentId = await appointment(doctor, patient);
+
+    expect((await patient.client.rpc("save_patient_medical_history", {
+      p_patient_id: patient.id,
+      p_expected_version: 0,
+      p_allergies: { status: "recorded", items: [{ substance: "Penicillin", reaction: "rash", severity: "moderate" }] },
+      p_conditions: { items: [{ name: "Hypertension", status: "active", notes: "" }] },
+      p_medical_details: "Patient supplied detail",
+    })).error).toBeNull();
+    expect((await doctor.client.rpc("patient_clinical_record", { p_patient_id: patient.id })).error).not.toBeNull();
+    expect((await otherDoctor.client.rpc("patient_clinical_record", { p_patient_id: patient.id })).error).not.toBeNull();
+
+    expect((await operator.client.rpc("check_in_appointment", { p_appointment_id: appointmentId })).error).toBeNull();
+    const { data: board } = await operator.client.rpc("queue_appointment_board", { p_doctor_id: doctor.id });
+    const row = board?.find((item: { appointment_id: string }) => item.appointment_id === appointmentId);
+    expect(row?.entry_id).toBeTruthy();
+    expect((await operator.client.rpc("transition_queue_entry", { p_entry_id: row!.entry_id, p_action: "call_next" })).error).toBeNull();
+
+    const active = await doctor.client.rpc("doctor_active_patient_clinical_record", { p_appointment_id: appointmentId });
+    expect(active.error).toBeNull();
+    expect(active.data).toMatchObject({ patient_id: patient.id, medical_history: { version: 1, verification_status: "self_reported" } });
+    expect((await doctor.client.rpc("save_patient_medical_history", {
+      p_patient_id: patient.id,
+      p_expected_version: 1,
+      p_allergies: { status: "none_known", items: [] },
+      p_conditions: { items: [{ name: "Hypertension", status: "active", notes: "Reviewed with patient" }] },
+      p_medical_details: "Clinician reviewed detail",
+    })).data).toBe(2);
+    expect((await patient.client.rpc("save_patient_medical_history", {
+      p_patient_id: patient.id,
+      p_expected_version: 1,
+      p_allergies: { status: "unknown", items: [] },
+      p_conditions: { items: [] },
+      p_medical_details: "Stale change",
+    })).error?.message).toContain("changed");
+
+    expect((await operator.client.rpc("transition_queue_entry", { p_entry_id: row!.entry_id, p_action: "complete" })).error).toBeNull();
+    expect((await doctor.client.rpc("patient_clinical_record", { p_patient_id: patient.id })).error).not.toBeNull();
+    const completed = await doctor.client.rpc("doctor_active_patient_clinical_record", { p_appointment_id: appointmentId });
+    expect(completed.error).toBeNull();
+    expect(completed.data).toMatchObject({ patient_id: patient.id, medical_history: { version: 2, verification_status: "clinician_verified" } });
+    expect((await otherDoctor.client.rpc("doctor_active_patient_clinical_record", { p_appointment_id: appointmentId })).error).not.toBeNull();
+    const savedSummary = await doctor.client.rpc("save_doctor_visit_summary", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 0,
+      p_summary: "Blood pressure reviewed. Continue medication and follow up in two weeks.",
+      p_publish: true,
+    });
+    expect(savedSummary.error).toBeNull();
+    expect(savedSummary.data).toBe(1);
+    const patientRecord = await patient.client.rpc("patient_clinical_record", { p_patient_id: patient.id });
+    expect(patientRecord.error).toBeNull();
+    expect(patientRecord.data).toMatchObject({
+      medical_history: { version: 2, verification_status: "clinician_verified" },
+      visits: [{ appointment_id: appointmentId, summary_status: "published" }],
+    });
+    const pastAppointments = await patient.client.rpc("patient_appointments", { p_tab: "past" });
+    expect(pastAppointments.data?.find((item: { appointment_id: string }) => item.appointment_id === appointmentId)).toMatchObject({ status: "completed" });
+  });
 });
