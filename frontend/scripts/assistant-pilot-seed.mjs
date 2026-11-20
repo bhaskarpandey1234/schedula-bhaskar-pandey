@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 dotenv.config({ path: fileURLToPath(new URL("../.env.local", import.meta.url)) });
 
 export const pilotUsers = {
+  staff: { email: "pilot.staff@schedula.example", name: "Schedula Local Receptionist" },
   doctor: { email: "pilot.doctor@schedula.example", name: "Dr. Mira Sen" },
   patient: { email: "pilot.patient@schedula.example", name: "Arjun Pilot" },
 };
@@ -18,6 +19,11 @@ export const queueDemoPatients = [
   { email: "pilot.queue.04@schedula.example", name: "Meera Joshi", phone: "+919900000104", dateOfBirth: "1990-10-05" },
   { email: "pilot.queue.05@schedula.example", name: "Ishaan Das", phone: "+919900000105", dateOfBirth: "1988-06-21" },
 ];
+
+export const clinicalDemo = {
+  publishedSummary: "Synthetic demo only: symptoms reviewed, a follow-up plan was discussed, and no clinical decision should be inferred from this record.",
+  draftSummary: "Synthetic doctor-only draft: confirm the follow-up plan before publishing this summary to the patient.",
+};
 
 const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
 const pilotTimezone = "Asia/Kolkata";
@@ -136,6 +142,11 @@ async function assertQueueSchema(databaseUrl) {
         to_regprocedure('public.transition_queue_entry(uuid,text)') IS NOT NULL AS has_queue_transitions,
         to_regprocedure('public.check_in_appointment(uuid)') IS NOT NULL AS has_check_in,
         to_regprocedure('public.patient_appointment_queue_token(uuid)') IS NOT NULL AS has_patient_tokens,
+        to_regclass('public.patient_medical_history_versions') IS NOT NULL AS has_medical_history,
+        to_regclass('public.visit_summary_versions') IS NOT NULL AS has_visit_summaries,
+        to_regprocedure('public.patient_clinical_record(uuid)') IS NOT NULL AS has_clinical_record,
+        to_regprocedure('public.save_patient_medical_history(uuid,integer,jsonb,jsonb,text)') IS NOT NULL AS has_medical_history_save,
+        to_regprocedure('public.save_doctor_visit_summary(uuid,integer,text,boolean)') IS NOT NULL AS has_visit_summary_save,
         COALESCE(position('token_reassigned' IN pg_get_functiondef(to_regprocedure('public.sync_appointment_queue()'))) > 0, false) AS has_queue_safety
     `;
     const required = [
@@ -149,10 +160,15 @@ async function assertQueueSchema(databaseUrl) {
       "has_queue_transitions",
       "has_check_in",
       "has_patient_tokens",
+      "has_medical_history",
+      "has_visit_summaries",
+      "has_clinical_record",
+      "has_medical_history_save",
+      "has_visit_summary_save",
       "has_queue_safety",
     ];
     if (required.some((name) => schema[name] !== true)) {
-      throw new Error("Local queue demo seed requires migrations 0058–0063. Missing queue schema or RPC support was detected; apply the pending migrations to local Supabase, then rerun. No seed records were written.");
+      throw new Error("Local demo seed requires the queue and clinical-history migrations. Missing schema or RPC support was detected; apply the pending migrations to local Supabase, then rerun. No seed records were written.");
     }
   } finally {
     await sql.end();
@@ -184,9 +200,13 @@ async function ensureUser(admin, user, password, role, { disableLogin = false, p
 async function seedDatabase(databaseUrl, ids, serviceDate) {
   const sql = postgres(databaseUrl, { max: 1, prepare: false });
   const completedDate = dateOffset(-7);
+  const cancelledDate = dateOffset(-8);
+  const draftDate = dateOffset(-10);
   const upcomingDate = dateOffset(3);
   const leaveDate = dateOffset(5);
   const pastSession = await sql`SELECT id FROM public.availability_sessions WHERE doctor_id = ${ids.doctor} AND session_date = ${completedDate} AND start_time = '09:00:00'::time LIMIT 1`;
+  const cancelledSession = await sql`SELECT id FROM public.availability_sessions WHERE doctor_id = ${ids.doctor} AND session_date = ${cancelledDate} AND start_time = '09:00:00'::time LIMIT 1`;
+  const draftSession = await sql`SELECT id FROM public.availability_sessions WHERE doctor_id = ${ids.doctor} AND session_date = ${draftDate} AND start_time = '09:00:00'::time LIMIT 1`;
   const upcomingSession = await sql`SELECT id FROM public.availability_sessions WHERE doctor_id = ${ids.doctor} AND session_date = ${upcomingDate} AND start_time = '09:00:00'::time LIMIT 1`;
   const leaveSession = await sql`SELECT id FROM public.availability_sessions WHERE doctor_id = ${ids.doctor} AND session_date = ${leaveDate} AND start_time = '14:00:00'::time LIMIT 1`;
 
@@ -196,6 +216,7 @@ async function seedDatabase(databaseUrl, ids, serviceDate) {
     // signed-in browser session; the seed validates ownership through fixed
     // local Auth identities and never runs against hosted databases.
     await tx.unsafe("SET LOCAL session_replication_role = 'replica'");
+    await tx`INSERT INTO public.profiles (id, full_name, role) VALUES (${ids.staff}, ${pilotUsers.staff.name}, 'staff') ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`;
     await tx`INSERT INTO public.profiles (id, full_name, role) VALUES (${ids.doctor}, ${pilotUsers.doctor.name}, 'doctor') ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`;
     await tx`INSERT INTO public.profiles (id, full_name, role) VALUES (${ids.patient}, ${pilotUsers.patient.name}, 'patient') ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, role = EXCLUDED.role`;
     for (const patient of ids.queuePatients) {
@@ -210,6 +231,7 @@ async function seedDatabase(databaseUrl, ids, serviceDate) {
       clinicId = clinic.id;
     }
     await tx`INSERT INTO public.doctors (id, clinic_id, specialty, clinic_name, experience_years, biography, timezone, consultation_fee_minor, consultation_currency, phone) VALUES (${ids.doctor}, ${clinicId}, 'Cardiology', 'Cedar Pilot Clinic', 12, 'Synthetic doctor account for local assistant testing.', ${pilotTimezone}, 100000, 'INR', '+919900000001') ON CONFLICT (id) DO UPDATE SET specialty = EXCLUDED.specialty, clinic_name = EXCLUDED.clinic_name, experience_years = EXCLUDED.experience_years, biography = EXCLUDED.biography, timezone = EXCLUDED.timezone, consultation_fee_minor = EXCLUDED.consultation_fee_minor, clinic_id = COALESCE(doctors.clinic_id, EXCLUDED.clinic_id)`;
+    await tx`INSERT INTO public.staff_clinic_memberships (staff_id, clinic_id) VALUES (${ids.staff}, ${clinicId}) ON CONFLICT (staff_id) DO UPDATE SET clinic_id = EXCLUDED.clinic_id`;
     await tx`INSERT INTO public.patients (id, phone, date_of_birth) VALUES (${ids.patient}, '+919900000002', '1990-04-20') ON CONFLICT (id) DO UPDATE SET phone = EXCLUDED.phone, date_of_birth = EXCLUDED.date_of_birth`;
     await tx`INSERT INTO public.assistant_pilot_access (user_id, label, enabled) VALUES (${ids.doctor}, 'synthetic-local-pilot', true), (${ids.patient}, 'synthetic-local-pilot', true) ON CONFLICT (user_id) DO UPDATE SET label = EXCLUDED.label, enabled = EXCLUDED.enabled`;
 
@@ -221,6 +243,8 @@ async function seedDatabase(databaseUrl, ids, serviceDate) {
     }
 
     const pastSessionId = pastSession[0]?.id ?? await ensureSession(completedDate, '09:00', '11:00');
+    const cancelledSessionId = cancelledSession[0]?.id ?? await ensureSession(cancelledDate, '09:00', '11:00');
+    const draftSessionId = draftSession[0]?.id ?? await ensureSession(draftDate, '09:00', '11:00');
     const upcomingSessionId = upcomingSession[0]?.id ?? await ensureSession(upcomingDate, '09:00', '11:00');
     const leaveSessionId = leaveSession[0]?.id ?? await ensureSession(leaveDate, '14:00', '16:00');
     await tx`INSERT INTO public.doctor_leave_occurrences (doctor_id, availability_session_id, occurrence_date) VALUES (${ids.doctor}, ${leaveSessionId}, ${leaveDate}) ON CONFLICT (availability_session_id, occurrence_date) DO NOTHING`;
@@ -233,9 +257,9 @@ async function seedDatabase(databaseUrl, ids, serviceDate) {
     }
 
     const completedSlot = await ensureSlot(pastSessionId, dateAt(completedDate, 9, 0), dateAt(completedDate, 9, 30));
-    const cancelledSlot = await ensureSlot(pastSessionId, dateAt(completedDate, 10, 0), dateAt(completedDate, 10, 30));
+    const cancelledSlot = await ensureSlot(cancelledSessionId, dateAt(cancelledDate, 9, 0), dateAt(cancelledDate, 9, 30));
+    const draftSlot = await ensureSlot(draftSessionId, dateAt(draftDate, 9, 0), dateAt(draftDate, 9, 30));
     const upcomingSlot = await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 9, 0), dateAt(upcomingDate, 9, 30));
-    const overlappingSlot = await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 9, 15), dateAt(upcomingDate, 9, 45));
     await ensureSlot(upcomingSessionId, dateAt(upcomingDate, 10, 0), dateAt(upcomingDate, 10, 30));
 
     const priorDemoSession = await tx`
@@ -369,11 +393,99 @@ async function seedDatabase(databaseUrl, ids, serviceDate) {
       return inserted[0].id;
     }
 
+    // Ensure strictly one booking per patient per doctor per day
+    await tx`
+      DELETE FROM public.appointments a
+      USING public.appointment_slots s
+      WHERE a.slot_id = s.id
+        AND a.patient_id = ${ids.patient}
+        AND a.doctor_id = ${ids.doctor}
+        AND (s.slot_start_at AT TIME ZONE ${pilotTimezone})::date IN (${completedDate}::date, ${cancelledDate}::date, ${draftDate}::date, ${upcomingDate}::date)
+        AND a.slot_id NOT IN (${completedSlot}, ${cancelledSlot}, ${draftSlot}, ${upcomingSlot})
+    `;
+
     const completedAppointment = await ensureAppointment(completedSlot, 'completed', 'Synthetic completed consultation', dateAt(completedDate, 9, 30));
     const cancelledAppointment = await ensureAppointment(cancelledSlot, 'cancelled', 'Synthetic cancelled appointment');
+    const draftAppointment = await ensureAppointment(draftSlot, 'completed', 'Synthetic completed consultation with doctor-only draft', dateAt(draftDate, 9, 30));
     await ensureAppointment(upcomingSlot, 'confirmed', 'Synthetic upcoming appointment');
-    await ensureAppointment(overlappingSlot, 'confirmed', 'Synthetic overlapping appointment');
-    await tx`UPDATE public.appointment_slots SET allocated_count = (SELECT count(*) FROM public.appointments WHERE slot_id = public.appointment_slots.id AND status IN ('confirmed', 'completed', 'payment_pending')) WHERE id IN (${completedSlot}, ${cancelledSlot}, ${upcomingSlot}, ${overlappingSlot})`;
+    await tx`UPDATE public.appointment_slots SET allocated_count = (SELECT count(*) FROM public.appointments WHERE slot_id = public.appointment_slots.id AND status IN ('confirmed', 'completed', 'payment_pending')) WHERE id IN (${completedSlot}, ${cancelledSlot}, ${draftSlot}, ${upcomingSlot})`;
+
+    async function replaceMedicalHistory(patientId, entries) {
+      await tx`DELETE FROM public.patient_medical_history_versions WHERE patient_id = ${patientId}`;
+      for (const entry of entries) {
+        await tx`
+          INSERT INTO public.patient_medical_history_versions (
+            patient_id, version, allergies, conditions, medical_details, source,
+            verification_status, authored_by, verified_by, verified_at, created_at
+          ) VALUES (
+            ${patientId}, ${entry.version}, ${tx.json(entry.allergies)},
+            ${tx.json(entry.conditions)}, ${entry.medicalDetails}, ${entry.source},
+            ${entry.verificationStatus}, ${entry.authoredBy}, ${entry.verifiedBy},
+            ${entry.verifiedAt}, ${entry.createdAt}
+          )
+        `;
+      }
+    }
+
+    await replaceMedicalHistory(ids.patient, [
+      {
+        version: 1,
+        allergies: { status: "recorded", items: [{ substance: "Synthetic sample allergen", reaction: "Mild rash", severity: "mild" }] },
+        conditions: { items: [{ name: "Synthetic sample condition", status: "active", notes: "Demo record only; not clinical guidance." }] },
+        medicalDetails: "Self-reported synthetic history for the local demo.",
+        source: "patient_reported",
+        verificationStatus: "self_reported",
+        authoredBy: ids.patient,
+        verifiedBy: null,
+        verifiedAt: null,
+        createdAt: dateAt(completedDate, 8, 45),
+      },
+      {
+        version: 2,
+        allergies: { status: "recorded", items: [{ substance: "Synthetic sample allergen", reaction: "Mild rash", severity: "mild" }] },
+        conditions: { items: [{ name: "Synthetic sample condition", status: "active", notes: "Reviewed by the synthetic demo clinician." }] },
+        medicalDetails: "Synthetic clinician verification added for the local walkthrough.",
+        source: "doctor_recorded",
+        verificationStatus: "clinician_verified",
+        authoredBy: ids.doctor,
+        verifiedBy: ids.doctor,
+        verifiedAt: dateAt(completedDate, 9, 30),
+        createdAt: dateAt(completedDate, 9, 30),
+      },
+    ]);
+
+    await replaceMedicalHistory(ids.queuePatients[0].id, [
+      {
+        version: 1,
+        allergies: { status: "unknown", items: [] },
+        conditions: { items: [{ name: "Synthetic queue-history sample", status: "active", notes: "Visible to the doctor only during the local consultation demo." }] },
+        medicalDetails: "Synthetic queue patient record for the active-consultation history demonstration.",
+        source: "patient_reported",
+        verificationStatus: "self_reported",
+        authoredBy: ids.queuePatients[0].id,
+        verifiedBy: null,
+        verifiedAt: null,
+        createdAt: dateAt(serviceDate, 8, 0),
+      },
+    ]);
+
+    await tx`DELETE FROM public.visit_summary_versions WHERE appointment_id IN (${completedAppointment}, ${draftAppointment})`;
+    await tx`
+      INSERT INTO public.visit_summary_versions (
+        appointment_id, doctor_id, patient_id, version, summary, status, authored_by, published_at, created_at
+      ) VALUES (
+        ${completedAppointment}, ${ids.doctor}, ${ids.patient}, 1, ${clinicalDemo.publishedSummary},
+        'published', ${ids.doctor}, ${dateAt(completedDate, 9, 30)}, ${dateAt(completedDate, 9, 30)}
+      )
+    `;
+    await tx`
+      INSERT INTO public.visit_summary_versions (
+        appointment_id, doctor_id, patient_id, version, summary, status, authored_by, published_at, created_at
+      ) VALUES (
+        ${draftAppointment}, ${ids.doctor}, ${ids.patient}, 1, ${clinicalDemo.draftSummary},
+        'draft', ${ids.doctor}, NULL, ${dateAt(draftDate, 9, 30)}
+      )
+    `;
 
     async function ensurePayment(appointmentId, idempotencyKey, orderId, paymentProviderId) {
       const existing = await tx`SELECT id FROM public.payments WHERE idempotency_key = ${idempotencyKey} LIMIT 1`;
@@ -407,8 +519,9 @@ export async function seedAssistantPilot(env = process.env) {
   await assertQueueSchema(config.databaseUrl);
   const admin = createClient(config.supabaseUrl, config.serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const ids = {
-    doctor: await ensureUser(admin, pilotUsers.doctor, config.password, "doctor", { preserveExistingPassword: true }),
-    patient: await ensureUser(admin, pilotUsers.patient, config.password, "patient", { preserveExistingPassword: true }),
+    staff: await ensureUser(admin, pilotUsers.staff, config.password, "staff", { preserveExistingPassword: false }),
+    doctor: await ensureUser(admin, pilotUsers.doctor, config.password, "doctor", { preserveExistingPassword: false }),
+    patient: await ensureUser(admin, pilotUsers.patient, config.password, "patient", { preserveExistingPassword: false }),
     queuePatients: [],
   };
   for (const patient of queueDemoPatients) {
@@ -426,6 +539,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     .then(({ users, queuePatients, queueDemoDate }) => {
       console.log("Local assistant pilot seed complete.");
       console.log(`Queue demo service date: ${queueDemoDate} (${pilotTimezone}).`);
+      console.log(`Staff / Receptionist login: ${users.staff.email}`);
       console.log(`Doctor login: ${users.doctor.email}`);
       console.log(`Patient login: ${users.patient.email}`);
       console.log("Synthetic queue patients (profiles only; sign-in disabled):");

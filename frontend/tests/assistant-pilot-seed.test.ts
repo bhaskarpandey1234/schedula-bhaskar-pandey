@@ -14,7 +14,7 @@ function futureQueueDemoDate() {
 }
 
 describe("local assistant pilot seed guard", async () => {
-  const { findDemoQueueStartMinute, pilotUsers, queueDemoPatients, validateLocalEnvironment } = await import(modulePath);
+  const { clinicalDemo, findDemoQueueStartMinute, pilotUsers, queueDemoPatients, validateLocalEnvironment } = await import(modulePath);
   const queueDemoDate = futureQueueDemoDate();
 
   it("accepts local Supabase and database URLs", () => {
@@ -35,7 +35,7 @@ describe("local assistant pilot seed guard", async () => {
     })).toThrow(/localhost/);
   });
 
-  it("requires the local service-role key but not a login password for queue-only demo patients", () => {
+  it("requires the local service-role key but preserves existing demo-account passwords when none is supplied", () => {
     expect(() => validateLocalEnvironment({
       NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:54322/postgres",
@@ -70,11 +70,17 @@ describe("local assistant pilot seed guard", async () => {
   });
 
   it("uses stable synthetic queue patient identities", () => {
+    expect(pilotUsers.staff.email).toBe("pilot.staff@schedula.example");
     expect(pilotUsers.doctor.email).toBe("pilot.doctor@schedula.example");
     expect(pilotUsers.patient.email).toBe("pilot.patient@schedula.example");
     expect(queueDemoPatients).toHaveLength(5);
     expect(new Set(queueDemoPatients.map((patient: { email: string }) => patient.email)).size).toBe(5);
     expect(queueDemoPatients.every((patient: { email: string }) => patient.email.endsWith("@schedula.example"))).toBe(true);
+  });
+
+  it("labels every clinical demo summary as synthetic", () => {
+    expect(clinicalDemo.publishedSummary).toMatch(/synthetic/i);
+    expect(clinicalDemo.draftSummary).toMatch(/synthetic/i);
   });
 
   it("finds a five-slot demo block that does not overlap today's sessions", () => {
