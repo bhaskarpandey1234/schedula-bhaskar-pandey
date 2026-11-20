@@ -309,6 +309,62 @@
       "when": 1794935000000,
       "tag": "0065-doctor-queue-actions-and-permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1795090000000,
+      "tag": "0066-patient-medical-visit-history",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795091000000,
+      "tag": "0067-clinical-history-audit-author-retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1795092000000,
+      "tag": "0068-fix-visit-summary-status-cast",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795093000000,
+      "tag": "0069-clinical-history-verification-retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795094000000,
+      "tag": "0070-clinical-draft-visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795095000000,
+      "tag": "0071-multi-item-prescription-and-consultation-access",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795096000000,
+      "tag": "0072-doctor-patient-prescriptions-access",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795097000000,
+      "tag": "0073-doctor-active-patient-demographics",
+      "breakpoints": true
     }
   ]
 }

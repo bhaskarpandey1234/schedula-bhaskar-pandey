@@ -300,6 +300,9 @@ export const rescheduleRequests = pgTable("reschedule_requests", {
 
 export const prescriptionStatus = pgEnum("prescription_status", ["draft", "published"]);
 export const assistantActionStatus = pgEnum("assistant_action_status", ["pending", "confirmed", "executing", "awaiting_payment", "succeeded", "failed", "expired", "declined"]);
+export const medicalHistorySource = pgEnum("medical_history_source", ["patient_reported", "doctor_recorded"]);
+export const medicalHistoryVerification = pgEnum("medical_history_verification", ["self_reported", "clinician_verified"]);
+export const visitSummaryStatus = pgEnum("visit_summary_status", ["draft", "published"]);
 
 export const doctorLeaveOccurrences = pgTable("doctor_leave_occurrences", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -331,6 +334,34 @@ export const prescriptionItems = pgTable("prescription_items", {
   instructions: text("instructions"),
   sortOrder: integer("sort_order").notNull().default(0),
 });
+
+export const patientMedicalHistoryVersions = pgTable("patient_medical_history_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  allergies: jsonb("allergies").notNull(),
+  conditions: jsonb("conditions").notNull(),
+  medicalDetails: text("medical_details"),
+  source: medicalHistorySource("source").notNull(),
+  verificationStatus: medicalHistoryVerification("verification_status").notNull(),
+  authoredBy: uuid("authored_by").references(() => profiles.id, { onDelete: "set null" }),
+  verifiedBy: uuid("verified_by").references(() => profiles.id, { onDelete: "set null" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ patientCreatedIdx: index("patient_medical_history_versions_patient_created_idx").on(table.patientId, table.createdAt) }));
+
+export const visitSummaryVersions = pgTable("visit_summary_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appointmentId: uuid("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id").notNull().references(() => doctors.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  summary: text("summary").notNull(),
+  status: visitSummaryStatus("status").notNull(),
+  authoredBy: uuid("authored_by").references(() => profiles.id, { onDelete: "set null" }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ appointmentVersionIdx: index("visit_summary_versions_appointment_version_idx").on(table.appointmentId, table.version), patientCreatedIdx: index("visit_summary_versions_patient_created_idx").on(table.patientId, table.createdAt) }));
 
 export const assistantPilotAccess = pgTable("assistant_pilot_access", {
   userId: uuid("user_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
