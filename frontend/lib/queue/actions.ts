@@ -27,6 +27,18 @@ export async function queueAction(_: QueueActionState, formData: FormData): Prom
   if (action === "reverse_no_show" && reason.length < 3) return { error: "Enter a reason of at least three characters." };
   const supabase = await createClient();
 
+  // If completing an entry that is currently in 'called' status, start consultation first then complete
+  if (action === "complete" && entryId) {
+    const { data: qEntry } = await supabase
+      .from("queue_entries")
+      .select("status")
+      .eq("id", entryId)
+      .maybeSingle();
+    if (qEntry?.status === "called") {
+      await supabase.rpc("transition_queue_entry", { p_entry_id: entryId, p_action: "start" });
+    }
+  }
+
   let { error } = action === "check_in"
     ? await supabase.rpc("check_in_appointment", { p_appointment_id: appointmentId })
     : action === "no_show"
