@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AssistantChat } from "@/components/assistant/assistant-chat";
 import type { AssistantRole } from "@/lib/assistant/types";
@@ -58,7 +58,7 @@ export function FloatingAssistant({ role }: { role: AssistantRole }) {
             aria-expanded={open}
             onClick={() => setOpen(true)}
           >
-            <Bot
+            <MessageCircle
               className="size-6 transition-transform duration-250 ease-out group-hover:scale-110 group-hover:rotate-[-8deg]"
               aria-hidden="true"
             />
