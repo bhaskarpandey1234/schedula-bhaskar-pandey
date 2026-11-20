@@ -77,7 +77,9 @@ export function commandDisabledReason(
     case "return":
       return row.queue_status === "skipped" ? null : "Only a skipped patient can return to the queue.";
     case "complete":
-      return row.queue_status === "in_consultation" ? null : "Call the patient from the queue before completing it.";
+      return (row.queue_status === "in_consultation" || row.queue_status === "called")
+        ? null
+        : "Call the patient from the queue before completing it.";
   }
 }
 
@@ -125,16 +127,14 @@ function timeRange(row: { slot_start_at: string; slot_end_at: string; timezone: 
 
 function queueLabel(row: QueueStatusRow, now?: number) {
   if (row.appointment_status === "cancelled") return "Cancelled";
+  if (row.appointment_status === "completed" || row.queue_status === "completed") return "Completed";
+  if (row.queue_status === "in_consultation") return "In consultation";
+  if (row.queue_status === "called") return "Called";
+  if (row.queue_status === "skipped") return "Skipped";
+  if (row.queue_status === "waiting") return "Checked in";
   if (row.attendance_status === "no_show" || (now && isGraceExpired(row, now))) return "Unavailable";
   if (!row.checked_in_at) return "Not arrived";
-  switch (row.queue_status) {
-    case "waiting": return "Checked in";
-    case "called": return "Called";
-    case "in_consultation": return "In consultation";
-    case "skipped": return "Skipped";
-    case "completed": return "Completed";
-    default: return "Checked in";
-  }
+  return "Checked in";
 }
 
 function QueueActionDialog({

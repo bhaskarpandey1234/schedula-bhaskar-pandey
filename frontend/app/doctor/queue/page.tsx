@@ -5,6 +5,7 @@ import { getDoctorSchedule } from "@/lib/availability/actions";
 import { DoctorQueueSummaryView } from "@/components/queue/doctor-queue-summary-view";
 import { createClient } from "@/lib/supabase/server";
 import { getDoctorQueuePatients, getDoctorQueueSummaryForSlot, parseQueueServiceDate } from "@/lib/queue/queries";
+import type { ClinicalPrescription, ClinicalPrescriptionItem } from "@/lib/clinical/queries";
 
 export const instant = false;
 
@@ -52,16 +53,60 @@ export default async function DoctorQueuePage({
       ])
     : [null, []];
 
+  const initialPrescriptions: Record<string, ClinicalPrescription> = {};
+  if (patients.length > 0) {
+    const appointmentIds = patients.map((p) => p.appointment_id);
+    const { data: rxData } = await supabase
+      .from("prescriptions")
+      .select(`
+        id,
+        appointment_id,
+        doctor_id,
+        patient_id,
+        status,
+        notes,
+        published_at,
+        created_at,
+        items:prescription_items (
+          id,
+          prescription_id,
+          medication_name,
+          dosage,
+          frequency,
+          duration,
+          instructions,
+          sort_order
+        )
+      `)
+      .in("appointment_id", appointmentIds)
+      .eq("status", "published");
+
+    if (rxData) {
+      for (const rx of rxData) {
+        initialPrescriptions[rx.appointment_id] = {
+          ...rx,
+          items: ((rx.items ?? []) as ClinicalPrescriptionItem[]).sort(
+            (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+          ),
+        };
+      }
+    }
+  }
+
   return (
     <DoctorQueueSummaryView
       summary={summary}
       initialPatients={patients}
+      initialPrescriptions={initialPrescriptions}
       filters={{
         serviceDate,
         timezone: doctor.timezone,
         slots,
         selectedSlotId,
         showQueue,
+      }}
+      doctorInfo={{
+        name: account.profile?.full_name || "Doctor",
       }}
     />
   );
