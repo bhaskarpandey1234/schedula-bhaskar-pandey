@@ -223,9 +223,14 @@ export default async function AppointmentsPage({
                       )}
 
                       {tab === "past" && (
-                        <Button asChild size="sm" variant="outline" className="rounded-xl">
-                          <Link href="/doctors">Book Again</Link>
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button asChild size="sm" variant="outline" className="rounded-xl text-xs font-semibold text-primary">
+                            <Link href="/patient/history">Prescription & Records</Link>
+                          </Button>
+                          <Button asChild size="sm" variant="outline" className="rounded-xl text-xs">
+                            <Link href="/doctors">Book Again</Link>
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </CardContent>
